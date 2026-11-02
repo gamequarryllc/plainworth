@@ -68,6 +68,50 @@ export type NWView = 'accounts' | 'categories';
 /** The order debts are listed in: highest rate first, smallest balance first, or by balance. */
 export type PayoffOrder = 'off' | 'avalanche' | 'snowball';
 
+/** How often the update reminder comes. */
+export type ReminderRepeat = 'weekly' | 'biweekly' | 'monthly';
+
+/** A notification set on this phone that nudges you to update your balances. */
+export interface Reminder {
+  on: boolean;
+  repeat: ReminderRepeat;
+  /** Weekly and every 2 weeks: 0 = Sunday … 6 = Saturday. */
+  weekday: number;
+  /** Monthly: the 1st or the 15th, or 0 for the last day of the month. */
+  monthDay: number;
+  /** Minutes after midnight, e.g. 540 for 9:00 AM. */
+  time: number;
+  /** Every 2 weeks: the day of the first one, so it keeps to the same weeks. */
+  start?: DateKey;
+}
+
+/** A net worth to reach, in today's money. */
+export interface NetWorthGoal {
+  amount: Cents;
+  /** Reach it by the end of this year. Neither this nor `age` means no date. */
+  year?: number;
+  /** Reach it by the end of the year you turn this age (needs `birthYear`). */
+  age?: number;
+}
+
+/** What looking ahead assumes. Everything ahead is in today's money. */
+export interface Outlook {
+  /** Prices rise this much a year, e.g. 0.03. */
+  inflation: number;
+  /** What you have grows this much a year on top of inflation, e.g. 0.04. */
+  growth: number;
+  /** What you add each month, in today's money. Left out, it's worked out from your pace. */
+  monthly?: Cents;
+}
+
+/** Spending goals, judged over the whole year so one big month doesn't sink them. */
+export interface SpendingGoal {
+  /** Keep at least this share of what you earn (saved plus invested), e.g. 0.2. */
+  keep?: number;
+  /** Spend no more than this in an average month. */
+  limit?: Cents;
+}
+
 export interface Settings {
   currency: string;
   hideAmounts: boolean;
@@ -77,6 +121,12 @@ export interface Settings {
   payoffOrder: PayoffOrder;
   /** The day of the last backup, shown in Settings. */
   lastBackup?: DateKey;
+  reminder: Reminder;
+  goal?: NetWorthGoal;
+  /** For goals set by age. */
+  birthYear?: number;
+  outlook: Outlook;
+  spendingGoal?: SpendingGoal;
 }
 
 export interface Data {

@@ -2,22 +2,25 @@ import Constants from 'expo-constants';
 import { router } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import { useEffect, useState } from 'react';
-import { Platform, Pressable, StyleSheet, Switch, View } from 'react-native';
+import { AppState, Linking, Platform, Pressable, StyleSheet, Switch, View } from 'react-native';
 
 import { Icon } from '@/components/icon';
 import { Row, Section } from '@/components/list';
 import { ProBadge } from '@/components/pro-badge';
 import { Screen } from '@/components/screen';
 import { Text } from '@/components/text';
+import { TimeField } from '@/components/time-field';
 import { authenticate, biometricLabel, canAuthenticate, systemAppLock } from '@/lib/auth';
 import { dayNumber, formatDate, todayKey } from '@/lib/dates';
-import { confirm, notify } from '@/lib/dialogs';
+import { choose, confirm, notify } from '@/lib/dialogs';
 import { exportFileName, exportWorkbook } from '@/lib/export';
 import { haptics } from '@/lib/haptics';
 import { CURRENCIES } from '@/lib/money';
+import { askForReminders, reminderPermission, type ReminderPermission } from '@/lib/notifications';
 import { pickTextFile } from '@/lib/pick-file';
+import { firstWeekday, formatReminder, MONTH_DAYS, monthDayName, reminderTimes, WEEKDAYS } from '@/lib/reminders';
 import { BACKUP, EXCEL, shareFile } from '@/lib/share-file';
-import type { Data, DateKey } from '@/lib/types';
+import type { Data, DateKey, Reminder, ReminderRepeat } from '@/lib/types';
 import { currentData, flushSave, useStore } from '@/store';
 import { BackupError, backupFileName, makeBackup, readBackup, type Backup } from '@/store/backup';
 import { openPaywall, restorePurchases, setTestPro, useProStore } from '@/store/pro';
@@ -189,6 +192,8 @@ export default function SettingsScreen() {
         ) : null}
       </Section>
 
+      <Reminders />
+
       <Section
         header="Backup"
         footer={`${backupStatus(settings.lastBackup)} Save the backup somewhere safe, like iCloud Drive or Google Drive. If you ever lose your ${DEVICE}, install Plainworth again and restore it.`}>
@@ -226,6 +231,107 @@ export default function SettingsScreen() {
 
       <PrivacyNote />
     </Screen>
+  );
+}
+
+const REPEATS: { value: ReminderRepeat; label: string }[] = [
+  { value: 'weekly', label: 'Weekly' },
+  { value: 'biweekly', label: 'Every 2 Weeks' },
+  { value: 'monthly', label: 'Monthly' },
+];
+
+/**
+ * A reminder to update balances, set on this phone (no server), weekly, every
+ * two weeks or monthly. Tapping it opens Update Balances.
+ */
+function Reminders() {
+  const reminder = useStore((s) => s.settings.reminder);
+  const updateSettings = useStore((s) => s.updateSettings);
+  const [permission, setPermission] = useState<ReminderPermission | null>(null);
+
+  useEffect(() => {
+    const check = () => reminderPermission().then(setPermission);
+    check();
+    // Coming back from the Settings app after allowing notifications.
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') check();
+    });
+    return () => sub.remove();
+  }, []);
+
+  const set = (patch: Partial<Reminder>) => {
+    const next = { ...reminder, ...patch };
+    // Every 2 weeks counts from the next one, so it starts this week or next, not in 3 weeks.
+    if (next.repeat === 'biweekly' && (patch.repeat || patch.weekday != null || patch.on)) {
+      next.start = firstWeekday(next.weekday, next.time, new Date());
+    }
+    updateSettings({ reminder: next });
+  };
+
+  const blocked = reminder.on && permission === 'denied';
+  // While the permission is still being checked, show what was saved.
+  const on = reminder.on && (permission == null || permission === 'granted');
+
+  const toggle = async (value: boolean) => {
+    if (!value) {
+      set({ on: false });
+      return;
+    }
+    if (await askForReminders()) {
+      setPermission('granted');
+      haptics.success();
+      set({ on: true });
+      return;
+    }
+    setPermission('denied');
+    const open = await confirm({
+      title: 'Notifications are off',
+      message: `To get reminders, allow notifications for Plainworth in the Settings app.`,
+      confirmLabel: 'Open Settings',
+    });
+    if (open) Linking.openSettings().catch(() => {});
+  };
+
+  const pickRepeat = async () => {
+    const i = await choose({ title: 'Repeat', options: REPEATS.map((r) => ({ label: r.label })) });
+    if (i != null) set({ repeat: REPEATS[i].value });
+  };
+
+  const pickDay = async () => {
+    if (reminder.repeat === 'monthly') {
+      const labels = ['1st of the Month', '15th of the Month', 'Last Day of the Month'];
+      const i = await choose({ title: 'Day', options: labels.map((label) => ({ label })) });
+      if (i != null) set({ monthDay: MONTH_DAYS[i] });
+      return;
+    }
+    const i = await choose({ title: 'Day', options: WEEKDAYS.map((label) => ({ label })) });
+    if (i != null) set({ weekday: i });
+  };
+
+  const now = new Date();
+  const next = on ? reminderTimes(reminder, now, 1)[0] : undefined;
+  const footer = blocked
+    ? 'Notifications are turned off for Plainworth, so reminders can’t show. Turn them on in the Settings app.'
+    : next
+      ? `Next reminder: ${formatReminder(next, now)}. Tapping it opens Update Balances.`
+      : `A nudge to update your balances and log your spending. It’s set on this ${DEVICE}, so nothing goes through a server.`;
+
+  return (
+    <Section header="Reminders" footer={footer}>
+      <Row title="Update Reminder" accessory={<Switch value={on} onValueChange={toggle} />} />
+      {on ? <Row title="Repeat" value={REPEATS.find((r) => r.value === reminder.repeat)!.label} onPress={pickRepeat} /> : null}
+      {on ? (
+        <Row
+          title="Day"
+          value={reminder.repeat === 'monthly' ? monthDayName(reminder.monthDay) : WEEKDAYS[reminder.weekday]}
+          onPress={pickDay}
+        />
+      ) : null}
+      {on ? <Row title="Time" accessory={<TimeField value={reminder.time} onChange={(time) => set({ time })} />} /> : null}
+      {blocked ? (
+        <Row title="Open Settings" titleColor="tint" chevron={false} onPress={() => Linking.openSettings().catch(() => {})} />
+      ) : null}
+    </Section>
   );
 }
 

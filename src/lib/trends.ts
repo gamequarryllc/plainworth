@@ -1,7 +1,7 @@
 import { dayNumber, monthKey, parseDateKey, parseMonthKey } from './dates';
 import { holdingsOn, netWorthMonths, spendingYear, type Month } from './insights';
 import { monthTotals, type MonthTotals } from './spending';
-import type { Cents, Data, DateKey, NWCategory } from './types';
+import type { Cents, Data, DateKey, NWCategory, SpendingGoal } from './types';
 
 /**
  * Progress over time for the Insights charts: where net worth is headed, this
@@ -235,4 +235,78 @@ export function distribution(data: NWData, today: DateKey, unit: PeriodUnit, cou
       return categories.map((c) => totals.get(c.id) ?? 0);
     }),
   };
+}
+
+export interface YearGoals {
+  /** Finished months with something entered, so far this year. */
+  months: number;
+  /** Months still to come this year, counting the one going now. */
+  left: number;
+  /** Share of income kept (saved or invested) so far this year; null without income. */
+  kept: number | null;
+  /** The same, as of the end of each month: twelve entries, null where nothing counts yet. */
+  keptLine: (number | null)[];
+  /**
+   * To end the year at the savings goal: the share of income to keep from here
+   * on, assuming income carries on as it has. 0 or less means you're there
+   * already; more than 1 means it's out of reach. Null without a goal or income.
+   */
+  keepFromHere: number | null;
+  /** Average spent a month so far this year; null before any month counts. */
+  spent: Cents | null;
+  /** The same, as of the end of each month. */
+  spentLine: (Cents | null)[];
+  /** To end the year at or under the limit: the most to spend in an average month from here on. Null without a limit. */
+  spendFromHere: Cents | null;
+}
+
+/**
+ * How this year is going against the spending goals. Both are judged over the
+ * whole year, so one big month (a car, a move) can be made up for later.
+ * Months count once they're over, like the other Spending insights.
+ */
+export function yearGoals(data: SpendData, goal: SpendingGoal, year: number, today: DateKey): YearGoals {
+  const t = parseDateKey(today);
+  const categories = new Map(data.spendCategories.map((c) => [c.id, c]));
+  const lastOver = year < t.y ? 12 : year === t.y ? t.m - 1 : 0;
+  const totals = Array.from({ length: 12 }, (_, i) => monthTotals(data.spend[monthKey(year, i + 1)], categories));
+  const lastEntered = totals.reduce<number>((last, m, i) => (m.hasData && i < lastOver ? i : last), -1);
+
+  let months = 0;
+  let spentSum = 0;
+  let income = 0;
+  let net = 0;
+  let incomeMonths = 0;
+  const keptLine: (number | null)[] = [];
+  const spentLine: (Cents | null)[] = [];
+  totals.forEach((m, i) => {
+    if (i > lastEntered) {
+      keptLine.push(null);
+      spentLine.push(null);
+      return;
+    }
+    if (m.hasData) {
+      months++;
+      spentSum += m.expenses;
+    }
+    if (m.income > 0) {
+      income += m.income;
+      net += m.net;
+      incomeMonths++;
+    }
+    keptLine.push(income > 0 ? net / income : null);
+    spentLine.push(months ? Math.round(spentSum / months) : null);
+  });
+
+  const left = 12 - lastOver;
+  const kept = income > 0 ? net / income : null;
+  let keepFromHere: number | null = null;
+  if (goal.keep != null && income > 0 && left > 0) {
+    const ahead = (income / incomeMonths) * left;
+    keepFromHere = (goal.keep * (income + ahead) - net) / ahead;
+  }
+  const spent = months ? Math.round(spentSum / months) : null;
+  const spendFromHere =
+    goal.limit != null && left > 0 ? Math.round((goal.limit * (months + left) - spentSum) / left) : null;
+  return { months, left, kept, keptLine, keepFromHere, spent, spentLine, spendFromHere };
 }

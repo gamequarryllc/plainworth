@@ -8,7 +8,8 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { LockGate } from '@/components/lock-gate';
 import { useStackOptions } from '@/components/stack-options';
-import { flushSave } from '@/store';
+import { syncReminders, useReminderTaps } from '@/lib/notifications';
+import { flushSave, useStore } from '@/store';
 import { startPro } from '@/store/pro';
 import { useSpotPriceRefresh } from '@/store/spot';
 import { useColors } from '@/theme';
@@ -26,9 +27,17 @@ export default function RootLayout() {
   useEffect(() => {
     const sub = AppState.addEventListener('change', (state) => {
       if (state !== 'active') flushSave();
+      // Top up the reminders each time the app comes back.
+      else syncReminders(useStore.getState().settings.reminder);
     });
     return () => sub.remove();
   }, []);
+
+  const reminder = useStore((s) => s.settings.reminder);
+  useEffect(() => {
+    syncReminders(reminder);
+  }, [reminder]);
+  useReminderTaps();
 
   const base = scheme === 'dark' ? DarkTheme : DefaultTheme;
   const theme = {
@@ -52,6 +61,8 @@ export default function RootLayout() {
           <Stack.Screen name="settings" options={{ ...modal, headerShown: false }} />
           <Stack.Screen name="pro" options={modal} />
           <Stack.Screen name="share" options={modal} />
+          <Stack.Screen name="goal" options={modal} />
+          <Stack.Screen name="spending-goal" options={modal} />
         </Stack>
         <LockGate />
         <StatusBar style="auto" />

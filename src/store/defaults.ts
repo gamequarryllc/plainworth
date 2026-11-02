@@ -1,4 +1,4 @@
-import type { Data, NWCategory, Settings, SpendCategory, SpendGroup } from '@/lib/types';
+import type { Data, NWCategory, Outlook, Reminder, Settings, SpendCategory, SpendGroup } from '@/lib/types';
 
 const nw = (id: string, name: string, kind: NWCategory['kind'], order: number): NWCategory => ({
   id,
@@ -57,6 +57,24 @@ export const defaultInvestCategories = (): SpendCategory[] => [sc('investing', '
 /** Bump when stored data needs migrating (see `migrate` in the store). */
 export const DATA_VERSION = 2;
 
+/** Off until turned on; when on, the 1st of each month at 9:00 AM. */
+export const defaultReminder = (): Reminder => ({
+  on: false,
+  repeat: 'monthly',
+  weekday: 0,
+  monthDay: 1,
+  time: 9 * 60,
+});
+
+/**
+ * 3% inflation is about the long-run US average. 4% growth on top of it (about
+ * 7% before inflation) is a common long-run assumption for investments.
+ */
+export const defaultOutlook = (): Outlook => ({
+  inflation: 0.03,
+  growth: 0.04,
+});
+
 export const defaultSettings = (): Settings => ({
   currency: 'USD',
   hideAmounts: false,
@@ -64,6 +82,8 @@ export const defaultSettings = (): Settings => ({
   nwRange: '6M',
   nwView: 'accounts',
   payoffOrder: 'off',
+  reminder: defaultReminder(),
+  outlook: defaultOutlook(),
 });
 
 export const emptyData = (): Data => ({

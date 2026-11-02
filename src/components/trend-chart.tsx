@@ -157,9 +157,7 @@ export function TrendChart({
       {labels.length ? (
         <View style={styles.axis} pointerEvents="none">
           {width > 0
-            ? labels.map((l, i) => {
-                // Keep the end labels inside the chart.
-                const left = Math.min(Math.max(x(l.index) - LABEL_BOX / 2, 0), width - LABEL_BOX);
+            ? placeLabels(labels, x, width).map(({ label: l, left }, i) => {
                 const align = left === 0 ? 'left' : left === width - LABEL_BOX ? 'right' : 'center';
                 return (
                   <Text
@@ -178,6 +176,23 @@ export function TrendChart({
       ) : null}
     </View>
   );
+}
+
+/**
+ * Where each label goes, kept inside the chart. Labels that would overlap are
+ * dropped, later ones first in line, so "Today" wins over a start date that's
+ * right beside it.
+ */
+function placeLabels(labels: TrendLabel[], x: (i: number) => number, width: number) {
+  const placed: { label: TrendLabel; left: number }[] = [];
+  for (const label of [...labels].reverse()) {
+    const left = Math.min(Math.max(x(label.index) - LABEL_BOX / 2, 0), width - LABEL_BOX);
+    // Single letters (months) sit close together; longer labels need their whole box.
+    const room = label.text.length <= 2 ? 0 : LABEL_BOX;
+    if (placed.some((p) => Math.abs(p.left - left) < Math.max(room, p.label.text.length <= 2 ? 0 : LABEL_BOX))) continue;
+    placed.push({ label, left });
+  }
+  return placed.reverse();
 }
 
 /** Finger tracking for `TrendChart`, with the same feel as `LineChart`: sideways drags keep the page still. */

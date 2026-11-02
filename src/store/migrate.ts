@@ -1,6 +1,6 @@
 import type { Data } from '@/lib/types';
 
-import { DATA_VERSION, defaultInvestCategories, defaultSettings, emptyData } from './defaults';
+import { DATA_VERSION, defaultInvestCategories, defaultOutlook, defaultReminder, defaultSettings, emptyData } from './defaults';
 
 /** Fill in anything a stored copy from an older version might be missing. */
 export function migrate(raw: unknown): Data {
@@ -21,6 +21,11 @@ export function migrate(raw: unknown): Data {
     spendCategories,
     spend: d.spend ?? {},
     monthNotes: d.monthNotes ?? {},
-    settings: { ...defaultSettings(), ...d.settings },
+    settings: {
+      ...defaultSettings(),
+      ...d.settings,
+      reminder: { ...defaultReminder(), ...d.settings?.reminder },
+      outlook: { ...defaultOutlook(), ...d.settings?.outlook },
+    },
   };
 }

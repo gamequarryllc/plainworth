@@ -371,13 +371,28 @@ export const useStore = create<Store>()((set, get) => ({
 
   eraseAll() {
     const settings = get().settings;
-    set({ ...emptyData(), settings: { ...settings, requireUnlock: false, hideAmounts: false } });
+    set({
+      ...emptyData(),
+      settings: {
+        ...settings,
+        requireUnlock: false,
+        hideAmounts: false,
+        reminder: { ...settings.reminder, on: false },
+        goal: undefined,
+        birthYear: undefined,
+        outlook: { ...settings.outlook, monthly: undefined },
+        spendingGoal: undefined,
+      },
+    });
   },
 
   restore(data, date) {
-    // The lock and hidden amounts belong to this phone, not to the data.
-    const { requireUnlock, hideAmounts } = get().settings;
-    set({ ...data, settings: { ...data.settings, requireUnlock, hideAmounts, lastBackup: date ?? data.settings.lastBackup } });
+    // The lock, hidden amounts and reminder belong to this phone, not to the data.
+    const { requireUnlock, hideAmounts, reminder } = get().settings;
+    set({
+      ...data,
+      settings: { ...data.settings, requireUnlock, hideAmounts, reminder, lastBackup: date ?? data.settings.lastBackup },
+    });
   },
 }));
 

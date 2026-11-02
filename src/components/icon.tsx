@@ -9,6 +9,7 @@ type MaterialName = Extract<SymbolViewProps['name'], { android?: unknown }>['and
 /** SF Symbols on iOS, Material Symbols on Android and web. */
 const MATERIAL: Partial<Record<SFSymbol, MaterialName>> = {
   plus: 'add',
+  minus: 'remove',
   'plus.circle.fill': 'add_circle',
   'chevron.right': 'chevron_right',
   'chevron.left': 'chevron_left',
@@ -23,6 +24,7 @@ const MATERIAL: Partial<Record<SFSymbol, MaterialName>> = {
   'ellipsis.circle': 'more_horiz',
   trash: 'delete',
   pencil: 'edit',
+  flag: 'flag',
   'square.and.pencil': 'edit_square',
   'arrow.clockwise': 'refresh',
   'arrow.up.arrow.down': 'swap_vert',

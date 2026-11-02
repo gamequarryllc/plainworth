@@ -10,6 +10,7 @@ import {
   netWorthSoFar,
   nextMilestone,
   spentSoFar,
+  yearGoals,
 } from '../trends';
 import type { Account, NWCategory, Snapshot, SpendCategory } from '../types';
 
@@ -139,4 +140,37 @@ test('trends: what you own by category, period by period', () => {
   // Q4 2025, Q1 2026, and Q2 so far.
   assert.deepEqual(q.periods.map((p) => [p.year, p.month]), [[2025, 12], [2026, 3], [2026, 6]]);
   assert.deepEqual(distribution({ ...nw, snapshots: [] }, '2026-05-20', 'year').periods, []);
+});
+
+
+test('trends: yearly savings and spending goals', () => {
+  // January to March 2026: earned 6,600, spent 4,200, so kept 2,400 (36%).
+  const g = yearGoals(sp, { keep: 0.4, limit: 1_300_00 }, 2026, '2026-04-15');
+  assert.equal(g.months, 3);
+  assert.equal(g.left, 9);
+  assert.ok(Math.abs(g.kept! - 2_400 / 6_600) < 1e-9);
+  assert.deepEqual(
+    g.keptLine.slice(0, 4).map((v) => (v == null ? null : Math.round(v * 1000) / 1000)),
+    [Math.round((800 / 2200) * 1000) / 1000, Math.round((1_800 / 4_400) * 1000) / 1000, Math.round((2_400 / 6_600) * 1000) / 1000, null],
+  );
+  // The rest of the year at 2,200 a month: keep 40% of 26,400 = 10,560, so 8,160 of the 19,800 still to earn.
+  assert.ok(Math.abs(g.keepFromHere! - 8_160 / 19_800) < 1e-9);
+  assert.equal(g.spent, 1_400_00);
+  assert.deepEqual(g.spentLine.slice(0, 4), [1_400_00, 1_300_00, 1_400_00, null]);
+  // 1,300 a month over 12 months is 15,600; 4,200 is spent, leaving 11,400 for 9 months.
+  assert.equal(g.spendFromHere, Math.round(11_400_00 / 9));
+
+  // Ahead of a 20% goal, so less is needed from here: 5,280 for the year, 2,400 kept.
+  assert.ok(Math.abs(yearGoals(sp, { keep: 0.2 }, 2026, '2026-04-15').keepFromHere! - 2_880 / 19_800) < 1e-9);
+  assert.equal(yearGoals(sp, { keep: 0.2 }, 2026, '2026-04-15').spendFromHere, null);
+  // A finished year has nothing left to change.
+  const last = yearGoals(sp, { keep: 0.4, limit: 1_000_00 }, 2025, '2026-04-15');
+  assert.equal(last.left, 0);
+  assert.equal(last.keepFromHere, null);
+  assert.equal(last.spendFromHere, null);
+  // Nothing finished yet this year.
+  const early = yearGoals(sp, { keep: 0.2 }, 2026, '2026-01-10');
+  assert.equal(early.months, 0);
+  assert.equal(early.kept, null);
+  assert.equal(early.spent, null);
 });
