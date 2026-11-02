@@ -27,7 +27,11 @@ export default function SpendingScreen() {
   const spendCategories = useStore((s) => s.spendCategories);
   const hidden = useStore((s) => s.settings.hideAmounts);
   const now = parseMonthKey(currentMonthKey());
-  const [year, setYear] = useState(now.year);
+  const [pickedYear, setYear] = useState(now.year);
+  // Up to this year, or further only if something was already entered for a later year:
+  // an empty future year looks like lost data (say, after restoring a backup).
+  const lastYear = Math.max(now.year, ...Object.keys(spend).map((k) => parseMonthKey(k).year));
+  const year = Math.min(pickedYear, lastYear);
   const [selected, setSelected] = useState<number | null>(null);
 
   const data = { spend, spendCategories };
@@ -41,7 +45,7 @@ export default function SpendingScreen() {
   const whole = (v: number) => money(v, { whole: true });
 
   const changeYear = (step: number) => {
-    setYear((y) => y + step);
+    setYear(year + step);
     setSelected(null);
   };
 
@@ -117,6 +121,7 @@ export default function SpendingScreen() {
         onNext={() => changeYear(1)}
         prevLabel="Previous year"
         nextLabel="Next year"
+        canNext={year < lastYear}
       />
       <Hero
         label={picked ? `Spent in ${MONTHS[selected!]}` : `Spent in ${year}`}
