@@ -5,7 +5,7 @@ import type { Cents, Data, DateKey } from './types';
 
 /**
  * Progress over time for the Insights charts: where net worth is headed, this
- * year against last, streaks, and lifestyle creep. Net worth trends come from
+ * year against last, and lifestyle creep. Net worth trends come from
  * balances alone and spending trends from Spending alone.
  */
 
