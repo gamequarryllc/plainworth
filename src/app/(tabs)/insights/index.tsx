@@ -1,4 +1,4 @@
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useState, type ReactElement } from 'react';
 import { StyleSheet, View } from 'react-native';
 
@@ -15,7 +15,7 @@ import { useMoney } from '@/hooks/use-money';
 import { useToday } from '@/hooks/use-today';
 import { MONTHS, MONTHS_SHORT, parseDateKey } from '@/lib/dates';
 import { firstYear, spendingYear, type Month } from '@/lib/insights';
-import { formatPercent } from '@/lib/money';
+import { formatPercent, MASK } from '@/lib/money';
 import {
   growthStreaks,
   lifestyleCreep,
@@ -34,6 +34,7 @@ import {
   type SpendStreaks,
 } from '@/lib/trends';
 import { useStore } from '@/store';
+import { openPaywall } from '@/store/pro';
 import { useColors } from '@/theme';
 
 type Part = 'networth' | 'spending';
@@ -46,13 +47,21 @@ const PARTS: { value: Part; label: string }[] = [
  * Progress over time, chart first: where net worth is headed, this year
  * against last, streaks and lifestyle creep. Net Worth and Spending are one tap
  * apart and never mixed, so neither is thrown off by how much of the other
- * tracker is filled in. As a preview, each shows only its first card.
+ * tracker is filled in. As a preview, every card shows its chart's shape
+ * with the numbers and answers hidden, and opens Pro when tapped.
  */
 export default function InsightsScreen() {
   const tabButtons = useTabButtons();
   const snapshots = useStore((s) => s.snapshots);
   const spend = useStore((s) => s.spend);
-  const [part, setPart] = useState<Part>('networth');
+  const params = useLocalSearchParams<{ part?: Part }>();
+  const [part, setPart] = useState<Part>(params.part === 'spending' ? 'spending' : 'networth');
+  const [asked, setAsked] = useState(params.part);
+  // Opened again from the Spending streak while Insights was already open.
+  if (params.part !== asked) {
+    setAsked(params.part);
+    if (params.part === 'spending' || params.part === 'networth') setPart(params.part);
+  }
 
   if (firstYear({ snapshots, spend }) == null) {
     return (
@@ -76,11 +85,25 @@ export default function InsightsScreen() {
   );
 }
 
-/** The cards that have something to say; just the first one in the preview. */
+/** The cards that have something to say. */
 function useCards(cards: (ReactElement | null)[]): ReactElement[] {
-  const preview = useInsightsPreview();
-  const shown = cards.filter((x): x is ReactElement => x != null);
-  return preview ? shown.slice(0, 1) : shown;
+  return cards.filter((x): x is ReactElement => x != null);
+}
+
+/**
+ * For a card in the Pro preview: amounts come out masked, the card opens Pro
+ * when tapped, and its sentence is a teaser instead of the answer.
+ */
+function useLock() {
+  const locked = useInsightsPreview();
+  const money = useMoney();
+  return {
+    locked,
+    money: (locked ? () => MASK : money) as typeof money,
+    card: locked ? { locked: true, onPress: () => openPaywall('insights') } : {},
+    text: (answer: string, teaser: string) => (locked ? teaser : answer),
+    mask: (value: string) => (locked ? '••' : value),
+  };
 }
 
 const shortMonth = (m: Month) => `${MONTHS_SHORT[m.month - 1]} ${m.year}`;
@@ -137,7 +160,8 @@ const HORIZONS: { value: Horizon; label: string }[] = [
 /** Net worth so far, then a dotted line ahead at the current pace, like a forecast. */
 function HeadedCard({ history, perMonth, counted }: { history: NetWorthMonth[]; perMonth: number; counted: number }) {
   const c = useColors();
-  const money = useMoney();
+  const lock = useLock();
+  const money = lock.money;
   const whole = (cents: number) => money(cents, { whole: true });
   const [horizon, setHorizon] = useState<Horizon>('60');
   const [at, setAt] = useState<number | null>(null);
@@ -179,7 +203,8 @@ function HeadedCard({ history, perMonth, counted }: { history: NetWorthMonth[]; 
   return (
     <InsightCard
       label="Where You’re Headed"
-      sentence={sentence}
+      sentence={lock.text(sentence, 'See what your net worth could be in 1, 3, 5 or 10 years, and when you’ll pass your next milestone.')}
+      {...lock.card}
       note={`Your pace is the average monthly change over the last ${counted} months. It assumes nothing changes, so it’s a direction, not a promise.`}>
       <Segmented options={HORIZONS} value={horizon} onChange={setHorizon} style={styles.horizon} />
       <View style={styles.bigRow}>
@@ -200,7 +225,7 @@ function HeadedCard({ history, perMonth, counted }: { history: NetWorthMonth[]; 
         items={[
           { label: 'Your net worth', color: c.up },
           { label: 'At your pace', color: c.up, dashed: true },
-          ...(away != null && away <= ahead ? [{ label: whole(milestone), color: c.warning }] : []),
+          ...(away != null && away <= ahead ? [{ label: lock.locked ? 'Next milestone' : whole(milestone), color: c.warning }] : []),
         ]}
       />
       <TrendChart
@@ -212,7 +237,7 @@ function HeadedCard({ history, perMonth, counted }: { history: NetWorthMonth[]; 
         ]}
         marker={away != null && away <= ahead ? { index: nowIndex + away, value: milestone, color: c.warning } : null}
         labels={labels}
-        onScrub={setAt}
+        onScrub={lock.locked ? undefined : setAt}
       />
     </InsightCard>
   );
@@ -221,7 +246,8 @@ function HeadedCard({ history, perMonth, counted }: { history: NetWorthMonth[]; 
 /** Growth since January 1, this year against last, month by month. */
 function NetWorthYearCard({ year, soFar, before }: { year: number; soFar: (number | null)[]; before: (number | null)[] }) {
   const c = useColors();
-  const money = useMoney();
+  const lock = useLock();
+  const money = lock.money;
   const whole = (cents: number) => money(cents, { whole: true });
   const last = lastIndex(soFar);
   const value = soFar[last]!;
@@ -242,7 +268,11 @@ function NetWorthYearCard({ year, soFar, before }: { year: number; soFar: (numbe
   }
 
   return (
-    <InsightCard label="This Year vs Last Year" sentence={sentence} note="How much your net worth has grown since January 1.">
+    <InsightCard
+      label="This Year vs Last Year"
+      sentence={lock.text(sentence, `See whether your net worth is growing faster than it did in ${year - 1}.`)}
+      note="How much your net worth has grown since January 1."
+      {...lock.card}>
       {at != null ? (
         <Readout
           title={MONTHS[at]}
@@ -267,13 +297,14 @@ function NetWorthYearCard({ year, soFar, before }: { year: number; soFar: (numbe
           { values: soFar, color: c.up, endDot: true },
         ]}
         labels={MONTH_LABELS}
-        onScrub={setAt}
+        onScrub={lock.locked ? undefined : setAt}
       />
     </InsightCard>
   );
 }
 
 function GrowthStreaksCard({ streaks }: { streaks: GrowthStreaks }) {
+  const lock = useLock();
   const { current, best, highsThisYear, recent } = streaks;
   const up = recent.filter((m) => m.up).length;
   let sentence: string;
@@ -285,14 +316,17 @@ function GrowthStreaksCard({ streaks }: { streaks: GrowthStreaks }) {
     sentence = best > 0 ? `Your net worth dipped last month. Your best run of growth is ${months(best)}.` : 'Your net worth hasn’t had a month of growth yet.';
   }
   return (
-    <InsightCard label="Streaks" sentence={sentence}>
-      <MonthDots months={recent} />
+    <InsightCard
+      label="Streaks"
+      sentence={lock.text(sentence, 'See how many months in a row your net worth has grown, and your best run.')}
+      {...lock.card}>
+      <MonthDots months={recent} hidden={lock.locked} />
       <StatGrid
         stats={[
-          { value: months(current, true), label: 'Growth streak' },
-          { value: months(best, true), label: 'Best streak' },
-          { value: String(highsThisYear), label: highsThisYear === 1 ? 'New high this year' : 'New highs this year' },
-          { value: `${up} of ${recent.length}`, label: 'Months up lately' },
+          { value: lock.mask(months(current, true)), label: 'Growth streak' },
+          { value: lock.mask(months(best, true)), label: 'Best streak' },
+          { value: lock.mask(String(highsThisYear)), label: highsThisYear === 1 ? 'New high this year' : 'New highs this year' },
+          { value: lock.mask(`${up} of ${recent.length}`), label: 'Months up lately' },
         ]}
       />
     </InsightCard>
@@ -343,7 +377,8 @@ function Spending() {
 /** Spending added up since January, this year against last. */
 function SpentYearCard({ year, soFar, before }: { year: number; soFar: (number | null)[]; before: (number | null)[] }) {
   const c = useColors();
-  const money = useMoney();
+  const lock = useLock();
+  const money = lock.money;
   const whole = (cents: number) => money(cents, { whole: true });
   const last = lastIndex(soFar);
   const value = soFar[last]!;
@@ -363,7 +398,11 @@ function SpentYearCard({ year, soFar, before }: { year: number; soFar: (number |
   }
 
   return (
-    <InsightCard label="This Year vs Last Year" sentence={sentence} note="Counts each month once it’s over.">
+    <InsightCard
+      label="This Year vs Last Year"
+      sentence={lock.text(sentence, `See whether you’re spending more or less than you did by this point in ${year - 1}.`)}
+      note="Counts each month once it’s over."
+      {...lock.card}>
       {at != null ? (
         <Readout
           title={`By the end of ${MONTHS[at]}`}
@@ -387,7 +426,7 @@ function SpentYearCard({ year, soFar, before }: { year: number; soFar: (number |
           { values: soFar, color: c.bar, endDot: true },
         ]}
         labels={MONTH_LABELS}
-        onScrub={setAt}
+        onScrub={lock.locked ? undefined : setAt}
       />
     </InsightCard>
   );
@@ -396,6 +435,7 @@ function SpentYearCard({ year, soFar, before }: { year: number; soFar: (number |
 /** Income and spending, each as a change from where it started: spending climbing faster is creep. */
 function CreepCard({ creep }: { creep: Creep }) {
   const c = useColors();
+  const lock = useLock();
   const { income, spending, year } = creep;
   const [at, setAt] = useState<number | null>(null);
   const pct = (r: number | null) => (r == null ? '—' : `${r < 0 ? '−' : '+'}${Math.round(Math.abs(r) * 100)}%`);
@@ -419,7 +459,8 @@ function CreepCard({ creep }: { creep: Creep }) {
   return (
     <InsightCard
       label="Lifestyle Creep"
-      sentence={sentence}
+      sentence={lock.text(sentence, 'See whether your spending is growing faster than your income.')}
+      {...lock.card}
       note={`Compares your average month in ${year} with ${year - 1}. Each line is a six-month average, as a change from where it started. When the blue line climbs faster than the green one, that’s creep.`}>
       {at != null ? (
         <Readout
@@ -445,13 +486,14 @@ function CreepCard({ creep }: { creep: Creep }) {
           { values: creep.spendingLine, color: c.bar, endDot: true },
         ]}
         labels={labels}
-        onScrub={setAt}
+        onScrub={lock.locked ? undefined : setAt}
       />
     </InsightCard>
   );
 }
 
 function SpendStreaksCard({ streaks }: { streaks: SpendStreaks }) {
+  const lock = useLock();
   const { keeping, bestKeeping, underAverage, investing, recent } = streaks;
   let sentence: string;
   if (keeping >= 2) sentence = `${keeping} months in a row keeping at least 20% of what you earned.`;
@@ -460,14 +502,18 @@ function SpendStreaksCard({ streaks }: { streaks: SpendStreaks }) {
   else if (investing >= 2) sentence = `${investing} months in a row investing.`;
   else sentence = 'Keep 20% of what you earn in a month to start a streak.';
   return (
-    <InsightCard label="Streaks" sentence={sentence} note="A green dot is a month you kept 20% or more.">
-      <MonthDots months={recent} />
+    <InsightCard
+      label="Streaks"
+      sentence={lock.text(sentence, 'See your streaks for keeping 20% or more, spending under your average, and investing.')}
+      note="A green dot is a month you kept 20% or more."
+      {...lock.card}>
+      <MonthDots months={recent} hidden={lock.locked} />
       <StatGrid
         stats={[
-          { value: months(keeping, true), label: 'Keeping 20% or more' },
-          { value: months(underAverage, true), label: 'Under your average' },
-          { value: months(investing, true), label: 'Investing every month' },
-          { value: months(bestKeeping, true), label: 'Best 20% streak' },
+          { value: lock.mask(months(keeping, true)), label: 'Keeping 20% or more' },
+          { value: lock.mask(months(underAverage, true)), label: 'Under your average' },
+          { value: lock.mask(months(investing, true)), label: 'Investing every month' },
+          { value: lock.mask(months(bestKeeping, true)), label: 'Best 20% streak' },
         ]}
       />
     </InsightCard>
@@ -477,7 +523,8 @@ function SpendStreaksCard({ streaks }: { streaks: SpendStreaks }) {
 /** The year's biggest spending categories, with the full list a tap away. */
 function WhereItWentCard({ year }: { year: number }) {
   const c = useColors();
-  const money = useMoney();
+  const lock = useLock();
+  const money = lock.money;
   const today = useToday();
   const spend = useStore((s) => s.spend);
   const spendCategories = useStore((s) => s.spendCategories);
@@ -492,9 +539,13 @@ function WhereItWentCard({ year }: { year: number }) {
   return (
     <InsightCard
       label="Where It Went"
-      sentence={`${top.category.name} took the biggest share of your spending this year, ${formatPercent(top.share)}.`}
+      sentence={lock.text(
+        `${top.category.name} took the biggest share of your spending this year, ${formatPercent(top.share)}.`,
+        'See every category a month on average, and how each compares with last year.',
+      )}
       note={canCompare ? `Next to each bar is how much more or less you spent a month than in ${year - 1}.` : null}
-      onPress={() => router.push({ pathname: '/insights/where-it-went', params: { year: String(year) } })}>
+      onPress={() => router.push({ pathname: '/insights/where-it-went', params: { year: String(year) } })}
+      {...lock.card}>
       {sp.categories.slice(0, 5).map((x) => {
         const change = canCompare ? x.monthly - (lastYearMonthly.get(x.category.id) ?? 0) : null;
         return (
@@ -504,9 +555,9 @@ function WhereItWentCard({ year }: { year: number }) {
             value={`${whole(x.monthly)}/mo`}
             share={x.share / top.share}
             color={c.bar}
-            note={change == null ? formatPercent(x.share) : change === 0 ? 'Same' : signed(change)}
+            note={lock.locked ? MASK : change == null ? formatPercent(x.share) : change === 0 ? 'Same' : signed(change)}
             // Spending more is the bad direction.
-            noteColor={change == null || change === 0 ? 'secondary' : change > 0 ? 'down' : 'up'}
+            noteColor={lock.locked || change == null || change === 0 ? 'secondary' : change > 0 ? 'down' : 'up'}
           />
         );
       })}
@@ -534,7 +585,7 @@ function Readout({ title, items }: { title: string; items: { label: string; valu
 }
 
 /** A dot per month, filled when it counts, like Fitness's streak rows. */
-function MonthDots({ months: list }: { months: (Month & { up: boolean })[] }) {
+function MonthDots({ months: list, hidden }: { months: (Month & { up: boolean })[]; hidden?: boolean }) {
   const c = useColors();
   return (
     <View style={styles.dots}>
@@ -543,8 +594,8 @@ function MonthDots({ months: list }: { months: (Month & { up: boolean })[] }) {
           key={`${m.year}-${m.month}`}
           style={styles.dotCol}
           accessible
-          accessibilityLabel={`${MONTHS[m.month - 1]} ${m.year}: ${m.up ? 'yes' : 'no'}`}>
-          <View style={[styles.dot, { backgroundColor: m.up ? c.up : c.fill }]} />
+          accessibilityLabel={hidden ? MONTHS[m.month - 1] : `${MONTHS[m.month - 1]} ${m.year}: ${m.up ? 'yes' : 'no'}`}>
+          <View style={[styles.dot, { backgroundColor: m.up && !hidden ? c.up : c.fill }]} />
           <Text variant="caption" color="secondary">
             {MONTHS_SHORT[m.month - 1][0]}
           </Text>

@@ -4,6 +4,7 @@ import { Pressable, StyleSheet, View } from 'react-native';
 import { layout, useColors } from '@/theme';
 
 import { Icon } from './icon';
+import { ProBadge } from './pro-badge';
 import { Text } from './text';
 
 /**
@@ -17,6 +18,7 @@ export function InsightCard({
   note,
   children,
   onPress,
+  locked,
 }: {
   label: string;
   sentence: string;
@@ -24,6 +26,8 @@ export function InsightCard({
   note?: string | null;
   children?: ReactNode;
   onPress?: () => void;
+  /** Part of Pro: a PRO badge by the label, and the chart can't be touched. */
+  locked?: boolean;
 }) {
   const c = useColors();
   const frame = [styles.card, { backgroundColor: c.card, borderColor: c.separator }];
@@ -33,12 +37,17 @@ export function InsightCard({
         <Text variant="footnote" weight="600" color="secondary" style={styles.label}>
           {label}
         </Text>
+        {locked ? <ProBadge /> : null}
         {onPress ? <Icon name="chevron.right" size={12} weight="semibold" color={c.tertiary} /> : null}
       </View>
       <Text variant="headline" style={styles.sentence}>
         {sentence}
       </Text>
-      {children ? <View style={styles.body}>{children}</View> : null}
+      {children ? (
+        <View style={styles.body} pointerEvents={locked ? 'none' : 'auto'}>
+          {children}
+        </View>
+      ) : null}
       {note ? (
         <Text variant="footnote" color="secondary" style={styles.note}>
           {note}
