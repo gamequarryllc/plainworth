@@ -273,8 +273,8 @@ function HeadedCard({ history, perMonth, counted }: { history: NetWorthMonth[]; 
   if (perMonth > 0) {
     sentence =
       away != null && away <= 600
-        ? `At about ${whole(perMonth)} a month, you’d ${milestone === 0 ? 'be back above zero' : `pass ${whole(milestone)}`} around ${MONTHS[shift(now, away).month - 1]} ${shift(now, away).year}.`
-        : `At about ${whole(perMonth)} a month, you’d have ${whole(projected)} ${inYears}.`;
+        ? `Your net worth grows about ${whole(perMonth)} a month. At that pace, you’d ${milestone === 0 ? 'be back above zero' : `pass ${whole(milestone)}`} around ${MONTHS[shift(now, away).month - 1]} ${shift(now, away).year}.`
+        : `Your net worth grows about ${whole(perMonth)} a month. At that pace, you’d have ${whole(projected)} ${inYears}.`;
   } else if (perMonth < 0) {
     sentence = `Your net worth has fallen about ${whole(-perMonth)} a month lately. At that pace it would be ${whole(projected)} ${inYears}.`;
   } else {
@@ -286,7 +286,7 @@ function HeadedCard({ history, perMonth, counted }: { history: NetWorthMonth[]; 
       label="Where You’re Headed"
       sentence={lock.text(sentence, 'See what your net worth could be in 1, 3, 5 or 10 years, and when you’ll pass your next milestone.')}
       {...lock.card}
-      note={`Your pace is the average monthly change over the last ${counted} months. It assumes nothing changes, so it’s a direction, not a promise.`}>
+      note={`How much your net worth went up in an average month over the last ${counted}: what you saved and paid off, plus what your investments and other assets gained. It assumes that keeps going, so it’s a direction, not a promise.`}>
       <Segmented options={HORIZONS} value={horizon} onChange={setHorizon} style={styles.horizon} />
       <View style={styles.bigRow}>
         <Text variant="title2" weight="700" rounded tabular numberOfLines={1}>
