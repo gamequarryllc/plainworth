@@ -2,15 +2,12 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
 import {
-  growthStreaks,
   lifestyleCreep,
   monthsUntil,
   netWorthHistory,
   netWorthPace,
   netWorthSoFar,
   nextMilestone,
-  spendHistory,
-  spendStreaks,
   spentSoFar,
 } from '../trends';
 import type { Account, NWCategory, Snapshot, SpendCategory } from '../types';
@@ -83,17 +80,6 @@ test('trends: growth so far this year, month by month', () => {
   assert.deepEqual(netWorthSoFar(h, 2025).slice(9), [null, 0, 200_00]);
 });
 
-test('trends: growth streaks', () => {
-  const s = growthStreaks(netWorthHistory(nw, '2026-05-20'), '2026-05-20');
-  assert.equal(s.current, 2);
-  assert.equal(s.best, 2);
-  // January, March, April and May (so far) each set a new high.
-  assert.equal(s.highsThisYear, 4);
-  assert.deepEqual(
-    s.recent.map((m) => m.up),
-    [false, true, true, false, true, true],
-  );
-});
 
 const spendCategories: SpendCategory[] = [
   { id: 'rent', name: 'Rent', group: 'recurring', order: 0, hidden: false },
@@ -119,19 +105,6 @@ test('trends: spending so far this year', () => {
   assert.deepEqual(spentSoFar(sp, 2024, '2026-04-15'), Array(12).fill(null));
 });
 
-test('trends: spending streaks, broken by a skipped month', () => {
-  const history = spendHistory(sp, '2026-04-15');
-  assert.equal(history.length, 6);
-  const s = spendStreaks(history, '2026-04-15');
-  // Kept 36%, 45% and 27% this year; 2025's last month kept 23% but the gap breaks the run.
-  assert.equal(s.keeping, 3);
-  assert.equal(s.bestKeeping, 3);
-  assert.equal(s.investing, 3);
-  // The average month is $1,383: March's $1,600 is over it.
-  assert.equal(s.underAverage, 0);
-  // Nothing entered last month: every streak is over.
-  assert.equal(spendStreaks(history, '2026-05-15').keeping, 0);
-});
 
 test('trends: lifestyle creep compares average months', () => {
   const c = lifestyleCreep(sp, '2026-04-15')!;
@@ -149,9 +122,3 @@ test('trends: lifestyle creep compares average months', () => {
   assert.equal(lifestyleCreep(sp, '2026-02-15'), null);
 });
 
-test('trends: the last twelve months for the dots', () => {
-  const s = spendStreaks(spendHistory(sp, '2026-04-15'), '2026-04-15');
-  assert.equal(s.recent.length, 12);
-  assert.deepEqual(s.recent[0], { year: 2025, month: 4, up: false });
-  assert.deepEqual(s.recent.slice(-3).map((m) => [m.month, m.up]), [[1, true], [2, true], [3, true]]);
-});

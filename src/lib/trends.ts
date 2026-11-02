@@ -1,6 +1,6 @@
 import { monthKey, parseDateKey, parseMonthKey } from './dates';
 import { netWorthMonths, spendingYear, type Month } from './insights';
-import { monthTotals, savingsRate, type MonthTotals } from './spending';
+import { monthTotals, type MonthTotals } from './spending';
 import type { Cents, Data, DateKey } from './types';
 
 /**
@@ -97,41 +97,6 @@ export function netWorthSoFar(history: NetWorthMonth[], year: number): (Cents | 
   });
 }
 
-export interface GrowthStreaks {
-  /** Finished months in a row, up to the latest, that net worth grew. */
-  current: number;
-  /** The longest such run ever. */
-  best: number;
-  /** Months this year that ended at a new all-time high. */
-  highsThisYear: number;
-  /** The last twelve finished months (or fewer), oldest first, and whether each grew. */
-  recent: (Month & { up: boolean })[];
-}
-
-export function growthStreaks(history: NetWorthMonth[], today: DateKey): GrowthStreaks {
-  const done = history.filter((m) => m.finished);
-  const { current, best } = runs(done.map((m) => m.change > 0));
-  const year = parseDateKey(today).y;
-  let high = -Infinity;
-  let highsThisYear = 0;
-  history.forEach((m, i) => {
-    if (i > 0 && m.end > high && m.year === year) highsThisYear++;
-    high = Math.max(high, m.end);
-  });
-  return { current, best, highsThisYear, recent: done.slice(-12).map((m) => ({ ...m, up: m.change > 0 })) };
-}
-
-/** The run of trues at the end of a list, and the longest run anywhere in it. */
-function runs(flags: boolean[]): { current: number; best: number } {
-  let run = 0;
-  let best = 0;
-  for (const f of flags) {
-    run = f ? run + 1 : 0;
-    best = Math.max(best, run);
-  }
-  return { current: run, best };
-}
-
 /**
  * How much has been spent since the year began, at the end of each month that
  * counts (see `spendingYear`): twelve entries, null outside the counted months.
@@ -163,49 +128,6 @@ export function spendHistory(data: SpendData, today: DateKey): SpendMonth[] {
     .sort()
     .map((key) => ({ ...parseMonthKey(key), totals: monthTotals(data.spend[key], categories) }))
     .filter((m) => m.totals.hasData && monthsBetween(m, now) > 0);
-}
-
-export interface SpendStreaks {
-  /** Months in a row, up to the latest finished one, keeping at least 20% of income. */
-  keeping: number;
-  /** The longest such run ever. */
-  bestKeeping: number;
-  /** Months in a row spending less than the average month of the last year. */
-  underAverage: number;
-  /** Months in a row with something invested. */
-  investing: number;
-  /** The last twelve months, oldest first, and whether each kept at least 20%. */
-  recent: (Month & { up: boolean })[];
-}
-
-/** The share of income that counts as keeping a good amount. */
-export const KEEP_TARGET = 0.2;
-
-/** Streaks over months in a row; a month with nothing entered breaks them. */
-export function spendStreaks(history: SpendMonth[], today: DateKey): SpendStreaks {
-  const t = parseDateKey(today);
-  const lastMonth = shift({ year: t.y, month: t.m }, -1);
-  // Fill in skipped months so they break runs.
-  const months: (SpendMonth | null)[] = [];
-  if (history.length) {
-    const first = history[0];
-    const byKey = new Map(history.map((m) => [monthKey(m.year, m.month), m]));
-    for (let i = 0; i <= monthsBetween(first, lastMonth); i++) {
-      const m = shift(first, i);
-      months.push(byKey.get(monthKey(m.year, m.month)) ?? null);
-    }
-  }
-  const keeps = (m: SpendMonth | null) => !!m && (savingsRate(m.totals) ?? -1) >= KEEP_TARGET;
-  const recent = history.slice(-12);
-  const avg = recent.length ? recent.reduce((s, m) => s + m.totals.expenses, 0) / recent.length : 0;
-  const keeping = runs(months.map(keeps));
-  return {
-    keeping: keeping.current,
-    bestKeeping: keeping.best,
-    underAverage: recent.length >= 3 ? runs(months.map((m) => !!m && m.totals.expenses < avg)).current : 0,
-    investing: runs(months.map((m) => !!m && m.totals.invested > 0)).current,
-    recent: months.slice(-12).map((m, i, list) => ({ ...shift(lastMonth, i - list.length + 1), up: keeps(m) })),
-  };
 }
 
 export interface Creep {

@@ -1,4 +1,4 @@
-import { router, useLocalSearchParams } from 'expo-router';
+import { router } from 'expo-router';
 import { useState, type ReactElement } from 'react';
 import { StyleSheet, View } from 'react-native';
 
@@ -17,7 +17,6 @@ import { MONTHS, MONTHS_SHORT, parseDateKey } from '@/lib/dates';
 import { firstYear, spendingYear, type Month } from '@/lib/insights';
 import { formatPercent, MASK } from '@/lib/money';
 import {
-  growthStreaks,
   lifestyleCreep,
   monthsUntil,
   netWorthHistory,
@@ -26,12 +25,9 @@ import {
   nextMilestone,
   shift,
   spendHistory,
-  spendStreaks,
   spentSoFar,
   type Creep,
-  type GrowthStreaks,
   type NetWorthMonth,
-  type SpendStreaks,
 } from '@/lib/trends';
 import { useStore } from '@/store';
 import { openPaywall } from '@/store/pro';
@@ -45,7 +41,7 @@ const PARTS: { value: Part; label: string }[] = [
 
 /**
  * Progress over time, chart first: where net worth is headed, this year
- * against last, streaks and lifestyle creep. Net Worth and Spending are one tap
+ * against last, and lifestyle creep. Net Worth and Spending are one tap
  * apart and never mixed, so neither is thrown off by how much of the other
  * tracker is filled in. As a preview, every card shows its chart's shape
  * with the numbers and answers hidden, and opens Pro when tapped.
@@ -54,14 +50,7 @@ export default function InsightsScreen() {
   const tabButtons = useTabButtons();
   const snapshots = useStore((s) => s.snapshots);
   const spend = useStore((s) => s.spend);
-  const params = useLocalSearchParams<{ part?: Part }>();
-  const [part, setPart] = useState<Part>(params.part === 'spending' ? 'spending' : 'networth');
-  const [asked, setAsked] = useState(params.part);
-  // Opened again from the Spending streak while Insights was already open.
-  if (params.part !== asked) {
-    setAsked(params.part);
-    if (params.part === 'spending' || params.part === 'networth') setPart(params.part);
-  }
+  const [part, setPart] = useState<Part>('networth');
 
   if (firstYear({ snapshots, spend }) == null) {
     return (
@@ -102,7 +91,6 @@ function useLock() {
     money: (locked ? () => MASK : money) as typeof money,
     card: locked ? { locked: true, onPress: () => openPaywall('insights') } : {},
     text: (answer: string, teaser: string) => (locked ? teaser : answer),
-    mask: (value: string) => (locked ? '••' : value),
   };
 }
 
@@ -120,13 +108,11 @@ function NetWorth() {
   const history = netWorthHistory({ accounts, snapshots, nwCategories }, today);
   const pace = netWorthPace(history);
   const soFar = netWorthSoFar(history, year);
-  const streaks = growthStreaks(history, today);
   const cards = useCards([
     pace ? <HeadedCard key="headed" history={history} perMonth={pace.perMonth} counted={pace.months} /> : null,
     lastIndex(soFar) >= 0 && history.length >= 2 ? (
       <NetWorthYearCard key="year" year={year} soFar={soFar} before={netWorthSoFar(history, year - 1)} />
     ) : null,
-    streaks.recent.length >= 2 ? <GrowthStreaksCard key="streaks" streaks={streaks} /> : null,
   ]);
 
   if (!history.length) {
@@ -303,38 +289,6 @@ function NetWorthYearCard({ year, soFar, before }: { year: number; soFar: (numbe
   );
 }
 
-function GrowthStreaksCard({ streaks }: { streaks: GrowthStreaks }) {
-  const lock = useLock();
-  const { current, best, highsThisYear, recent } = streaks;
-  const up = recent.filter((m) => m.up).length;
-  let sentence: string;
-  if (current >= 2) {
-    sentence = `${current} months in a row of growth. ${best > current ? `Your best run is ${best}.` : 'That’s your best run yet.'}`;
-  } else if (current === 1) {
-    sentence = `Your net worth grew last month.${best > 1 ? ` Your best run is ${best} months.` : ''}`;
-  } else {
-    sentence = best > 0 ? `Your net worth dipped last month. Your best run of growth is ${months(best)}.` : 'Your net worth hasn’t had a month of growth yet.';
-  }
-  return (
-    <InsightCard
-      label="Streaks"
-      sentence={lock.text(sentence, 'See how many months in a row your net worth has grown, and your best run.')}
-      {...lock.card}>
-      <MonthDots months={recent} hidden={lock.locked} />
-      <StatGrid
-        stats={[
-          { value: lock.mask(months(current, true)), label: 'Growth streak' },
-          { value: lock.mask(months(best, true)), label: 'Best streak' },
-          { value: lock.mask(String(highsThisYear)), label: highsThisYear === 1 ? 'New high this year' : 'New highs this year' },
-          { value: lock.mask(`${up} of ${recent.length}`), label: 'Months up lately' },
-        ]}
-      />
-    </InsightCard>
-  );
-}
-
-const months = (n: number, short?: boolean) => (short ? `${n} mo` : n === 1 ? '1 month' : `${n} months`);
-
 function Spending() {
   const today = useToday();
   const spend = useStore((s) => s.spend);
@@ -345,14 +299,12 @@ function Spending() {
   const soFar = spentSoFar(data, year, today);
   const creep = lifestyleCreep(data, today);
   const history = spendHistory(data, today);
-  const streaks = spendStreaks(history, today);
   const sp = spendingYear(data, year, today);
   const cards = useCards([
     lastIndex(soFar) >= 0 ? (
       <SpentYearCard key="year" year={year} soFar={soFar} before={spentSoFar(data, year - 1, today)} />
     ) : null,
     creep ? <CreepCard key="creep" creep={creep} /> : null,
-    history.length >= 2 ? <SpendStreaksCard key="streaks" streaks={streaks} /> : null,
     sp?.categories.length ? <WhereItWentCard key="where" year={year} /> : null,
   ]);
 
@@ -492,34 +444,6 @@ function CreepCard({ creep }: { creep: Creep }) {
   );
 }
 
-function SpendStreaksCard({ streaks }: { streaks: SpendStreaks }) {
-  const lock = useLock();
-  const { keeping, bestKeeping, underAverage, investing, recent } = streaks;
-  let sentence: string;
-  if (keeping >= 2) sentence = `${keeping} months in a row keeping at least 20% of what you earned.`;
-  else if (keeping === 1) sentence = 'You kept at least 20% of what you earned last month.';
-  else if (bestKeeping > 0) sentence = `Your best run keeping 20% or more is ${months(bestKeeping)}.`;
-  else if (investing >= 2) sentence = `${investing} months in a row investing.`;
-  else sentence = 'Keep 20% of what you earn in a month to start a streak.';
-  return (
-    <InsightCard
-      label="Streaks"
-      sentence={lock.text(sentence, 'See your streaks for keeping 20% or more, spending under your average, and investing.')}
-      note="A green dot is a month you kept 20% or more."
-      {...lock.card}>
-      <MonthDots months={recent} hidden={lock.locked} />
-      <StatGrid
-        stats={[
-          { value: lock.mask(months(keeping, true)), label: 'Keeping 20% or more' },
-          { value: lock.mask(months(underAverage, true)), label: 'Under your average' },
-          { value: lock.mask(months(investing, true)), label: 'Investing every month' },
-          { value: lock.mask(months(bestKeeping, true)), label: 'Best 20% streak' },
-        ]}
-      />
-    </InsightCard>
-  );
-}
-
 /** The year's biggest spending categories, with the full list a tap away. */
 function WhereItWentCard({ year }: { year: number }) {
   const c = useColors();
@@ -584,45 +508,6 @@ function Readout({ title, items }: { title: string; items: { label: string; valu
   );
 }
 
-/** A dot per month, filled when it counts, like Fitness's streak rows. */
-function MonthDots({ months: list, hidden }: { months: (Month & { up: boolean })[]; hidden?: boolean }) {
-  const c = useColors();
-  return (
-    <View style={styles.dots}>
-      {list.map((m) => (
-        <View
-          key={`${m.year}-${m.month}`}
-          style={styles.dotCol}
-          accessible
-          accessibilityLabel={hidden ? MONTHS[m.month - 1] : `${MONTHS[m.month - 1]} ${m.year}: ${m.up ? 'yes' : 'no'}`}>
-          <View style={[styles.dot, { backgroundColor: m.up && !hidden ? c.up : c.fill }]} />
-          <Text variant="caption" color="secondary">
-            {MONTHS_SHORT[m.month - 1][0]}
-          </Text>
-        </View>
-      ))}
-    </View>
-  );
-}
-
-/** Four small figures in two rows. */
-function StatGrid({ stats }: { stats: { value: string; label: string }[] }) {
-  return (
-    <View style={styles.grid}>
-      {stats.map((s) => (
-        <View key={s.label} style={styles.stat}>
-          <Text variant="title3" weight="700" rounded tabular>
-            {s.value}
-          </Text>
-          <Text variant="footnote" color="secondary" numberOfLines={1}>
-            {s.label}
-          </Text>
-        </View>
-      ))}
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
   parts: {
     marginTop: 4,
@@ -646,27 +531,5 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: 14,
     marginBottom: 10,
-  },
-  dots: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 14,
-  },
-  dotCol: {
-    alignItems: 'center',
-    gap: 4,
-  },
-  dot: {
-    width: 14,
-    height: 14,
-    borderRadius: 7,
-  },
-  grid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    rowGap: 12,
-  },
-  stat: {
-    width: '50%',
   },
 });

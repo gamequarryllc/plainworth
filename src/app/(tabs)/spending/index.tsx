@@ -9,7 +9,6 @@ import { MonthsTable, type TableCell, type TableRow } from '@/components/months-
 import { Screen } from '@/components/screen';
 import { ShareRow } from '@/components/share-row';
 import { Stepper } from '@/components/stepper';
-import { StreakPill } from '@/components/streak-pill';
 import { useTabButtons } from '@/components/tab-buttons';
 import { Text } from '@/components/text';
 import { useMoney } from '@/hooks/use-money';
@@ -112,7 +111,6 @@ export default function SpendingScreen() {
 
   return (
     <Screen title="Spending" large left={tabButtons}>
-      <StreakPill />
       <Stepper
         label={String(year)}
         onPrev={() => changeYear(-1)}
