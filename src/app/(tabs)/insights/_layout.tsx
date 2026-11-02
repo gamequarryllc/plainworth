@@ -17,8 +17,8 @@ export default function InsightsLayout() {
 }
 
 /**
- * Insights is part of Pro. Without it, every Insights screen shows only the
- * last two whole months, with a way to unlock the rest at the end of the page.
+ * Insights is part of Pro. Without it, each Insights page shows only its first
+ * card, with a way to unlock the rest at the end of the page.
  */
 function ProPreview({ children }: { children: ReactNode }) {
   const pro = usePro();
@@ -28,8 +28,8 @@ function ProPreview({ children }: { children: ReactNode }) {
       footer={
         <UnlockCard
           feature="insights"
-          title="See your whole year with Pro"
-          text="This preview shows your last two months. Plainworth Pro shows every month of the year, how it compares with last year, and the years before."
+          title="See all your progress with Pro"
+          text="This preview shows one card. Plainworth Pro adds this year against last, your streaks, lifestyle creep, and where your money went."
         />
       }>
       {children}

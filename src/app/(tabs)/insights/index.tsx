@@ -1,42 +1,40 @@
 import { router } from 'expo-router';
-import { useState } from 'react';
+import { useState, type ReactElement } from 'react';
 import { StyleSheet, View } from 'react-native';
 
-import { BarChart } from '@/components/bar-chart';
-import { ChangeBars } from '@/components/change-bars';
 import { EmptyState } from '@/components/empty-state';
-import { CompareBars, InsightCard, RankRow } from '@/components/insight-card';
+import { InsightCard, RankRow } from '@/components/insight-card';
 import { PreviewFooter, useInsightsPreview } from '@/components/insights-preview';
 import { Row, Section } from '@/components/list';
 import { Screen } from '@/components/screen';
 import { Segmented } from '@/components/segmented';
-import { Stepper } from '@/components/stepper';
 import { useTabButtons } from '@/components/tab-buttons';
 import { Text } from '@/components/text';
+import { TrendChart, TrendKey, type TrendLabel } from '@/components/trend-chart';
 import { useMoney } from '@/hooks/use-money';
 import { useToday } from '@/hooks/use-today';
 import { MONTHS, MONTHS_SHORT, parseDateKey } from '@/lib/dates';
-import {
-  average,
-  categoryChangesBetween,
-  debtBetween,
-  finishedMonths,
-  firstYear,
-  holdingsOn,
-  monthsLabel,
-  monthsSpan,
-  netWorthMonths,
-  netWorthYear,
-  recentMonths,
-  spendingMonths,
-  spendingYear,
-  yearSpan,
-  type CategoryChange,
-  type Month,
-} from '@/lib/insights';
+import { firstYear, spendingYear, type Month } from '@/lib/insights';
 import { formatPercent } from '@/lib/money';
+import {
+  growthStreaks,
+  lifestyleCreep,
+  monthsUntil,
+  netWorthHistory,
+  netWorthPace,
+  netWorthSoFar,
+  nextMilestone,
+  shift,
+  spendHistory,
+  spendStreaks,
+  spentSoFar,
+  type Creep,
+  type GrowthStreaks,
+  type NetWorthMonth,
+  type SpendStreaks,
+} from '@/lib/trends';
 import { useStore } from '@/store';
-import { layout, useColors } from '@/theme';
+import { useColors } from '@/theme';
 
 type Part = 'networth' | 'spending';
 const PARTS: { value: Part; label: string }[] = [
@@ -45,480 +43,472 @@ const PARTS: { value: Part; label: string }[] = [
 ];
 
 /**
- * A year in short findings, each a sentence and a chart, with Net Worth and
- * Spending one tap apart so neither is a long scroll. Net worth findings come
- * only from balances and spending findings only from Spending, so neither is
- * thrown off by how much of the other tracker is filled in. As a preview, it
- * shows the last two whole months instead of years.
+ * Progress over time, chart first: where net worth is headed, this year
+ * against last, streaks and lifestyle creep. Net Worth and Spending are one tap
+ * apart and never mixed, so neither is thrown off by how much of the other
+ * tracker is filled in. As a preview, each shows only its first card.
  */
 export default function InsightsScreen() {
   const tabButtons = useTabButtons();
-  const preview = useInsightsPreview();
-  const today = useToday();
   const snapshots = useStore((s) => s.snapshots);
   const spend = useStore((s) => s.spend);
-  const now = parseDateKey(today);
   const [part, setPart] = useState<Part>('networth');
-  const [year, setYear] = useState(now.y);
 
-  const first = firstYear({ snapshots, spend });
-  if (first == null) {
+  if (firstYear({ snapshots, spend }) == null) {
     return (
       <Screen title="Insights" large left={tabButtons}>
         <EmptyState
           icon="chart.pie"
           title="See the bigger picture"
-          message="Once you’ve added accounts or entered a month of spending, this page shows how your net worth and spending change over time."
+          message="Once you’ve added accounts or entered a month of spending, this page shows where your net worth is headed and how your spending changes over time."
         />
         <PreviewFooter />
       </Screen>
     );
   }
 
-  const months = preview ? recentMonths(today) : null;
   return (
     <Screen title="Insights" large left={tabButtons}>
       <Segmented options={PARTS} value={part} onChange={setPart} style={styles.parts} />
-      {months ? (
-        <View style={styles.period}>
-          <Text variant="headline" align="center">
-            {monthsLabel(months)}
-          </Text>
-        </View>
-      ) : (
-        <Stepper
-          label={String(year)}
-          onPrev={() => setYear((y) => y - 1)}
-          onNext={() => setYear((y) => y + 1)}
-          canPrev={year > first}
-          canNext={year < now.y}
-          prevLabel="Previous year"
-          nextLabel="Next year"
-        />
-      )}
-      {part === 'networth' ? <NetWorth key={year} year={year} months={months} /> : <Spending year={year} months={months} />}
+      {part === 'networth' ? <NetWorth /> : <Spending />}
       <PreviewFooter />
     </Screen>
   );
 }
 
-/** "this year", "in 2025", or "in September and October". */
-function periodWords(year: number, months: Month[] | null, today: string) {
-  const isThisYear = !months && year === parseDateKey(today).y;
-  return {
-    isThisYear,
-    when: months ? `in ${monthsLabel(months)}` : isThisYear ? 'this year' : `in ${year}`,
-    before: isThisYear ? 'last year' : `in ${year - 1}`,
-  };
+/** The cards that have something to say; just the first one in the preview. */
+function useCards(cards: (ReactElement | null)[]): ReactElement[] {
+  const preview = useInsightsPreview();
+  const shown = cards.filter((x): x is ReactElement => x != null);
+  return preview ? shown.slice(0, 1) : shown;
 }
 
-/** Months of a run that have figures, latest first, for two-bar comparisons. */
-function latestFirst<T>(months: Month[], values: (T | null)[]): { month: Month; value: T }[] {
-  return months.flatMap((month, i) => (values[i] != null ? [{ month, value: values[i] as T }] : [])).reverse();
-}
+const shortMonth = (m: Month) => `${MONTHS_SHORT[m.month - 1]} ${m.year}`;
+const lastIndex = (values: (number | null)[]) => values.reduce<number>((last, v, i) => (v != null ? i : last), -1);
+const MONTH_LABELS: TrendLabel[] = MONTHS_SHORT.map((m, i) => ({ index: i, text: m[0] }));
 
-const monthName = (m: Month) => MONTHS[m.month - 1];
-
-function NetWorth({ year, months }: { year: number; months: Month[] | null }) {
-  const c = useColors();
-  const money = useMoney();
+function NetWorth() {
   const today = useToday();
   const accounts = useStore((s) => s.accounts);
   const snapshots = useStore((s) => s.snapshots);
   const nwCategories = useStore((s) => s.nwCategories);
-  const now = parseDateKey(today);
-  const [month, setMonth] = useState<number | null>(null);
-  const whole = (cents: number) => money(cents, { whole: true });
-  const signed = (cents: number) => money(cents, { signed: true, whole: true });
-  const { isThisYear, when, before: lastYear } = periodWords(year, months, today);
+  const year = parseDateKey(today).y;
 
-  const data = { accounts, snapshots, nwCategories };
-  const span = months ? monthsSpan(months, today) : yearSpan(year, today);
-  const nw = months ? netWorthMonths(data, months, today) : netWorthYear(data, year, today);
-  const categories = span ? categoryChangesBetween(data, span) : [];
-  const debt = span ? debtBetween(data, span) : null;
-  const holdings = span ? holdingsOn(data, span.to) : null;
+  const history = netWorthHistory({ accounts, snapshots, nwCategories }, today);
+  const pace = netWorthPace(history);
+  const soFar = netWorthSoFar(history, year);
+  const streaks = growthStreaks(history, today);
+  const cards = useCards([
+    pace ? <HeadedCard key="headed" history={history} perMonth={pace.perMonth} counted={pace.months} /> : null,
+    lastIndex(soFar) >= 0 && history.length >= 2 ? (
+      <NetWorthYearCard key="year" year={year} soFar={soFar} before={netWorthSoFar(history, year - 1)} />
+    ) : null,
+    streaks.recent.length >= 2 ? <GrowthStreaksCard key="streaks" streaks={streaks} /> : null,
+  ]);
 
-  // A year's months; a preview's two months are compared side by side instead.
-  const done = nw && !months ? finishedMonths(nw, year, today) : [];
-  const perMonth = average(done.map((m) => m.change));
-  const before = months ? null : netWorthYear(data, year - 1, today);
-  const beforeMonths = before ? finishedMonths(before, year - 1, today) : [];
-  const perMonthBefore = average(beforeMonths.map((m) => m.change));
-  const best = done.reduce<(typeof done)[number] | null>((b, m) => (!b || m.change > b.change ? m : b), null);
-  const picked = month != null && nw ? nw.months[month] : null;
-  const recent = months && nw ? latestFirst(months, nw.months) : [];
-  const canComparePace = perMonth != null && perMonthBefore != null && done.length >= 2 && beforeMonths.length >= 2;
-
-  // Nothing to compare yet: balances entered just now, or (in the preview) only after its months.
-  const nothingYet = nw
-    ? nw.change === 0 && (months ? recent.every((m) => m.value.change === 0) : done.length === 0)
-    : months != null && snapshots.length > 0;
-  if (nothingYet) {
+  if (!history.length) {
     return (
-      <InsightCard
-        label="Growth"
-        sentence="Update your balances over the next few months to see how your net worth changes."
-      />
-    );
-  }
-  if (!nw) {
-    return (
-      <Section footer={`No balances entered by the end of ${months ? monthName(months[months.length - 1]) : year}.`}>
+      <Section footer="No balances entered yet.">
         {accounts.length === 0 ? (
           <Row title="Add an Account" titleColor="tint" chevron={false} onPress={() => router.push('/account-form')} />
         ) : null}
       </Section>
     );
   }
+  if (!cards.length) {
+    return (
+      <InsightCard
+        label="Where You’re Headed"
+        sentence="Update your balances over the next couple of months to see where your net worth is headed."
+      />
+    );
+  }
+  return <>{cards}</>;
+}
 
-  const pct = nw.ratio != null && nw.start > 0 ? formatPercent(Math.abs(nw.ratio)) : null;
-  let growth =
-    nw.change > 0
-      ? `Your net worth grew ${whole(nw.change)} ${when}${pct ? `, up ${pct}` : ''}.`
-      : nw.change < 0
-        ? `Your net worth fell ${whole(-nw.change)} ${when}${pct ? `, down ${pct}` : ''}.`
-        : `Your net worth didn’t change ${when}.`;
-  if (perMonth != null && done.length >= 2 && Math.sign(perMonth) === Math.sign(nw.change)) {
-    growth += ` That’s about ${whole(Math.abs(perMonth))} a month.`;
+type Horizon = '12' | '36' | '60' | '120';
+const HORIZONS: { value: Horizon; label: string }[] = [
+  { value: '12', label: '1Y' },
+  { value: '36', label: '3Y' },
+  { value: '60', label: '5Y' },
+  { value: '120', label: '10Y' },
+];
+
+/** Net worth so far, then a dotted line ahead at the current pace, like a forecast. */
+function HeadedCard({ history, perMonth, counted }: { history: NetWorthMonth[]; perMonth: number; counted: number }) {
+  const c = useColors();
+  const money = useMoney();
+  const whole = (cents: number) => money(cents, { whole: true });
+  const [horizon, setHorizon] = useState<Horizon>('60');
+  const ahead = Number(horizon);
+  const years = ahead / 12;
+  const inYears = years === 1 ? 'in a year' : `in ${years} years`;
+
+  const now = history[history.length - 1];
+  const current = now.end;
+  const projected = current + perMonth * ahead;
+  const milestone = nextMilestone(current);
+  const away = monthsUntil(current, milestone, perMonth);
+
+  // As much history as the projection is long, so the chart stays balanced.
+  const shown = history.slice(-Math.min(ahead, history.length));
+  const nowIndex = shown.length - 1;
+  const count = nowIndex + ahead + 1;
+  const actual = [...shown.map((m) => m.end), ...Array(ahead).fill(null)];
+  const forecast = Array.from({ length: count }, (_, i) => (i < nowIndex ? null : current + perMonth * (i - nowIndex)));
+  const end = shift(now, ahead);
+  const labels: TrendLabel[] = [
+    ...(nowIndex > 0 ? [{ index: 0, text: shortMonth(shown[0]) }] : []),
+    { index: nowIndex, text: 'Today' },
+    { index: count - 1, text: shortMonth(end) },
+  ];
+
+  let sentence: string;
+  if (perMonth > 0) {
+    sentence =
+      away != null && away <= 600
+        ? `At about ${whole(perMonth)} a month, you’d ${milestone === 0 ? 'be back above zero' : `pass ${whole(milestone)}`} around ${MONTHS[shift(now, away).month - 1]} ${shift(now, away).year}.`
+        : `At about ${whole(perMonth)} a month, you’d have ${whole(projected)} ${inYears}.`;
+  } else if (perMonth < 0) {
+    sentence = `Your net worth has fallen about ${whole(-perMonth)} a month lately. At that pace it would be ${whole(projected)} ${inYears}.`;
+  } else {
+    sentence = 'Your net worth has held steady lately.';
   }
 
   return (
-    <>
-      {months ? (
-        <InsightCard label="Growth" sentence={growth}>
-          {recent.length >= 2 ? (
-            <CompareBars
-              bars={recent.map((r, i) => ({
-                label: monthName(r.month),
-                value: r.value.change,
-                text: signed(r.value.change),
-                color: i === 0 ? (r.value.change >= 0 ? c.up : c.down) : undefined,
-              }))}
-            />
-          ) : null}
-        </InsightCard>
-      ) : (
-        <InsightCard
-          label="Growth"
-          sentence={growth}
-          note={
-            picked
-              ? `${MONTHS[month!]}${isThisYear && month! + 1 === now.m ? ' so far' : ''}: ${signed(picked.change)}`
-              : best && done.length >= 2 && best.change > 0
-                ? `Best month: ${MONTHS[best.month]}, ${signed(best.change)}`
-                : null
-          }>
-          <ChangeBars
-            bars={nw.months.map((m, i) => ({
-              value: m ? m.change : null,
-              label: MONTHS_SHORT[i][0],
-              accessibilityLabel: m ? `${MONTHS[i]}: ${signed(m.change)}` : `${MONTHS[i]}: no balances`,
-            }))}
-            height={96}
-            selected={month}
-            onSelect={setMonth}
-          />
-        </InsightCard>
-      )}
-
-      {canComparePace ? (
-        <InsightCard
-          label={`Compared with ${year - 1}`}
-          sentence={paceSentence(perMonth!, perMonthBefore!, when, lastYear)}
-          note="The average change in a month.">
-          <CompareBars
-            bars={[
-              {
-                label: String(year),
-                value: perMonth!,
-                text: signed(perMonth!),
-                unit: 'a month',
-                color: perMonth! >= 0 ? c.up : c.down,
-              },
-              { label: String(year - 1), value: perMonthBefore!, text: signed(perMonthBefore!), unit: 'a month' },
-            ]}
-          />
-        </InsightCard>
-      ) : null}
-
-      {categories.length >= 2 ? (
-        <InsightCard
-          label="By Category"
-          sentence={categorySentence(categories, when)}
-          note={categories.some((x) => x.category.kind === 'liability') ? 'Paying down a debt counts as growth here.' : null}>
-          {pickBiggest(categories, 5).map((x) => (
-            <RankRow
-              key={x.category.id}
-              title={x.category.name}
-              value={signed(x.change)}
-              valueColor={x.change > 0 ? 'up' : 'down'}
-              share={Math.abs(x.change) / Math.max(...categories.map((y) => Math.abs(y.change)))}
-              color={x.change > 0 ? c.up : c.down}
-            />
-          ))}
-        </InsightCard>
-      ) : null}
-
-      {debt ? (
-        <InsightCard
-          label="Debt"
-          sentence={debtSentence(debt, whole, when)}
-          note={
-            holdings && holdings.assetTotal > 0 && holdings.debtTotal > 0
-              ? `What you owe is ${formatPercent(holdings.debtTotal / holdings.assetTotal)} of what you own.`
-              : null
-          }>
-          <CompareBars
-            bars={[
-              {
-                label: months ? `End of ${monthName(months[months.length - 1])}` : isThisYear ? 'Today' : `End of ${year}`,
-                value: debt.end,
-                text: whole(debt.end),
-                color: c.down,
-              },
-              {
-                label: months ? `Start of ${monthName(months[0])}` : `Start of ${year}`,
-                value: debt.start,
-                text: whole(debt.start),
-              },
-            ]}
-          />
-        </InsightCard>
-      ) : null}
-    </>
+    <InsightCard
+      label="Where You’re Headed"
+      sentence={sentence}
+      note={`Your pace is the average monthly change over the last ${counted} months. It assumes nothing changes, so it’s a direction, not a promise.`}>
+      <Segmented options={HORIZONS} value={horizon} onChange={setHorizon} style={styles.horizon} />
+      <View style={styles.bigRow}>
+        <Text variant="title2" weight="700" rounded tabular numberOfLines={1}>
+          {whole(projected)}
+        </Text>
+        <Text variant="subheadline" color="secondary">
+          {` ${inYears}`}
+        </Text>
+      </View>
+      <TrendKey
+        items={[
+          { label: 'Your net worth', color: c.up },
+          { label: 'At your pace', color: c.up, dashed: true },
+          ...(away != null && away <= ahead ? [{ label: whole(milestone), color: c.warning }] : []),
+        ]}
+      />
+      <TrendChart
+        count={count}
+        height={130}
+        series={[
+          { values: actual, color: c.up, endDot: true },
+          { values: forecast, color: c.up, dashed: true },
+        ]}
+        marker={away != null && away <= ahead ? { index: nowIndex + away, value: milestone, color: c.warning } : null}
+        labels={labels}
+      />
+    </InsightCard>
   );
 }
 
-function Spending({ year, months }: { year: number; months: Month[] | null }) {
+/** Growth since January 1, this year against last, month by month. */
+function NetWorthYearCard({ year, soFar, before }: { year: number; soFar: (number | null)[]; before: (number | null)[] }) {
+  const c = useColors();
+  const money = useMoney();
+  const whole = (cents: number) => money(cents, { whole: true });
+  const last = lastIndex(soFar);
+  const value = soFar[last]!;
+  const then = before[last];
+  const hasBefore = lastIndex(before) >= 0;
+
+  let sentence = value >= 0 ? `Your net worth is up ${whole(value)} this year` : `Your net worth is down ${whole(-value)} this year`;
+  if (then != null) {
+    const diff = value - then;
+    sentence +=
+      Math.abs(diff) <= Math.max(Math.abs(then) * 0.03, 100)
+        ? ', about the same as at this point last year.'
+        : `, ${whole(Math.abs(diff))} ${diff > 0 ? 'more' : 'less'} than at this point last year.`;
+  } else {
+    sentence += '.';
+  }
+
+  return (
+    <InsightCard label="This Year vs Last Year" sentence={sentence} note="How much your net worth has grown since January 1.">
+      {hasBefore ? (
+        <TrendKey
+          items={[
+            { label: String(year), color: c.up },
+            { label: String(year - 1), color: c.tertiary },
+          ]}
+        />
+      ) : null}
+      <TrendChart
+        count={12}
+        zero
+        series={[
+          { values: before, color: c.tertiary },
+          { values: soFar, color: c.up, endDot: true },
+        ]}
+        labels={MONTH_LABELS}
+      />
+    </InsightCard>
+  );
+}
+
+function GrowthStreaksCard({ streaks }: { streaks: GrowthStreaks }) {
+  const { current, best, highsThisYear, recent } = streaks;
+  const up = recent.filter((m) => m.up).length;
+  let sentence: string;
+  if (current >= 2) {
+    sentence = `${current} months in a row of growth. ${best > current ? `Your best run is ${best}.` : 'That’s your best run yet.'}`;
+  } else if (current === 1) {
+    sentence = `Your net worth grew last month.${best > 1 ? ` Your best run is ${best} months.` : ''}`;
+  } else {
+    sentence = best > 0 ? `Your net worth dipped last month. Your best run of growth is ${months(best)}.` : 'Your net worth hasn’t had a month of growth yet.';
+  }
+  return (
+    <InsightCard label="Streaks" sentence={sentence}>
+      <MonthDots months={recent} />
+      <StatGrid
+        stats={[
+          { value: months(current, true), label: 'Growth streak' },
+          { value: months(best, true), label: 'Best streak' },
+          { value: String(highsThisYear), label: highsThisYear === 1 ? 'New high this year' : 'New highs this year' },
+          { value: `${up} of ${recent.length}`, label: 'Months up lately' },
+        ]}
+      />
+    </InsightCard>
+  );
+}
+
+const months = (n: number, short?: boolean) => (short ? `${n} mo` : n === 1 ? '1 month' : `${n} months`);
+
+function Spending() {
+  const today = useToday();
+  const spend = useStore((s) => s.spend);
+  const spendCategories = useStore((s) => s.spendCategories);
+  const year = parseDateKey(today).y;
+  const data = { spend, spendCategories };
+
+  const soFar = spentSoFar(data, year, today);
+  const creep = lifestyleCreep(data, today);
+  const history = spendHistory(data, today);
+  const streaks = spendStreaks(history, today);
+  const sp = spendingYear(data, year, today);
+  const cards = useCards([
+    lastIndex(soFar) >= 0 ? (
+      <SpentYearCard key="year" year={year} soFar={soFar} before={spentSoFar(data, year - 1, today)} />
+    ) : null,
+    creep ? <CreepCard key="creep" creep={creep} /> : null,
+    history.length >= 2 ? <SpendStreaksCard key="streaks" streaks={streaks} /> : null,
+    sp?.categories.length ? <WhereItWentCard key="where" year={year} /> : null,
+  ]);
+
+  if (!sp && !history.length) {
+    return (
+      <Section footer="Nothing entered in Spending yet.">
+        <Row title="Open Spending" titleColor="tint" chevron={false} onPress={() => router.navigate('/spending')} />
+      </Section>
+    );
+  }
+  if (!cards.length) {
+    return (
+      <InsightCard
+        label="This Year vs Last Year"
+        sentence="Once a month you’ve entered is over, this page shows how your spending adds up over the year."
+      />
+    );
+  }
+  return <>{cards}</>;
+}
+
+/** Spending added up since January, this year against last. */
+function SpentYearCard({ year, soFar, before }: { year: number; soFar: (number | null)[]; before: (number | null)[] }) {
+  const c = useColors();
+  const money = useMoney();
+  const whole = (cents: number) => money(cents, { whole: true });
+  const last = lastIndex(soFar);
+  const value = soFar[last]!;
+  const then = before[last];
+  const hasBefore = lastIndex(before) >= 0;
+
+  let sentence = `You’ve spent ${whole(value)} this year through ${MONTHS[last]}`;
+  if (then != null) {
+    const diff = value - then;
+    sentence +=
+      Math.abs(diff) <= then * 0.03
+        ? ', about the same as by then last year.'
+        : `, ${whole(Math.abs(diff))} ${diff < 0 ? 'less' : 'more'} than by then last year.`;
+  } else {
+    sentence += '.';
+  }
+
+  return (
+    <InsightCard label="This Year vs Last Year" sentence={sentence} note="Counts each month once it’s over.">
+      {hasBefore ? (
+        <TrendKey
+          items={[
+            { label: `${year}, added up`, color: c.bar },
+            { label: `${year - 1}, added up`, color: c.tertiary },
+          ]}
+        />
+      ) : null}
+      <TrendChart
+        count={12}
+        series={[
+          { values: before, color: c.tertiary },
+          { values: soFar, color: c.bar, endDot: true },
+        ]}
+        labels={MONTH_LABELS}
+      />
+    </InsightCard>
+  );
+}
+
+/** Income and spending, each as a change from where it started: spending climbing faster is creep. */
+function CreepCard({ creep }: { creep: Creep }) {
+  const c = useColors();
+  const { income, spending, year } = creep;
+  const moved = (r: number) =>
+    Math.round(Math.abs(r) * 100) === 0 ? 'held steady' : `${r >= 0 ? 'grew' : 'fell'} ${Math.round(Math.abs(r) * 100)}%`;
+  let sentence: string;
+  if (income == null) {
+    sentence = `Your spending ${moved(spending)} this year, month for month.`;
+  } else {
+    sentence = `Your income ${moved(income)} this year and your spending ${moved(spending)}.`;
+    if (spending > income + 0.01) sentence += ' That’s lifestyle creep.';
+    else if (income > spending + 0.01) sentence += ' You’re keeping the difference.';
+    else sentence += ' They’re moving together.';
+  }
+  const count = creep.months.length;
+  const labels: TrendLabel[] = [
+    { index: 0, text: shortMonth(creep.months[0]) },
+    ...(count > 14 ? [{ index: 12, text: shortMonth(creep.months[12]) }] : []),
+    { index: count - 1, text: shortMonth(creep.months[count - 1]) },
+  ];
+  return (
+    <InsightCard
+      label="Lifestyle Creep"
+      sentence={sentence}
+      note={`Compares your average month in ${year} with ${year - 1}. Each line is a six-month average, as a change from where it started. When the blue line climbs faster than the green one, that’s creep.`}>
+      <TrendKey
+        items={[
+          ...(income != null ? [{ label: 'Income', color: c.up }] : []),
+          { label: 'Spending', color: c.bar },
+        ]}
+      />
+      <TrendChart
+        count={count}
+        zero
+        series={[
+          { values: creep.incomeLine, color: c.up, endDot: true },
+          { values: creep.spendingLine, color: c.bar, endDot: true },
+        ]}
+        labels={labels}
+      />
+    </InsightCard>
+  );
+}
+
+function SpendStreaksCard({ streaks }: { streaks: SpendStreaks }) {
+  const { keeping, bestKeeping, underAverage, investing, recent } = streaks;
+  let sentence: string;
+  if (keeping >= 2) sentence = `${keeping} months in a row keeping at least 20% of what you earned.`;
+  else if (keeping === 1) sentence = 'You kept at least 20% of what you earned last month.';
+  else if (bestKeeping > 0) sentence = `Your best run keeping 20% or more is ${months(bestKeeping)}.`;
+  else if (investing >= 2) sentence = `${investing} months in a row investing.`;
+  else sentence = 'Keep 20% of what you earn in a month to start a streak.';
+  return (
+    <InsightCard label="Streaks" sentence={sentence} note="A green dot is a month you kept 20% or more.">
+      <MonthDots months={recent} />
+      <StatGrid
+        stats={[
+          { value: months(keeping, true), label: 'Keeping 20% or more' },
+          { value: months(underAverage, true), label: 'Under your average' },
+          { value: months(investing, true), label: 'Investing every month' },
+          { value: months(bestKeeping, true), label: 'Best 20% streak' },
+        ]}
+      />
+    </InsightCard>
+  );
+}
+
+/** The year's biggest spending categories, with the full list a tap away. */
+function WhereItWentCard({ year }: { year: number }) {
   const c = useColors();
   const money = useMoney();
   const today = useToday();
   const spend = useStore((s) => s.spend);
   const spendCategories = useStore((s) => s.spendCategories);
-  const hidden = useStore((s) => s.settings.hideAmounts);
   const whole = (cents: number) => money(cents, { whole: true });
   const signed = (cents: number) => money(cents, { signed: true, whole: true });
-  const { when, before: lastYear } = periodWords(year, months, today);
-
   const data = { spend, spendCategories };
-  const sp = months ? spendingMonths(data, months) : spendingYear(data, year, today);
-  const spBefore = months ? null : spendingYear(data, year - 1, today);
-  const canCompare = !!sp && !!spBefore && sp.months >= 2 && spBefore.months >= 2;
-  const canCompareRate = canCompare && sp!.rate != null && spBefore!.rate != null;
+  const sp = spendingYear(data, year, today)!;
+  const spBefore = spendingYear(data, year - 1, today);
+  const canCompare = !!spBefore && sp.months >= 2 && spBefore.months >= 2;
   const lastYearMonthly = new Map(spBefore?.categories.map((x) => [x.category.id, x.monthly]) ?? []);
-
-  if (!sp) {
-    return (
-      <Section footer={`Nothing entered in Spending for ${months ? monthsLabel(months) : year}.`}>
-        <Row title="Open Spending" titleColor="tint" chevron={false} onPress={() => router.navigate('/spending')} />
-      </Section>
-    );
-  }
-
-  const spent = months ? latestFirst(months, sp.spent) : [];
-  const rates = months ? latestFirst(months, sp.rates) : [];
   const top = sp.categories[0];
-
   return (
-    <>
-      {months ? (
-        <InsightCard
-          label="Spent"
-          sentence={
-            spent.length >= 2
-              ? monthSpendSentence(spent[0].value, spent[1].value, monthName(spent[0].month), monthName(spent[1].month))
-              : `You spent ${whole(spent[0].value)} in ${monthName(spent[0].month)}.`
-          }>
-          {spent.length >= 2 ? (
-            <CompareBars
-              bars={spent.map((s, i) => ({
-                label: monthName(s.month),
-                value: s.value,
-                text: whole(s.value),
-                color: i === 0 ? c.bar : undefined,
-              }))}
-            />
-          ) : null}
-        </InsightCard>
-      ) : (
-        <InsightCard
-          label="Average Month"
-          sentence={
-            canCompare
-              ? spendSentence(sp.monthly, spBefore!.monthly, when, lastYear)
-              : `You spent ${whole(sp.monthly)} a month on average ${when}.`
-          }>
-          {canCompare ? (
-            <CompareBars
-              bars={[
-                { label: String(year), value: sp.monthly, text: whole(sp.monthly), unit: 'a month', color: c.bar },
-                { label: String(year - 1), value: spBefore!.monthly, text: whole(spBefore!.monthly), unit: 'a month' },
-              ]}
-            />
-          ) : (
-            <BarChart
-              bars={sp.spent.map((v, i) => ({
-                value: v ?? 0,
-                label: MONTHS_SHORT[i][0],
-                accessibilityLabel: v != null ? `${MONTHS[i]}: spent ${whole(v)}` : `${MONTHS[i]}: not counted`,
-              }))}
-              height={110}
-              average={sp.months >= 2 ? sp.monthly : null}
-              formatTick={hidden ? undefined : (v) => money(v, { compact: true, whole: true })}
-            />
-          )}
-        </InsightCard>
-      )}
-
-      {sp.rate != null ? (
-        <InsightCard
-          label="Savings Rate"
-          sentence={
-            months && rates.length >= 2
-              ? rateSentence(
-                  rates[0].value,
-                  rates[1].value,
-                  `in ${monthName(rates[0].month)}`,
-                  `in ${monthName(rates[1].month)}`,
-                )
-              : canCompareRate
-                ? rateSentence(sp.rate, spBefore!.rate!, when, lastYear)
-                : keptSentence(sp.rate, months && rates.length ? `in ${monthName(rates[0].month)}` : when)
-          }
-          note="What you didn’t spend, out of what you earned.">
-          {months ? (
-            rates.length >= 2 ? (
-              <CompareBars
-                bars={rates.map((r, i) => ({
-                  label: monthName(r.month),
-                  value: r.value,
-                  text: formatPercent(r.value),
-                  color: i === 0 ? (r.value >= 0 ? c.up : c.down) : undefined,
-                }))}
-              />
-            ) : null
-          ) : canCompareRate ? (
-            <CompareBars
-              bars={[
-                { label: String(year), value: sp.rate, text: formatPercent(sp.rate), color: sp.rate >= 0 ? c.up : c.down },
-                { label: String(year - 1), value: spBefore!.rate!, text: formatPercent(spBefore!.rate!) },
-              ]}
-            />
-          ) : sp.months >= 2 ? (
-            <ChangeBars
-              bars={sp.rates.map((r, i) => ({
-                value: r,
-                label: MONTHS_SHORT[i][0],
-                accessibilityLabel: r != null ? `${MONTHS[i]}: kept ${formatPercent(r)}` : `${MONTHS[i]}: no income`,
-              }))}
-              height={84}
-            />
-          ) : null}
-        </InsightCard>
-      ) : null}
-
-      {top ? (
-        <InsightCard
-          label="Where It Went"
-          sentence={`${top.category.name} took the biggest share of your spending ${when}, ${formatPercent(top.share)}.`}
-          note={canCompare ? `Next to each bar is how much more or less you spent a month than in ${year - 1}.` : null}
-          onPress={() => router.push({ pathname: '/insights/where-it-went', params: { year: String(year) } })}>
-          {sp.categories.slice(0, 5).map((x) => {
-            const change = canCompare ? x.monthly - (lastYearMonthly.get(x.category.id) ?? 0) : null;
-            return (
-              <RankRow
-                key={x.category.id}
-                title={x.category.name}
-                value={`${whole(x.monthly)}/mo`}
-                share={x.share / top.share}
-                color={c.bar}
-                note={change == null ? formatPercent(x.share) : change === 0 ? 'Same' : signed(change)}
-                // Spending more is the bad direction.
-                noteColor={change == null || change === 0 ? 'secondary' : change > 0 ? 'down' : 'up'}
-              />
-            );
-          })}
-        </InsightCard>
-      ) : null}
-    </>
+    <InsightCard
+      label="Where It Went"
+      sentence={`${top.category.name} took the biggest share of your spending this year, ${formatPercent(top.share)}.`}
+      note={canCompare ? `Next to each bar is how much more or less you spent a month than in ${year - 1}.` : null}
+      onPress={() => router.push({ pathname: '/insights/where-it-went', params: { year: String(year) } })}>
+      {sp.categories.slice(0, 5).map((x) => {
+        const change = canCompare ? x.monthly - (lastYearMonthly.get(x.category.id) ?? 0) : null;
+        return (
+          <RankRow
+            key={x.category.id}
+            title={x.category.name}
+            value={`${whole(x.monthly)}/mo`}
+            share={x.share / top.share}
+            color={c.bar}
+            note={change == null ? formatPercent(x.share) : change === 0 ? 'Same' : signed(change)}
+            // Spending more is the bad direction.
+            noteColor={change == null || change === 0 ? 'secondary' : change > 0 ? 'down' : 'up'}
+          />
+        );
+      })}
+    </InsightCard>
   );
 }
 
-/** "Your net worth grew faster this year than last year", from the average month of each. */
-function paceSentence(now: number, before: number, thisYear: string, lastYear: string): string {
-  if (now >= 0 && before >= 0) {
-    if (Math.abs(now - before) <= 0.05 * Math.max(now, before)) {
-      return `Your net worth grew about as fast ${thisYear} as ${lastYear}.`;
-    }
-    return now > before
-      ? `Your net worth grew faster ${thisYear} than ${lastYear}.`
-      : `Your net worth grew more slowly ${thisYear} than ${lastYear}.`;
-  }
-  if (now < 0 && before >= 0) return `Your net worth fell ${thisYear}, after growing ${lastYear}.`;
-  if (now >= 0 && before < 0) return `Your net worth grew ${thisYear}, after falling ${lastYear}.`;
-  return now < before
-    ? `Your net worth fell faster ${thisYear} than ${lastYear}.`
-    : `Your net worth fell more slowly ${thisYear} than ${lastYear}.`;
+/** A dot per month, filled when it counts, like Fitness's streak rows. */
+function MonthDots({ months: list }: { months: (Month & { up: boolean })[] }) {
+  const c = useColors();
+  return (
+    <View style={styles.dots}>
+      {list.map((m) => (
+        <View
+          key={`${m.year}-${m.month}`}
+          style={styles.dotCol}
+          accessible
+          accessibilityLabel={`${MONTHS[m.month - 1]} ${m.year}: ${m.up ? 'yes' : 'no'}`}>
+          <View style={[styles.dot, { backgroundColor: m.up ? c.up : c.fill }]} />
+          <Text variant="caption" color="secondary">
+            {MONTHS_SHORT[m.month - 1][0]}
+          </Text>
+        </View>
+      ))}
+    </View>
+  );
 }
 
-/** The category that moved net worth the most, in plain words. */
-function categorySentence(list: CategoryChange[], when: string): string {
-  const top = list[0];
-  if (top.change > 0) {
-    return top.category.kind === 'liability'
-      ? `Paying down ${top.category.name} helped the most ${when}.`
-      : `${top.category.name} grew the most ${when}.`;
-  }
-  const worst = list[list.length - 1];
-  return worst.category.kind === 'liability'
-    ? `${worst.category.name} went up the most ${when}.`
-    : `${worst.category.name} fell the most ${when}.`;
-}
-
-/** The biggest movers either way, kept in order from most added to most taken away. */
-function pickBiggest<T extends { change: number }>(list: T[], count: number): T[] {
-  const keep = new Set([...list].sort((a, b) => Math.abs(b.change) - Math.abs(a.change)).slice(0, count));
-  return list.filter((x) => keep.has(x));
-}
-
-function debtSentence(debt: { start: number; end: number }, whole: (cents: number) => string, when: string): string {
-  if (debt.end < debt.start) {
-    return debt.end === 0
-      ? `You paid off all your debt ${when}.`
-      : `You paid down ${whole(debt.start - debt.end)} of debt ${when}.`;
-  }
-  if (debt.end > debt.start) return `Your debt grew ${whole(debt.end - debt.start)} ${when}.`;
-  return `Your debt didn’t change ${when}.`;
-}
-
-function spendSentence(now: number, before: number, thisYear: string, lastYear: string): string {
-  if (Math.abs(now - before) <= 0.03 * before) return `You spent about the same each month ${thisYear} as ${lastYear}.`;
-  return now < before
-    ? `You spent less each month ${thisYear} than ${lastYear}.`
-    : `You spent more each month ${thisYear} than ${lastYear}.`;
-}
-
-function monthSpendSentence(now: number, before: number, month: string, monthBefore: string): string {
-  if (Math.abs(now - before) <= 0.03 * before) return `You spent about the same in ${month} as in ${monthBefore}.`;
-  return now < before
-    ? `You spent less in ${month} than in ${monthBefore}.`
-    : `You spent more in ${month} than in ${monthBefore}.`;
-}
-
-function rateSentence(now: number, before: number, when: string, whenBefore: string): string {
-  if (Math.abs(now - before) < 0.005) {
-    return `You kept about the same share of what you earned ${when} as ${whenBefore}.`;
-  }
-  return now > before
-    ? `You kept more of what you earned ${when} than ${whenBefore}.`
-    : `You kept less of what you earned ${when} than ${whenBefore}.`;
-}
-
-function keptSentence(rate: number, when: string): string {
-  return rate >= 0
-    ? `You kept ${formatPercent(rate)} of what you earned ${when}.`
-    : `You spent ${formatPercent(-rate)} more than you earned ${when}.`;
+/** Four small figures in two rows. */
+function StatGrid({ stats }: { stats: { value: string; label: string }[] }) {
+  return (
+    <View style={styles.grid}>
+      {stats.map((s) => (
+        <View key={s.label} style={styles.stat}>
+          <Text variant="title3" weight="700" rounded tabular>
+            {s.value}
+          </Text>
+          <Text variant="footnote" color="secondary" numberOfLines={1}>
+            {s.label}
+          </Text>
+        </View>
+      ))}
+    </View>
+  );
 }
 
 const styles = StyleSheet.create({
@@ -526,11 +516,35 @@ const styles = StyleSheet.create({
     marginTop: 4,
     marginBottom: 10,
   },
-  period: {
-    height: 32,
-    justifyContent: 'center',
-    marginHorizontal: layout.margin,
-    marginTop: 4,
-    marginBottom: 6,
+  horizon: {
+    marginHorizontal: 0,
+    marginBottom: 12,
+  },
+  bigRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    marginBottom: 8,
+  },
+  dots: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 14,
+  },
+  dotCol: {
+    alignItems: 'center',
+    gap: 4,
+  },
+  dot: {
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+  },
+  grid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    rowGap: 12,
+  },
+  stat: {
+    width: '50%',
   },
 });

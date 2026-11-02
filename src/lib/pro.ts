@@ -11,7 +11,7 @@ export const PRO_FEATURES: { key: ProFeature; icon: SFSymbol; title: string; tex
     key: 'insights',
     icon: 'chart.bar.xaxis',
     title: 'Insights',
-    text: 'Your year in short findings: how your net worth grew, what moved it, your savings rate and top spending.',
+    text: 'Charts of your progress: where your net worth is headed, this year against last, streaks and lifestyle creep.',
   },
   {
     key: 'chart-values',
