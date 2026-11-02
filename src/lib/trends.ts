@@ -1,7 +1,7 @@
-import { monthKey, parseDateKey, parseMonthKey } from './dates';
-import { netWorthMonths, spendingYear, type Month } from './insights';
+import { dayNumber, monthKey, parseDateKey, parseMonthKey } from './dates';
+import { holdingsOn, netWorthMonths, spendingYear, type Month } from './insights';
 import { monthTotals, type MonthTotals } from './spending';
-import type { Cents, Data, DateKey } from './types';
+import type { Cents, Data, DateKey, NWCategory } from './types';
 
 /**
  * Progress over time for the Insights charts: where net worth is headed, this
@@ -184,5 +184,55 @@ export function lifestyleCreep(data: SpendData, today: DateKey): Creep | null {
     months,
     incomeLine: income == null ? months.map(() => null) : smooth((t) => t.income),
     spendingLine: smooth((t) => t.expenses),
+  };
+}
+
+export type PeriodUnit = 'month' | 'quarter' | 'year';
+
+export interface Distribution {
+  /** Oldest first: the last month of each period, which is the current one for the latest. */
+  periods: (Month & { unit: PeriodUnit })[];
+  /** Asset categories that had something in any period, biggest (in the latest period) first. */
+  categories: NWCategory[];
+  /** values[period][category]: what was in it at the end of the period, or today for the current one. */
+  values: Cents[][];
+}
+
+/**
+ * What you own by category at the end of each of the last few months,
+ * quarters or years, for the stacked "Distribution" chart. Debts aren't
+ * included: it shows what your assets are made of. Periods before the first
+ * balance are left out.
+ */
+export function distribution(data: NWData, today: DateKey, unit: PeriodUnit, count = 6): Distribution {
+  const t = parseDateKey(today);
+  const todayDay = dayNumber(today);
+  const step = unit === 'month' ? 1 : unit === 'quarter' ? 3 : 12;
+  // The last month of the current period.
+  const current: Month = {
+    year: t.y,
+    month: unit === 'month' ? t.m : unit === 'quarter' ? Math.ceil(t.m / 3) * 3 : 12,
+  };
+  const periods = Array.from({ length: count }, (_, i) => ({ ...shift(current, (i - count + 1) * step), unit }));
+  const rows = periods.map((p) => {
+    const end = Math.round(Date.UTC(p.year, p.month, 0) / 86_400_000);
+    return holdingsOn(data, Math.min(end, todayDay));
+  });
+  const first = rows.findIndex((h) => h.assets.length > 0);
+  if (first < 0) return { periods: [], categories: [], values: [] };
+  const kept = rows.slice(first);
+  const latest = new Map(kept[kept.length - 1].assets.map((a) => [a.category.id, a.total]));
+  const seen = new Map<string, NWCategory>();
+  for (const h of kept) for (const a of h.assets) seen.set(a.category.id, a.category);
+  const categories = [...seen.values()].sort(
+    (a, b) => (latest.get(b.id) ?? 0) - (latest.get(a.id) ?? 0) || a.order - b.order,
+  );
+  return {
+    periods: periods.slice(first),
+    categories,
+    values: kept.map((h) => {
+      const totals = new Map(h.assets.map((a) => [a.category.id, a.total]));
+      return categories.map((c) => totals.get(c.id) ?? 0);
+    }),
   };
 }

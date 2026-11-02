@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
 import {
+  distribution,
   lifestyleCreep,
   monthsUntil,
   netWorthHistory,
@@ -122,3 +123,20 @@ test('trends: lifestyle creep compares average months', () => {
   assert.equal(lifestyleCreep(sp, '2026-02-15'), null);
 });
 
+
+test('trends: what you own by category, period by period', () => {
+  const cats = [...nwCategories, { id: 'inv', name: 'Investments', kind: 'asset' as const, order: 2 }];
+  const accts = [...accounts.slice(0, 2).map((a) => (a.id === 'b' ? { ...a, categoryId: 'inv' } : a)), accounts[2]];
+  const d = distribution({ ...nw, accounts: accts, nwCategories: cats }, '2026-05-20', 'month');
+  // Six months back is December; November's first balance is before it.
+  assert.deepEqual(d.periods.map((p) => p.month), [12, 1, 2, 3, 4, 5]);
+  // Investments are biggest now, so they come first. The loan isn't an asset.
+  assert.deepEqual(d.categories.map((c) => c.id), ['inv', 'cash']);
+  assert.deepEqual(d.values[0], [0, 1_200_00]);
+  assert.deepEqual(d.values[5], [5_000_00, 1_700_00]);
+
+  const q = distribution(nw, '2026-05-20', 'quarter');
+  // Q4 2025, Q1 2026, and Q2 so far.
+  assert.deepEqual(q.periods.map((p) => [p.year, p.month]), [[2025, 12], [2026, 3], [2026, 6]]);
+  assert.deepEqual(distribution({ ...nw, snapshots: [] }, '2026-05-20', 'year').periods, []);
+});

@@ -51,6 +51,7 @@ export default function RootLayout() {
           <Stack.Screen name="spend-category-form" options={modal} />
           <Stack.Screen name="settings" options={{ ...modal, headerShown: false }} />
           <Stack.Screen name="pro" options={modal} />
+          <Stack.Screen name="share" options={modal} />
         </Stack>
         <LockGate />
         <StatusBar style="auto" />

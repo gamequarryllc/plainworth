@@ -8,6 +8,7 @@ import { PreviewFooter, useInsightsPreview } from '@/components/insights-preview
 import { Row, Section } from '@/components/list';
 import { Screen } from '@/components/screen';
 import { Segmented } from '@/components/segmented';
+import { StackedBars, useCategoryColors } from '@/components/stacked-bars';
 import { useTabButtons } from '@/components/tab-buttons';
 import { Text } from '@/components/text';
 import { TrendChart, TrendKey, type TrendLabel } from '@/components/trend-chart';
@@ -17,6 +18,7 @@ import { MONTHS, MONTHS_SHORT, parseDateKey } from '@/lib/dates';
 import { firstYear, spendingYear, type Month } from '@/lib/insights';
 import { formatPercent, MASK } from '@/lib/money';
 import {
+  distribution,
   lifestyleCreep,
   monthsUntil,
   netWorthHistory,
@@ -28,6 +30,7 @@ import {
   spentSoFar,
   type Creep,
   type NetWorthMonth,
+  type PeriodUnit,
 } from '@/lib/trends';
 import { useStore } from '@/store';
 import { openPaywall } from '@/store/pro';
@@ -113,6 +116,7 @@ function NetWorth() {
     lastIndex(soFar) >= 0 && history.length >= 2 ? (
       <NetWorthYearCard key="year" year={year} soFar={soFar} before={netWorthSoFar(history, year - 1)} />
     ) : null,
+    history.length >= 2 ? <DistributionCard key="mix" /> : null,
   ]);
 
   if (!history.length) {
@@ -133,6 +137,97 @@ function NetWorth() {
     );
   }
   return <>{cards}</>;
+}
+
+const UNITS: { value: PeriodUnit; label: string }[] = [
+  { value: 'month', label: 'Monthly' },
+  { value: 'quarter', label: 'Quarterly' },
+  { value: 'year', label: 'Yearly' },
+];
+
+const periodLabel = (p: Month & { unit: PeriodUnit }) =>
+  p.unit === 'month'
+    ? MONTHS_SHORT[p.month - 1]
+    : p.unit === 'quarter'
+      ? `Q${p.month / 3} ’${String(p.year).slice(2)}`
+      : String(p.year);
+const periodName = (p: Month & { unit: PeriodUnit }) =>
+  p.unit === 'month' ? `${MONTHS[p.month - 1]} ${p.year}` : p.unit === 'quarter' ? `Q${p.month / 3} ${p.year}` : String(p.year);
+
+/** What your assets are made of, period by period, as stacked columns. Tap one for its breakdown. */
+function DistributionCard() {
+  const lock = useLock();
+  const money = lock.money;
+  const colors = useCategoryColors();
+  const today = useToday();
+  const accounts = useStore((s) => s.accounts);
+  const snapshots = useStore((s) => s.snapshots);
+  const nwCategories = useStore((s) => s.nwCategories);
+  const [unit, setUnit] = useState<PeriodUnit>('month');
+  const [picked, setPicked] = useState<number | null>(null);
+  const d = distribution({ accounts, snapshots, nwCategories }, today, unit);
+  if (d.periods.length === 0 || d.categories.length === 0) return null;
+  const last = d.periods.length - 1;
+  const at = picked != null && picked <= last ? picked : last;
+  const totalAt = (i: number) => d.values[i].reduce((s, v) => s + v, 0);
+  const shareAt = (i: number, k: number) => (totalAt(i) > 0 ? d.values[i][k] / totalAt(i) : 0);
+  const top = d.categories[0];
+
+  let sentence = `${top.name} ${d.categories.length > 1 ? `makes up ${formatPercent(shareAt(last, 0))} of` : 'is all of'} what you own.`;
+  if (last > 0 && d.categories.length > 1) {
+    const then = shareAt(0, 0);
+    const now = shareAt(last, 0);
+    const since = periodName(d.periods[0]);
+    if (Math.abs(now - then) >= 0.02) {
+      sentence = `${top.name} makes up ${formatPercent(now)} of what you own, ${now > then ? 'up' : 'down'} from ${formatPercent(then)} in ${since}.`;
+    }
+  }
+
+  return (
+    <InsightCard
+      label="Distribution Over Time"
+      sentence={lock.text(sentence, 'See how what you own is split across cash, investments and more, and how that mix has shifted.')}
+      note="What you own, by category. Debts aren’t included."
+      {...lock.card}>
+      <Segmented
+        options={UNITS}
+        value={unit}
+        onChange={(u) => {
+          setUnit(u);
+          setPicked(null);
+        }}
+        style={styles.horizon}
+      />
+      <StackedBars
+        values={d.values}
+        colors={colors}
+        labels={d.periods.map(periodLabel)}
+        selected={at}
+        onSelect={lock.locked ? undefined : setPicked}
+      />
+      <View style={styles.mixList}>
+        <Text variant="footnote" weight="600" color="secondary">
+          {`${periodName(d.periods[at])}${at === last ? ' (so far)' : ''} · ${money(totalAt(at), { whole: true })}`}
+        </Text>
+        {d.categories.map((cat, k) =>
+          d.values[at][k] > 0 ? (
+            <View key={cat.id} style={styles.mixRow}>
+              <View style={[styles.mixDot, { backgroundColor: colors[k % colors.length] }]} />
+              <Text numberOfLines={1} style={styles.mixName}>
+                {cat.name}
+              </Text>
+              <Text tabular color="secondary" style={styles.mixShare}>
+                {lock.locked ? '••' : formatPercent(shareAt(at, k))}
+              </Text>
+              <Text tabular style={styles.mixValue}>
+                {money(d.values[at][k], { whole: true })}
+              </Text>
+            </View>
+          ) : null,
+        )}
+      </View>
+    </InsightCard>
+  );
 }
 
 type Horizon = '12' | '36' | '60' | '120';
@@ -521,6 +616,31 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'baseline',
     marginBottom: 8,
+  },
+  mixList: {
+    marginTop: 16,
+    gap: 8,
+  },
+  mixRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  mixDot: {
+    width: 9,
+    height: 9,
+    borderRadius: 4.5,
+  },
+  mixName: {
+    flex: 1,
+  },
+  mixShare: {
+    minWidth: 52,
+    textAlign: 'right',
+  },
+  mixValue: {
+    minWidth: 92,
+    textAlign: 'right',
   },
   bigUnit: {
     flexShrink: 1,

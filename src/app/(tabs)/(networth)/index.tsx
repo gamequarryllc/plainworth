@@ -94,6 +94,7 @@ export default function NetWorthScreen() {
   menu.push({
     inline: true,
     items: [
+      { label: 'Share Net Worth', icon: 'square.and.arrow.up', onPress: () => router.push('/share') },
       { label: 'Categories', icon: 'folder', onPress: () => router.push('/categories') },
       ...(closedCount > 0
         ? [{ label: 'Closed Accounts', icon: 'archivebox' as const, onPress: () => router.push('/closed') }]
