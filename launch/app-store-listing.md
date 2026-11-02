@@ -17,7 +17,7 @@ Everything to paste into App Store Connect. Character limits are Apple's.
 | Availability | All countries except the 27 EU countries |
 | Privacy policy URL | https://gamequarryllc.github.io/plainworth/privacy.html |
 | Support URL | https://gamequarryllc.github.io/plainworth/ |
-| Copyright | 2026 Alexander Curry |
+| Copyright | 2026 Game Quarry LLC |
 
 ## Keywords (100)
 
