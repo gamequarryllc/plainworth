@@ -29,8 +29,8 @@ import { useStore } from '@/store';
 import { layout, useColors } from '@/theme';
 
 const NAME_KEY = 'plainworth.share.name';
-/** More rows than this and the image gets too tall to post. */
-const MAX_ROWS = 8;
+/** Only the biggest accounts, so the image stays about phone-screen shaped. */
+const MAX_ROWS = 5;
 
 function readName(): string {
   try {
@@ -74,7 +74,7 @@ export default function ShareScreen() {
     .filter((a) => !a.closed)
     .map((a) => summaries.get(a.id)!)
     .filter((s) => s.balance !== 0)
-    .sort((x, y) => (y.kind === 'asset' ? 1 : 0) - (x.kind === 'asset' ? 1 : 0) || y.balance - x.balance);
+    .sort((x, y) => Math.abs(y.balance) - Math.abs(x.balance));
   const shownRows = rows.slice(0, MAX_ROWS);
 
   const whole = (cents: number) => formatMoney(cents, currency, { whole: true });
@@ -158,13 +158,13 @@ export default function ShareScreen() {
         </View>
         {points.length > 1 ? (
           <View style={styles.chart}>
-            <LineChart points={points} color={up ? c.up : c.down} baseline={points[0].value} height={170} axis />
+            <LineChart points={points} color={up ? c.up : c.down} baseline={points[0].value} height={130} axis />
           </View>
         ) : null}
         {showAccounts && shownRows.length ? (
           <View style={styles.list}>
-            <Text variant="headline" style={styles.listTitle}>
-              {rows.some((r) => r.kind === 'liability') ? 'Assets & Liabilities' : 'Accounts'}
+            <Text variant="footnote" weight="600" color="secondary" style={styles.listTitle}>
+              {rows.length > MAX_ROWS ? `TOP ${MAX_ROWS} ACCOUNTS` : 'ACCOUNTS'}
             </Text>
             {shownRows.map((s) => {
               const own = sliceSeries(perAccount.get(s.account.id) ?? [], range, today);
@@ -194,7 +194,7 @@ export default function ShareScreen() {
             })}
             {rows.length > shownRows.length ? (
               <Text variant="footnote" color="secondary" style={styles.more}>
-                {`And ${rows.length - shownRows.length} more`}
+                {`+ ${rows.length - shownRows.length} more`}
               </Text>
             ) : null}
           </View>
@@ -253,9 +253,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: layout.margin,
   },
   list: {
-    marginTop: 18,
+    marginTop: 14,
     paddingHorizontal: 10,
-    gap: 6,
+    gap: 4,
   },
   listTitle: {
     marginHorizontal: 6,
@@ -266,7 +266,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 12,
     paddingHorizontal: 12,
-    paddingVertical: 9,
+    paddingVertical: 6,
     borderRadius: 12,
     borderCurve: 'continuous',
   },
@@ -285,7 +285,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    marginTop: 14,
+    marginTop: 10,
     marginHorizontal: layout.margin,
     paddingTop: 10,
     paddingBottom: 6,
