@@ -24,6 +24,7 @@ import type { Data, DateKey, Reminder, ReminderRepeat } from '@/lib/types';
 import { currentData, flushSave, useStore } from '@/store';
 import { BackupError, backupFileName, makeBackup, readBackup, type Backup } from '@/store/backup';
 import { openPaywall, restorePurchases, setTestPro, useProStore } from '@/store/pro';
+import { markReminderOffered, resetReminderOffer } from '@/store/reminder-offer';
 import { layout, useColors } from '@/theme';
 
 const DEVICE = Platform.OS === 'android' ? 'phone' : 'iPhone';
@@ -226,6 +227,17 @@ export default function SettingsScreen() {
             accessory={<Switch value={pro} onValueChange={setTestPro} />}
           />
           <Row title="Load Sample Data" titleColor="tint" onPress={onSample} chevron={false} />
+          <Row
+            title="Offer Reminder Again"
+            subtitle="Asks after the next account or balance update"
+            titleColor="tint"
+            chevron={false}
+            onPress={() => {
+              resetReminderOffer();
+              updateSettings({ reminder: { ...settings.reminder, on: false } });
+              notify('Reminder offer reset', 'Add an account or update your balances to see it.');
+            }}
+          />
         </Section>
       ) : null}
 
@@ -273,6 +285,8 @@ function Reminders() {
   const on = reminder.on && (permission == null || permission === 'granted');
 
   const toggle = async (value: boolean) => {
+    // Set up here, so the offer after adding an account never comes.
+    markReminderOffered();
     if (!value) {
       set({ on: false });
       return;

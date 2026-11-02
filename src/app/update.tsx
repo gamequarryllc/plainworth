@@ -16,6 +16,7 @@ import { liveCurrencySupported, metalName } from '@/lib/metals';
 import { centsToInput, formatTyping, parseAmount, parseNumber } from '@/lib/money';
 import { compareSnapshots } from '@/lib/networth';
 import { useStore } from '@/store';
+import { offerReminder } from '@/store/reminder-offer';
 import { useSpotPrice } from '@/store/spot';
 import { type, useColors } from '@/theme';
 
@@ -76,6 +77,7 @@ export default function UpdateBalanceScreen() {
     ]);
     haptics.success();
     router.back();
+    offerReminder();
   };
 
   const placeholder = latest ? formatTyping(centsToInput(latest.value)) : '0';

@@ -1,4 +1,10 @@
-export function confirm(opts: { title: string; message?: string; confirmLabel: string; destructive?: boolean }): Promise<boolean> {
+export function confirm(opts: {
+  title: string;
+  message?: string;
+  confirmLabel: string;
+  cancelLabel?: string;
+  destructive?: boolean;
+}): Promise<boolean> {
   return Promise.resolve(window.confirm([opts.title, opts.message].filter(Boolean).join('\n\n')));
 }
 

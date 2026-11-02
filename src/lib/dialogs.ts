@@ -4,6 +4,8 @@ export function confirm(opts: {
   title: string;
   message?: string;
   confirmLabel: string;
+  /** Instead of "Cancel", e.g. "Not Now". */
+  cancelLabel?: string;
   destructive?: boolean;
 }): Promise<boolean> {
   return new Promise((resolve) => {
@@ -11,7 +13,7 @@ export function confirm(opts: {
       opts.title,
       opts.message,
       [
-        { text: 'Cancel', style: 'cancel', onPress: () => resolve(false) },
+        { text: opts.cancelLabel ?? 'Cancel', style: 'cancel', onPress: () => resolve(false) },
         {
           text: opts.confirmLabel,
           style: opts.destructive ? 'destructive' : 'default',

@@ -18,6 +18,7 @@ import { liveCurrencySupported, metalName } from '@/lib/metals';
 import { summarizeAccounts, type AccountSummary } from '@/lib/networth';
 import type { ID } from '@/lib/types';
 import { useStore, type NewSnapshot } from '@/store';
+import { offerReminder } from '@/store/reminder-offer';
 
 /** Update several balances at once, e.g. after payday. Only changed accounts get a new entry. */
 export default function UpdateAllScreen() {
@@ -88,6 +89,7 @@ export default function UpdateAllScreen() {
     addSnapshots(entries);
     haptics.success();
     router.back();
+    offerReminder();
   };
 
   let index = 0;

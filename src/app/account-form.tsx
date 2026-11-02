@@ -15,6 +15,7 @@ import { guessMetal, liveCurrencySupported, METALS, metalName } from '@/lib/meta
 import { centsToInput, formatTyping, parseAmount, parseNumber } from '@/lib/money';
 import type { CategoryKind, Metal } from '@/lib/types';
 import { useStore } from '@/store';
+import { offerReminder } from '@/store/reminder-offer';
 import { loadSpotPrice, useSpotPrice } from '@/store/spot';
 import { type, useColors } from '@/theme';
 
@@ -127,6 +128,7 @@ export default function AccountFormScreen() {
     });
     haptics.success();
     router.back();
+    offerReminder();
   };
 
   const input = [styles.input, { color: c.text }];
