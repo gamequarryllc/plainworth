@@ -20,6 +20,7 @@ import { firstYear, spendingYear, type Month } from '@/lib/insights';
 import { formatPercent, MASK } from '@/lib/money';
 import { goalStatus, goalYear, makePlan, MAX_MONTHS, monthlyRate, monthsToReach, project, ratePercent } from '@/lib/outlook';
 import {
+  compareYears,
   distribution,
   lifestyleCreep,
   netWorthHistory,
@@ -123,7 +124,7 @@ function NetWorth() {
       <HeadedCard key="headed" history={history} pace={pace?.perMonth ?? null} counted={pace?.months ?? 0} />
     ) : null,
     lastIndex(soFar) >= 0 && history.length >= 2 ? (
-      <NetWorthYearCard key="year" year={year} soFar={soFar} before={netWorthSoFar(history, year - 1)} />
+      <NetWorthYearCard key="year" year={year} soFar={soFar} lastYear={netWorthSoFar(history, year - 1)} />
     ) : null,
     history.length >= 2 ? <DistributionCard key="mix" /> : null,
   ]);
@@ -484,26 +485,31 @@ function GoalLink({ title, icon, onPress }: { title: string; icon?: 'flag'; onPr
   );
 }
 
-/** Growth since January 1, this year against last, month by month. */
-function NetWorthYearCard({ year, soFar, before }: { year: number; soFar: (number | null)[]; before: (number | null)[] }) {
+/**
+ * Growth since January 1, this year against last, month by month. Someone
+ * who started partway through the year sees growth since their first
+ * balances, against the same months last year.
+ */
+function NetWorthYearCard({ year, soFar, lastYear }: { year: number; soFar: (number | null)[]; lastYear: (number | null)[] }) {
   const c = useColors();
   const lock = useLock();
   const money = lock.money;
   const whole = (cents: number) => money(cents, { whole: true });
-  const last = lastIndex(soFar);
+  const { from, last, before, then } = compareYears(soFar, lastYear)!;
   const value = soFar[last]!;
-  const then = before[last];
   const hasBefore = lastIndex(before) >= 0;
   const [at, setAt] = useState<number | null>(null);
   const signed = (cents: number) => money(cents, { signed: true, whole: true });
 
-  let sentence = value >= 0 ? `Your net worth is up ${whole(value)} this year` : `Your net worth is down ${whole(-value)} this year`;
+  const since = from > 0 ? `since ${MONTHS[from]}` : 'this year';
+  let sentence = value >= 0 ? `Your net worth is up ${whole(value)} ${since}` : `Your net worth is down ${whole(-value)} ${since}`;
   if (then != null) {
     const diff = value - then;
+    const ref = from > 0 ? 'over the same months last year' : 'at this point last year';
     sentence +=
       Math.abs(diff) <= Math.max(Math.abs(then) * 0.03, 100)
-        ? ', about the same as at this point last year.'
-        : `, ${whole(Math.abs(diff))} ${diff > 0 ? 'more' : 'less'} than at this point last year.`;
+        ? `, about the same as ${ref}.`
+        : `, ${whole(Math.abs(diff))} ${diff > 0 ? 'more' : 'less'} than ${ref}.`;
   } else {
     sentence += '.';
   }
@@ -512,7 +518,11 @@ function NetWorthYearCard({ year, soFar, before }: { year: number; soFar: (numbe
     <InsightCard
       label="This Year vs Last Year"
       sentence={lock.text(sentence, `See whether your net worth is growing faster than it did in ${year - 1}.`)}
-      note="How much your net worth has grown since January 1."
+      note={
+        from > 0
+          ? `How much your net worth has grown since your first balances in ${MONTHS[from]}.`
+          : 'How much your net worth has grown since January 1.'
+      }
       {...lock.card}>
       {at != null ? (
         <Readout
@@ -557,7 +567,7 @@ function Spending() {
   const sp = spendingYear(data, year, today);
   const cards = useCards([
     lastIndex(soFar) >= 0 ? (
-      <SpentYearCard key="year" year={year} soFar={soFar} before={spentSoFar(data, year - 1, today)} />
+      <SpentYearCard key="year" year={year} soFar={soFar} lastYear={spentSoFar(data, year - 1, today)} />
     ) : null,
     creep ? <CreepCard key="creep" creep={creep} /> : null,
     sp?.categories.length ? <WhereItWentCard key="where" year={year} /> : null,
@@ -586,7 +596,7 @@ function Spending() {
  * goals once you've set them: a spending limit adds up month by month on the
  * chart, and each goal gets a bar. Like Net Worth's goal, it's set from here.
  */
-function SpentYearCard({ year, soFar, before }: { year: number; soFar: (number | null)[]; before: (number | null)[] }) {
+function SpentYearCard({ year, soFar, lastYear }: { year: number; soFar: (number | null)[]; lastYear: (number | null)[] }) {
   const c = useColors();
   const lock = useLock();
   const money = lock.money;
@@ -596,20 +606,26 @@ function SpentYearCard({ year, soFar, before }: { year: number; soFar: (number |
   const spend = useStore((s) => s.spend);
   const spendCategories = useStore((s) => s.spendCategories);
   const goal = useStore((s) => s.settings.spendingGoal);
-  const last = lastIndex(soFar);
+  // Someone who started partway through the year is counted from their first month, against the same months last year.
+  const { from, last, before, then } = compareYears(soFar, lastYear)!;
   const value = soFar[last]!;
-  const then = before[last];
   const hasBefore = lastIndex(before) >= 0;
   const [at, setAt] = useState<number | null>(null);
   const editGoals = () => router.push('/spending-goal');
 
-  let sentence = `You’ve spent ${whole(value)} this year through ${MONTHS[last]}`;
+  let sentence =
+    from === 0
+      ? `You’ve spent ${whole(value)} this year through ${MONTHS[last]}`
+      : from === last
+        ? `You’ve spent ${whole(value)} in ${MONTHS[last]}`
+        : `You’ve spent ${whole(value)} from ${MONTHS[from]} through ${MONTHS[last]}`;
   if (then != null) {
     const diff = value - then;
+    const ref = from === 0 ? 'by then last year' : from === last ? `in ${MONTHS[last]} last year` : 'in the same months last year';
     sentence +=
       Math.abs(diff) <= then * 0.03
-        ? ', about the same as by then last year.'
-        : `, ${whole(Math.abs(diff))} ${diff < 0 ? 'less' : 'more'} than by then last year.`;
+        ? `, about the same as ${ref}.`
+        : `, ${whole(Math.abs(diff))} ${diff < 0 ? 'less' : 'more'} than ${ref}.`;
   } else {
     sentence += '.';
   }
@@ -619,7 +635,7 @@ function SpentYearCard({ year, soFar, before }: { year: number; soFar: (number |
   if (said) sentence += ` ${said}`;
 
   const limit = goal?.limit;
-  const limitLine = limit != null ? Array.from({ length: 12 }, (_, i) => limit * (i + 1)) : null;
+  const limitLine = limit != null ? Array.from({ length: 12 }, (_, i) => (i < from ? null : limit * (i - from + 1))) : null;
   const bars: { key: string; progress: number; color: string; text: string }[] = [];
   if (goal?.keep != null && g?.kept != null) {
     bars.push({
@@ -656,7 +672,7 @@ function SpentYearCard({ year, soFar, before }: { year: number; soFar: (number |
           items={[
             { label: String(year), value: soFar[at] != null ? whole(soFar[at]!) : '—', color: c.bar },
             ...(hasBefore ? [{ label: String(year - 1), value: before[at] != null ? whole(before[at]!) : '—' }] : []),
-            ...(limitLine ? [{ label: 'Limit', value: whole(limitLine[at]) }] : []),
+            ...(limitLine ? [{ label: 'Limit', value: limitLine[at] != null ? whole(limitLine[at]!) : '—' }] : []),
           ]}
         />
       ) : keyItems.length > 1 ? (

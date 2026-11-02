@@ -115,6 +115,37 @@ export function spentSoFar(data: SpendData, year: number, today: DateKey): (Cent
   });
 }
 
+/** This year's running total next to last year's, for This Year vs Last Year. */
+export interface YearsCompared {
+  /** The month this year's total starts: 0 for January, later when your first balance or month came later. */
+  from: number;
+  /** The latest month in it. */
+  last: number;
+  /** Last year's running total, counted from the same month when it can be. */
+  before: (Cents | null)[];
+  /** Last year's total over the same months, or null when last year doesn't cover them all. */
+  then: Cents | null;
+}
+
+/**
+ * Lines up this year's running total (`netWorthSoFar`, `spentSoFar`) with
+ * last year's. When this year starts after January, last year is counted
+ * from the same month, so both cover the same months. When last year started
+ * later than this year (or stopped sooner), there's nothing fair to compare,
+ * so `then` is null: part of a year is never put against more of one.
+ */
+export function compareYears(soFar: (Cents | null)[], before: (Cents | null)[]): YearsCompared | null {
+  const from = soFar.findIndex((v) => v != null);
+  if (from < 0) return null;
+  const last = soFar.reduce<number>((l, v, i) => (v != null ? i : l), -1);
+  const start = before.findIndex((v) => v != null);
+  if (start < 0 || start > from) return { from, last, before, then: null };
+  // Before `from`, last year's total is what came ahead of this year's start.
+  const base = from > 0 ? (before[from - 1] ?? 0) : 0;
+  const counted = before.map((v, i) => (v == null || i < from ? null : v - base));
+  return { from, last, before: counted, then: counted[last] };
+}
+
 export interface SpendMonth extends Month {
   totals: MonthTotals;
 }

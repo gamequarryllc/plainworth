@@ -7,6 +7,7 @@ import {
   monthsUntil,
   netWorthHistory,
   netWorthPace,
+  compareYears,
   netWorthSoFar,
   nextMilestone,
   spentSoFar,
@@ -168,4 +169,27 @@ test('trends: yearly savings and spending goals', () => {
   assert.equal(early.months, 0);
   assert.equal(early.kept, null);
   assert.equal(early.spent, null);
+});
+
+test('trends: this year against last over the same months', () => {
+  const n = null;
+  // Whole years: compared as they are, at the same point.
+  const whole = compareYears([100, 200, 300, n, n, n, n, n, n, n, n, n], [50, 150, 250, 350, 450, 550, n, n, n, n, n, n]);
+  assert.equal(whole?.from, 0);
+  assert.equal(whole?.last, 2);
+  assert.equal(whole?.then, 250);
+  // This year starts in March: last year counts from March too.
+  const late = compareYears([n, n, 100, 250, n, n, n, n, n, n, n, n], [10, 20, 30, 40, 50, n, n, n, n, n, n, n]);
+  assert.equal(late?.from, 2);
+  assert.equal(late?.last, 3);
+  assert.deepEqual(late?.before.slice(0, 5), [n, n, 10, 20, 30]);
+  assert.equal(late?.then, 20);
+  // Last year started in October: nothing fair to compare January to November with.
+  const started = [n, n, n, n, n, n, n, n, n, 0, 50, 80];
+  const partial = compareYears([100, 200, 300, 400, 500, 600, 700, 800, 900, 1000, 1100, n], started);
+  assert.equal(partial?.then, null);
+  assert.deepEqual(partial?.before, started);
+  // No last year, or nothing this year.
+  assert.equal(compareYears([n, 5, n, n, n, n, n, n, n, n, n, n], Array(12).fill(n))?.then, null);
+  assert.equal(compareYears(Array(12).fill(n), [1, 2, n, n, n, n, n, n, n, n, n, n]), null);
 });
