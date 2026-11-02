@@ -1,9 +1,11 @@
-import { useState } from 'react';
-import { StyleSheet, View, type LayoutChangeEvent } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import { StyleSheet, View, type GestureResponderEvent, type LayoutChangeEvent } from 'react-native';
 import Svg, { Circle, Line, Path } from 'react-native-svg';
 
+import { haptics } from '@/lib/haptics';
 import { useColors } from '@/theme';
 
+import { useScrollLock } from './screen';
 import { Text } from './text';
 
 export interface TrendSeries {
@@ -25,6 +27,11 @@ const PAD_Y = 8;
 /** Room for the end dots. */
 const PAD_X = 5;
 const LABEL_BOX = 56;
+/** A drag this far sideways, or a hold this long, makes the chart keep the finger (as in LineChart). */
+const SIDEWAYS = 5;
+const HOLD_MS = 250;
+/** Moving this far up or down first means the page should scroll instead. */
+const UPDOWN = 8;
 
 /**
  * Lines over evenly spaced slots (months), drawn the way Health draws its
@@ -38,6 +45,7 @@ export function TrendChart({
   height = 120,
   zero,
   marker,
+  onScrub,
 }: {
   count: number;
   series: TrendSeries[];
@@ -46,10 +54,17 @@ export function TrendChart({
   zero?: boolean;
   /** A ringed dot, e.g. a milestone. */
   marker?: { index: number; value: number; color: string } | null;
+  /** Drag across to read values: called with the slot under the finger, or null when released. */
+  onScrub?: (index: number | null) => void;
 }) {
   const c = useColors();
   const [width, setWidth] = useState(0);
+  const [active, setActive] = useState<number | null>(null);
   const onLayout = (e: LayoutChangeEvent) => setWidth(e.nativeEvent.layout.width);
+  const touch = useScrub(count, width, (i) => {
+    setActive(i);
+    onScrub?.(i);
+  });
 
   const all = series.flatMap((s) => s.values.filter((v): v is number => v != null));
   if (marker) all.push(marker.value);
@@ -83,7 +98,7 @@ export function TrendChart({
   };
 
   return (
-    <View onLayout={onLayout}>
+    <View onLayout={onLayout} {...(onScrub ? touch : null)}>
       <View style={{ height }}>
         {width > 0 ? (
           <Svg width={width} height={height} style={StyleSheet.absoluteFill} pointerEvents="none">
@@ -119,7 +134,18 @@ export function TrendChart({
                 <Circle key={`dot${k}`} cx={x(i)} cy={y(s.values[i]!)} r={4} fill={s.color} stroke={c.card} strokeWidth={1.5} />
               );
             })}
-            {marker ? (
+            {active != null ? (
+              <>
+                <Line x1={x(active)} x2={x(active)} y1={0} y2={height} stroke={c.secondary} strokeWidth={1} />
+                {series.map((s, k) => {
+                  const v = s.values[active];
+                  return v == null ? null : (
+                    <Circle key={`at${k}`} cx={x(active)} cy={y(v)} r={4} fill={s.color} stroke={c.card} strokeWidth={1.5} />
+                  );
+                })}
+              </>
+            ) : null}
+            {marker && active == null ? (
               <>
                 <Circle cx={x(marker.index)} cy={y(marker.value)} r={6} fill={c.card} stroke={marker.color} strokeWidth={2} />
                 <Circle cx={x(marker.index)} cy={y(marker.value)} r={2} fill={marker.color} />
@@ -152,6 +178,68 @@ export function TrendChart({
       ) : null}
     </View>
   );
+}
+
+/** Finger tracking for `TrendChart`, with the same feel as `LineChart`: sideways drags keep the page still. */
+function useScrub(count: number, width: number, onChange: (index: number | null) => void) {
+  const lockScroll = useScrollLock();
+  const last = useRef<number | null>(null);
+  const drag = useRef({ x: 0, y: 0, locked: false, timer: null as ReturnType<typeof setTimeout> | null });
+  const stopTimer = () => {
+    if (drag.current.timer) clearTimeout(drag.current.timer);
+    drag.current.timer = null;
+  };
+  const lock = () => {
+    stopTimer();
+    if (drag.current.locked) return;
+    drag.current.locked = true;
+    lockScroll(true);
+  };
+  const unlock = () => {
+    stopTimer();
+    if (!drag.current.locked) return;
+    drag.current.locked = false;
+    lockScroll(false);
+  };
+  useEffect(() => unlock, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const update = (e: GestureResponderEvent) => {
+    if (width <= 0 || count < 1) return;
+    const ratio = (e.nativeEvent.locationX - PAD_X) / Math.max(width - PAD_X * 2, 1);
+    const i = Math.min(count - 1, Math.max(0, Math.round(ratio * (count - 1))));
+    if (i === last.current) return;
+    if (last.current != null) haptics.selection();
+    last.current = i;
+    onChange(i);
+  };
+  const end = () => {
+    unlock();
+    last.current = null;
+    onChange(null);
+  };
+  return {
+    onStartShouldSetResponder: () => true,
+    onMoveShouldSetResponder: () => true,
+    onResponderTerminationRequest: () => !drag.current.locked,
+    onResponderGrant: (e: GestureResponderEvent) => {
+      drag.current.x = e.nativeEvent.pageX;
+      drag.current.y = e.nativeEvent.pageY;
+      stopTimer();
+      drag.current.timer = setTimeout(lock, HOLD_MS);
+      update(e);
+    },
+    onResponderMove: (e: GestureResponderEvent) => {
+      if (!drag.current.locked) {
+        const dx = Math.abs(e.nativeEvent.pageX - drag.current.x);
+        const dy = Math.abs(e.nativeEvent.pageY - drag.current.y);
+        if (dx > SIDEWAYS && dx >= dy) lock();
+        else if (dy > UPDOWN) stopTimer();
+      }
+      update(e);
+    },
+    onResponderRelease: end,
+    onResponderTerminate: end,
+  };
 }
 
 /** What each line is, as small colored text with a short line beside it. */

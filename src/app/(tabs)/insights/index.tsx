@@ -140,6 +140,7 @@ function HeadedCard({ history, perMonth, counted }: { history: NetWorthMonth[]; 
   const money = useMoney();
   const whole = (cents: number) => money(cents, { whole: true });
   const [horizon, setHorizon] = useState<Horizon>('60');
+  const [at, setAt] = useState<number | null>(null);
   const ahead = Number(horizon);
   const years = ahead / 12;
   const inYears = years === 1 ? 'in a year' : `in ${years} years`;
@@ -183,10 +184,16 @@ function HeadedCard({ history, perMonth, counted }: { history: NetWorthMonth[]; 
       <Segmented options={HORIZONS} value={horizon} onChange={setHorizon} style={styles.horizon} />
       <View style={styles.bigRow}>
         <Text variant="title2" weight="700" rounded tabular numberOfLines={1}>
-          {whole(projected)}
+          {whole(at != null ? (actual[at] ?? forecast[at]!) : projected)}
         </Text>
-        <Text variant="subheadline" color="secondary">
-          {` ${inYears}`}
+        <Text variant="subheadline" color="secondary" numberOfLines={1} style={styles.bigUnit}>
+          {at == null
+            ? inYears
+            : at === nowIndex
+              ? 'today'
+              : at < nowIndex
+                ? `in ${shortMonth(shift(shown[0], at))}`
+                : `by ${shortMonth(shift(shown[0], at))} at your pace`}
         </Text>
       </View>
       <TrendKey
@@ -205,6 +212,7 @@ function HeadedCard({ history, perMonth, counted }: { history: NetWorthMonth[]; 
         ]}
         marker={away != null && away <= ahead ? { index: nowIndex + away, value: milestone, color: c.warning } : null}
         labels={labels}
+        onScrub={setAt}
       />
     </InsightCard>
   );
@@ -219,6 +227,8 @@ function NetWorthYearCard({ year, soFar, before }: { year: number; soFar: (numbe
   const value = soFar[last]!;
   const then = before[last];
   const hasBefore = lastIndex(before) >= 0;
+  const [at, setAt] = useState<number | null>(null);
+  const signed = (cents: number) => money(cents, { signed: true, whole: true });
 
   let sentence = value >= 0 ? `Your net worth is up ${whole(value)} this year` : `Your net worth is down ${whole(-value)} this year`;
   if (then != null) {
@@ -233,7 +243,15 @@ function NetWorthYearCard({ year, soFar, before }: { year: number; soFar: (numbe
 
   return (
     <InsightCard label="This Year vs Last Year" sentence={sentence} note="How much your net worth has grown since January 1.">
-      {hasBefore ? (
+      {at != null ? (
+        <Readout
+          title={MONTHS[at]}
+          items={[
+            { label: String(year), value: soFar[at] != null ? signed(soFar[at]!) : '—', color: c.up },
+            ...(hasBefore ? [{ label: String(year - 1), value: before[at] != null ? signed(before[at]!) : '—' }] : []),
+          ]}
+        />
+      ) : hasBefore ? (
         <TrendKey
           items={[
             { label: String(year), color: c.up },
@@ -249,6 +267,7 @@ function NetWorthYearCard({ year, soFar, before }: { year: number; soFar: (numbe
           { values: soFar, color: c.up, endDot: true },
         ]}
         labels={MONTH_LABELS}
+        onScrub={setAt}
       />
     </InsightCard>
   );
@@ -330,6 +349,7 @@ function SpentYearCard({ year, soFar, before }: { year: number; soFar: (number |
   const value = soFar[last]!;
   const then = before[last];
   const hasBefore = lastIndex(before) >= 0;
+  const [at, setAt] = useState<number | null>(null);
 
   let sentence = `You’ve spent ${whole(value)} this year through ${MONTHS[last]}`;
   if (then != null) {
@@ -344,7 +364,15 @@ function SpentYearCard({ year, soFar, before }: { year: number; soFar: (number |
 
   return (
     <InsightCard label="This Year vs Last Year" sentence={sentence} note="Counts each month once it’s over.">
-      {hasBefore ? (
+      {at != null ? (
+        <Readout
+          title={`By the end of ${MONTHS[at]}`}
+          items={[
+            { label: String(year), value: soFar[at] != null ? whole(soFar[at]!) : '—', color: c.bar },
+            ...(hasBefore ? [{ label: String(year - 1), value: before[at] != null ? whole(before[at]!) : '—' }] : []),
+          ]}
+        />
+      ) : hasBefore ? (
         <TrendKey
           items={[
             { label: `${year}, added up`, color: c.bar },
@@ -359,6 +387,7 @@ function SpentYearCard({ year, soFar, before }: { year: number; soFar: (number |
           { values: soFar, color: c.bar, endDot: true },
         ]}
         labels={MONTH_LABELS}
+        onScrub={setAt}
       />
     </InsightCard>
   );
@@ -368,6 +397,8 @@ function SpentYearCard({ year, soFar, before }: { year: number; soFar: (number |
 function CreepCard({ creep }: { creep: Creep }) {
   const c = useColors();
   const { income, spending, year } = creep;
+  const [at, setAt] = useState<number | null>(null);
+  const pct = (r: number | null) => (r == null ? '—' : `${r < 0 ? '−' : '+'}${Math.round(Math.abs(r) * 100)}%`);
   const moved = (r: number) =>
     Math.round(Math.abs(r) * 100) === 0 ? 'held steady' : `${r >= 0 ? 'grew' : 'fell'} ${Math.round(Math.abs(r) * 100)}%`;
   let sentence: string;
@@ -390,12 +421,22 @@ function CreepCard({ creep }: { creep: Creep }) {
       label="Lifestyle Creep"
       sentence={sentence}
       note={`Compares your average month in ${year} with ${year - 1}. Each line is a six-month average, as a change from where it started. When the blue line climbs faster than the green one, that’s creep.`}>
-      <TrendKey
-        items={[
-          ...(income != null ? [{ label: 'Income', color: c.up }] : []),
-          { label: 'Spending', color: c.bar },
-        ]}
-      />
+      {at != null ? (
+        <Readout
+          title={shortMonth(creep.months[at])}
+          items={[
+            ...(income != null ? [{ label: 'Income', value: pct(creep.incomeLine[at]), color: c.up }] : []),
+            { label: 'Spending', value: pct(creep.spendingLine[at]), color: c.bar },
+          ]}
+        />
+      ) : (
+        <TrendKey
+          items={[
+            ...(income != null ? [{ label: 'Income', color: c.up }] : []),
+            { label: 'Spending', color: c.bar },
+          ]}
+        />
+      )}
       <TrendChart
         count={count}
         zero
@@ -404,6 +445,7 @@ function CreepCard({ creep }: { creep: Creep }) {
           { values: creep.spendingLine, color: c.bar, endDot: true },
         ]}
         labels={labels}
+        onScrub={setAt}
       />
     </InsightCard>
   );
@@ -472,6 +514,25 @@ function WhereItWentCard({ year }: { year: number }) {
   );
 }
 
+/** What's under the finger, in place of the chart's key while dragging. */
+function Readout({ title, items }: { title: string; items: { label: string; value: string; color?: string }[] }) {
+  return (
+    <View style={styles.readout}>
+      <Text variant="footnote" weight="600" numberOfLines={1}>
+        {title}
+      </Text>
+      {items.map((it) => (
+        <Text key={it.label} variant="footnote" color="secondary" numberOfLines={1}>
+          {`${it.label} `}
+          <Text variant="footnote" weight="600" tabular color={it.color ?? 'text'}>
+            {it.value}
+          </Text>
+        </Text>
+      ))}
+    </View>
+  );
+}
+
 /** A dot per month, filled when it counts, like Fitness's streak rows. */
 function MonthDots({ months: list }: { months: (Month & { up: boolean })[] }) {
   const c = useColors();
@@ -524,6 +585,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'baseline',
     marginBottom: 8,
+  },
+  bigUnit: {
+    flexShrink: 1,
+    marginLeft: 5,
+  },
+  readout: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 14,
+    marginBottom: 10,
   },
   dots: {
     flexDirection: 'row',
