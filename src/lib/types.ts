@@ -1,0 +1,93 @@
+/** Money is stored as integer cents to avoid floating point drift. */
+export type Cents = number;
+/** Local calendar date, `YYYY-MM-DD`. */
+export type DateKey = string;
+/** Calendar month, `YYYY-MM`. */
+export type MonthKey = string;
+export type ID = string;
+
+export type CategoryKind = 'asset' | 'liability';
+
+/** Precious metals with a live market price: gold, silver, platinum, palladium. */
+export type Metal = 'XAU' | 'XAG' | 'XPT' | 'XPD';
+
+export interface NWCategory {
+  id: ID;
+  name: string;
+  kind: CategoryKind;
+  order: number;
+}
+
+export interface Account {
+  id: ID;
+  name: string;
+  categoryId: ID;
+  createdAt: number;
+  /** Closed accounts keep their history but are hidden from the main list. */
+  closed: boolean;
+  /**
+   * When set (for example "oz"), balances are entered as quantity × price per unit.
+   * Useful for metals, shares or crypto.
+   */
+  unit?: string;
+  /** Follows this metal's live price per troy ounce; the unit is then "oz". */
+  metal?: Metal;
+  /** Debts only: yearly interest rate in percent, e.g. 22.9. */
+  apr?: number;
+}
+
+/** A balance entry: what an account was worth on a given day. */
+export interface Snapshot {
+  id: ID;
+  accountId: ID;
+  date: DateKey;
+  value: Cents;
+  createdAt: number;
+  quantity?: number;
+  unitPrice?: Cents;
+  note?: string;
+  /** "spot" when the price came from the live feed, so a newer price can replace it the same day. */
+  source?: 'spot';
+}
+
+/** Invested money isn't spending: it's part of what you kept, tracked apart from plain savings. */
+export type SpendGroup = 'recurring' | 'variable' | 'invest' | 'income';
+
+export interface SpendCategory {
+  id: ID;
+  name: string;
+  group: SpendGroup;
+  order: number;
+  /** Hidden categories keep their history but are not offered for new months. */
+  hidden: boolean;
+}
+
+export type RangeKey = '1M' | '3M' | '6M' | 'YTD' | '1Y' | 'ALL';
+/** How the net worth list is grouped. */
+export type NWView = 'accounts' | 'categories';
+/** The order debts are listed in: highest rate first, smallest balance first, or by balance. */
+export type PayoffOrder = 'off' | 'avalanche' | 'snowball';
+
+export interface Settings {
+  currency: string;
+  hideAmounts: boolean;
+  requireUnlock: boolean;
+  nwRange: RangeKey;
+  nwView: NWView;
+  payoffOrder: PayoffOrder;
+  /** The day of the last backup, shown in Settings. */
+  lastBackup?: DateKey;
+}
+
+export interface Data {
+  /** Format version of the stored copy, for migrating older ones. */
+  version: number;
+  nwCategories: NWCategory[];
+  accounts: Account[];
+  snapshots: Snapshot[];
+  spendCategories: SpendCategory[];
+  /** month → category → amount */
+  spend: Record<MonthKey, Record<ID, Cents>>;
+  monthNotes: Record<MonthKey, string>;
+  settings: Settings;
+}

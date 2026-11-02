@@ -1,0 +1,5 @@
+/* Browser preview only: no focus rings on text fields, like the iPhone app. */
+input:focus,
+textarea:focus {
+  outline: none;
+}

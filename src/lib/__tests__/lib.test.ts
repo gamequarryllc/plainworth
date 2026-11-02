@@ -1,0 +1,263 @@
+import assert from 'node:assert/strict';
+import { test } from 'node:test';
+
+import { addMonths, dayNumber, keyFromDayNumber, shiftMonth } from '../dates';
+import { formatMoney, formatTyping, parseAmount } from '../money';
+import { buildSeries, seriesByAccount, sliceSeries, seriesChange, summarizeAccounts, totalsOf, updatesByAccount } from '../networth';
+import { emptyData } from '../../store/defaults';
+import { migrate } from '../../store/migrate';
+import { categoriesForMonth, categoryTotals, earnedTotals, monthTotals, savedCash, yearSummary } from '../spending';
+import type { Account, NWCategory, Snapshot, SpendCategory } from '../types';
+
+test('dates', () => {
+  assert.equal(addMonths('2026-03-31', -1), '2026-02-28');
+  assert.equal(addMonths('2024-03-31', -1), '2024-02-29');
+  assert.equal(addMonths('2026-01-15', -12), '2025-01-15');
+  assert.equal(shiftMonth('2026-01', -1), '2025-12');
+  assert.equal(shiftMonth('2025-12', 1), '2026-01');
+  assert.equal(keyFromDayNumber(dayNumber('2026-11-01')), '2026-11-01');
+});
+
+test('money parse/format', () => {
+  assert.equal(parseAmount('1,234.56'), 123456);
+  assert.equal(parseAmount('$45'), 4500);
+  assert.equal(parseAmount('120+45.50-10'), 15550);
+  assert.equal(parseAmount(''), null);
+  assert.equal(parseAmount('.'), null);
+  assert.equal(parseAmount('0.1'), 10);
+  assert.equal(formatMoney(123456, 'USD'), '$1,234.56');
+  assert.equal(formatMoney(-500, 'USD', { signed: true }), '−$5.00');
+  assert.equal(formatMoney(500, 'USD', { signed: true }), '+$5.00');
+  assert.equal(formatMoney(1_234_567_00, 'USD', { compact: true }), '$1.2M');
+  assert.equal(formatTyping('1234567.891'), '1,234,567.89');
+  assert.equal(formatTyping('.5'), '0.5');
+  assert.equal(formatTyping('007'), '7');
+  assert.equal(formatTyping('1,000.'), '1,000.');
+});
+
+const cats: NWCategory[] = [
+  { id: 'cash', name: 'Cash', kind: 'asset', order: 0 },
+  { id: 'loan', name: 'Loans', kind: 'liability', order: 1 },
+];
+const accounts: Account[] = [
+  { id: 'a', name: 'Savings', categoryId: 'cash', createdAt: 0, closed: false },
+  { id: 'b', name: 'Car loan', categoryId: 'loan', createdAt: 0, closed: false },
+];
+const snaps: Snapshot[] = [
+  { id: '1', accountId: 'a', date: '2026-01-01', value: 100_00, createdAt: 1 },
+  { id: '2', accountId: 'b', date: '2026-01-01', value: 30_00, createdAt: 2 },
+  { id: '3', accountId: 'a', date: '2026-02-01', value: 150_00, createdAt: 3 },
+  { id: '4', accountId: 'a', date: '2026-02-01', value: 160_00, createdAt: 4 },
+  { id: '5', accountId: 'b', date: '2026-03-01', value: 20_00, createdAt: 5 },
+];
+
+test('net worth series and totals', () => {
+  const series = buildSeries(snaps, accounts, cats, { signed: true });
+  assert.deepEqual(
+    series.map((p) => p.value),
+    [70_00, 130_00, 140_00],
+  );
+  const summaries = summarizeAccounts(accounts, snaps, cats);
+  assert.equal(summaries.get('a')!.balance, 160_00);
+  assert.equal(summaries.get('a')!.lastChange, 10_00);
+  assert.deepEqual(totalsOf(summaries.values()), { assets: 160_00, liabilities: 20_00, net: 140_00 });
+  const loanOnly = buildSeries(snaps, accounts, cats, { include: (a) => a.categoryId === 'loan' });
+  assert.deepEqual(
+    loanOnly.map((p) => p.value),
+    [30_00, 20_00],
+  );
+});
+
+test('slicing a series to a range', () => {
+  const series = buildSeries(snaps, accounts, cats, { signed: true });
+  const oneMonth = sliceSeries(series, '1M', '2026-03-15');
+  // value as of Feb 15 (130.00 → 140.00 on Mar 1), extended to today
+  assert.deepEqual(
+    oneMonth.map((p) => p.value),
+    [130_00, 140_00, 140_00],
+  );
+  assert.equal(oneMonth[0].day, dayNumber('2026-02-15'));
+  assert.equal(seriesChange(oneMonth).delta, 10_00);
+  const all = sliceSeries(series, 'ALL', '2026-03-01');
+  assert.equal(all.length, 3);
+  const single = sliceSeries([{ day: dayNumber('2026-03-01'), value: 5 }], '1M', '2026-03-01');
+  assert.equal(single.length, 2);
+});
+
+const spendCats: SpendCategory[] = [
+  { id: 'rent', name: 'Rent', group: 'recurring', order: 0, hidden: false },
+  { id: 'food', name: 'Groceries', group: 'variable', order: 0, hidden: false },
+  { id: 'old', name: 'Old', group: 'variable', order: 1, hidden: true },
+  { id: 'pay', name: 'Paycheck', group: 'income', order: 0, hidden: false },
+];
+
+test('spending summaries', () => {
+  const data = {
+    spendCategories: spendCats,
+    spend: {
+      '2026-04': { rent: 1000_00, food: 319_91, pay: 3706_14 },
+      '2026-05': { rent: 1000_00, old: 50_00, pay: 3706_14 },
+    },
+  };
+  const y = yearSummary(data, 2026);
+  assert.equal(y.months[3].expenses, 1319_91);
+  assert.equal(y.months[3].net, 2386_23);
+  assert.equal(y.monthsWithData, 2);
+  assert.equal(y.net, 3706_14 * 2 - 1319_91 - 1050_00);
+  const top = categoryTotals(data, 2026, ['recurring', 'variable']);
+  assert.equal(top[0].category.id, 'rent');
+  assert.deepEqual(
+    categoriesForMonth(spendCats, data.spend['2026-05'], 'variable').map((c) => c.id),
+    ['food', 'old'],
+  );
+  assert.deepEqual(
+    categoriesForMonth(spendCats, data.spend['2026-04'], 'variable').map((c) => c.id),
+    ['food'],
+  );
+});
+
+test('per-account series', () => {
+  const snap = (id: string, accountId: string, date: string, value: number, createdAt: number) => ({
+    id,
+    accountId,
+    date,
+    value,
+    createdAt,
+  });
+  const map = seriesByAccount([
+    snap('1', 'a', '2026-01-01', 100, 1),
+    snap('2', 'b', '2026-01-01', 50, 2),
+    snap('3', 'a', '2026-02-01', 120, 3),
+    snap('4', 'a', '2026-02-01', 130, 4),
+  ]);
+  assert.deepEqual(
+    map.get('a')!.map((p) => p.value),
+    [100, 130],
+  );
+  assert.equal(map.get('b')!.length, 1);
+  assert.equal(map.get('c'), undefined);
+});
+
+test('a month without income entered yet does not count against savings', () => {
+  const data = emptyData();
+  data.spend = {
+    '2026-01': { rent: 1_250_00, groceries: 300_00, 'paycheck-1': 2_000_00 },
+    '2026-02': { rent: 1_250_00, groceries: 250_00, 'paycheck-1': 2_000_00 },
+    // March so far: rent is in, the paycheck isn't.
+    '2026-03': { rent: 1_250_00 },
+  };
+  const y = yearSummary(data, 2026);
+  const earned = earnedTotals(y.months);
+  assert.deepEqual(earned, { income: 4_000_00, expenses: 3_050_00, invested: 0, net: 950_00 });
+  assert.equal(y.savingsRate, 950_00 / 4_000_00);
+  // Spending still counts every month.
+  assert.equal(y.expenses, 4_300_00);
+  assert.equal(earnedTotals(yearSummary(data, 2025).months).income, 0);
+  assert.equal(yearSummary(data, 2025).savingsRate, null);
+});
+
+test('invested money is kept, not spent', () => {
+  const cats = new Map<string, SpendCategory>([
+    ['rent', { id: 'rent', name: 'Rent', group: 'recurring', order: 0, hidden: false }],
+    ['food', { id: 'food', name: 'Food', group: 'variable', order: 0, hidden: false }],
+    ['brokerage', { id: 'brokerage', name: 'Brokerage', group: 'invest', order: 0, hidden: false }],
+    ['pay', { id: 'pay', name: 'Pay', group: 'income', order: 0, hidden: false }],
+  ]);
+  const t = monthTotals({ rent: 125000, food: 40000, brokerage: 20000, pay: 370600 }, cats);
+  assert.equal(t.expenses, 165000);
+  assert.equal(t.invested, 20000);
+  assert.equal(t.net, 205600);
+  assert.equal(savedCash(t), 185600);
+  const year = yearSummary(
+    { spend: { '2026-01': { brokerage: 20000, pay: 100000 }, '2026-02': { brokerage: 5000 } }, spendCategories: [...cats.values()] },
+    2026,
+  );
+  assert.equal(year.invested, 25000);
+  assert.equal(year.expenses, 0);
+});
+
+test('older saved data gets the Invested group once', () => {
+  const old = { version: 1, spendCategories: [{ id: 'rent', name: 'Rent', group: 'recurring', order: 0, hidden: false }] };
+  const migrated = migrate(old);
+  assert.equal(migrated.version, 2);
+  assert.deepEqual(
+    migrated.spendCategories.map((c) => c.group),
+    ['recurring', 'invest'],
+  );
+  // Someone who removed it on version 2 doesn't get it back.
+  const later = migrate({ ...migrated, spendCategories: migrated.spendCategories.filter((c) => c.group !== 'invest') });
+  assert.deepEqual(later.spendCategories.map((c) => c.group), ['recurring']);
+  assert.ok(migrate(null).spendCategories.some((c) => c.group === 'invest'));
+});
+
+test('two updates on the same day both show on the chart', () => {
+  const at = (h: number, m = 0) => new Date(2026, 10, 1, h, m).getTime();
+  const sameDay: Snapshot[] = [
+    { id: '1', accountId: 'a', date: '2026-10-31', value: 90_00, createdAt: at(9) - 86_400_000 },
+    { id: '2', accountId: 'a', date: '2026-11-01', value: 100_00, createdAt: at(9) },
+    { id: '3', accountId: 'a', date: '2026-11-01', value: 104_00, createdAt: at(14, 5) },
+  ];
+  const series = buildSeries(sameDay, accounts, cats, { signed: true });
+  assert.deepEqual(
+    series.map((p) => p.value),
+    [90_00, 100_00, 104_00],
+  );
+  const day = dayNumber('2026-11-01');
+  assert.deepEqual(
+    series.map((p) => p.day),
+    [day - 1, day, day + 0.5],
+  );
+  assert.equal(series[0].at, undefined);
+  assert.equal(series[2].at, at(14, 5));
+  assert.equal(keyFromDayNumber(series[2].day), '2026-11-01');
+
+  // Day one with two updates draws a line from the first to the second, not a flat one.
+  const today = sliceSeries(buildSeries(sameDay.slice(1), accounts, cats), '1M', '2026-11-01');
+  assert.deepEqual(
+    today.map((p) => p.value),
+    [100_00, 104_00],
+  );
+});
+
+test('entries saved together count as one update', () => {
+  // Update Balances saves every account within milliseconds: one point, not a step per account.
+  const t = new Date(2026, 10, 1, 9).getTime();
+  const batch: Snapshot[] = [
+    { id: '1', accountId: 'a', date: '2026-11-01', value: 100_00, createdAt: t },
+    { id: '2', accountId: 'b', date: '2026-11-01', value: 30_00, createdAt: t + 1 },
+    { id: '3', accountId: 'a', date: '2026-11-01', value: 120_00, createdAt: t + 3_600_000 },
+  ];
+  const series = buildSeries(batch, accounts, cats, { signed: true });
+  assert.deepEqual(
+    series.map((p) => p.value),
+    [70_00, 90_00],
+  );
+});
+
+test('a backdated entry on a busy day has no time of day', () => {
+  const later = new Date(2026, 10, 5, 9).getTime();
+  const backdated: Snapshot[] = [
+    { id: '1', accountId: 'a', date: '2026-11-01', value: 100_00, createdAt: new Date(2026, 10, 1, 9).getTime() },
+    { id: '2', accountId: 'a', date: '2026-11-01', value: 104_00, createdAt: later },
+  ];
+  const series = buildSeries(backdated, accounts, cats);
+  assert.equal(series.length, 2);
+  assert.notEqual(series[0].at, undefined);
+  assert.equal(series[1].at, undefined);
+});
+
+test('account sparklines show each update, Insights keeps one point a day', () => {
+  const t = new Date(2026, 10, 1, 9).getTime();
+  const two: Snapshot[] = [
+    { id: '1', accountId: 'a', date: '2026-11-01', value: 100_00, createdAt: t },
+    { id: '2', accountId: 'a', date: '2026-11-01', value: 104_00, createdAt: t + 3_600_000 },
+  ];
+  assert.deepEqual(
+    updatesByAccount(two).get('a')!.map((p) => p.value),
+    [100_00, 104_00],
+  );
+  assert.deepEqual(
+    seriesByAccount(two).get('a')!.map((p) => p.value),
+    [104_00],
+  );
+});
