@@ -12,7 +12,7 @@ import { useMoney } from '@/hooks/use-money';
 import { useToday } from '@/hooks/use-today';
 import { formatDate } from '@/lib/dates';
 import { formatRate, monthlyInterest } from '@/lib/debts';
-import { choose, confirm } from '@/lib/dialogs';
+import { confirm } from '@/lib/dialogs';
 import { haptics } from '@/lib/haptics';
 import { liveCurrencySupported, metalName } from '@/lib/metals';
 import { buildSeries, compareSnapshots } from '@/lib/networth';
@@ -46,30 +46,35 @@ export default function AccountScreen() {
   const series = buildSeries(snapshots, accounts, categories, { include: (a) => a.id === account.id });
   const live = account.metal && liveCurrencySupported(currency) ? account.metal : undefined;
 
-  // One way to remove an account. Keeping history (closing it) is the default
-  // because deleting rewrites past net worth; deleting is for mistakes.
-  const onRemove = async () => {
-    const choice = await choose({
-      title: `Remove ${account.name}?`,
+  // Closing is for an account you closed or sold: it drops to $0 from today and
+  // its past balances stay, so net worth history is untouched. Deleting is for
+  // mistakes, and it rewrites past net worth, so it says so plainly.
+  const onClose = async () => {
+    const ok = await confirm({
+      title: `Close ${account.name}?`,
       message:
-        'Keep History zeroes it as of today and moves it to Closed Accounts, so your past net worth stays the same. Delete Everything erases it and all its balances, which changes your past net worth.',
-      options: [{ label: 'Keep History' }, { label: 'Delete Everything', destructive: true }],
+        'Use this for an account you closed or sold. It counts as $0 from today and leaves your list, but its past balances stay, so your net worth history doesn’t change.\n\nYou can reopen it or delete it for good later from Closed Accounts, at the bottom of Net Worth.',
+      confirmLabel: 'Close Account',
     });
-    if (choice === 0) {
+    if (ok) {
       closeAccount(account.id, today);
       haptics.success();
       router.back();
-    } else if (choice === 1) {
-      router.back();
-      deleteAccount(account.id);
     }
   };
 
   const onDelete = async () => {
+    const peak = history.reduce((m, s) => Math.max(m, s.value), 0);
+    const count = `${history.length} ${history.length === 1 ? 'balance' : 'balances'}`;
+    const effect =
+      peak > 0
+        ? ` Your past net worth will go ${isDebt ? 'up' : 'down'} by what it was worth on each date (up to ${money(peak)}).`
+        : '';
+    const instead = account.closed ? '' : ' To keep your history as it is, close the account instead.';
     const ok = await confirm({
-      title: `Delete ${account.name}?`,
-      message: 'This erases the account and all its balances, which changes your past net worth.',
-      confirmLabel: 'Delete',
+      title: `Delete ${account.name} for Good?`,
+      message: `This erases the account and its ${count}.${effect} This can’t be undone.${instead}`,
+      confirmLabel: 'Delete for Good',
       destructive: true,
     });
     if (ok) {
@@ -77,6 +82,15 @@ export default function AccountScreen() {
       deleteAccount(account.id);
     }
   };
+
+  const onReopen = () => {
+    reopenAccount(account.id);
+    haptics.success();
+  };
+
+  const closedOn = account.closed
+    ? ([...history].reverse().find((s) => s.note === 'Account closed') ?? latest)?.date
+    : undefined;
 
   const newestFirst = [...history].reverse();
 
@@ -93,23 +107,35 @@ export default function AccountScreen() {
               icon: 'pencil',
               onPress: () => router.push({ pathname: '/account-form', params: { id: account.id } }),
             },
-            ...(account.closed
-              ? [
-                  { label: 'Reopen Account', icon: 'arrow.uturn.backward' as const, onPress: () => reopenAccount(account.id) },
-                  { label: 'Delete Account', icon: 'trash' as const, destructive: true, onPress: onDelete },
-                ]
-              : [{ label: 'Remove Account', icon: 'trash' as const, destructive: true, onPress: onRemove }]),
+            account.closed
+              ? { label: 'Reopen Account', icon: 'arrow.uturn.backward', onPress: onReopen }
+              : { label: 'Close Account', icon: 'archivebox', onPress: onClose },
+            {
+              label: account.closed ? 'Delete for Good' : 'Delete Account',
+              icon: 'trash',
+              destructive: true,
+              onPress: onDelete,
+            },
           ],
         },
       ]}>
       <TrendHeader label={category?.name} current={latest?.value ?? 0} series={series} invert={isDebt} />
 
-      <View style={styles.update}>
-        <Button
-          title={account.closed ? 'Add a Balance' : live ? 'Update Quantity' : 'Update Balance'}
-          onPress={() => router.push({ pathname: '/update', params: { id: account.id } })}
-        />
-      </View>
+      {account.closed ? (
+        <Section
+          style={styles.update}
+          footer={`Closed${closedOn ? ` ${formatDate(closedOn)}` : ''}. It counts as ${money(0, { whole: true })} from then on, and its past balances still count in your net worth history. Delete it for good only if it shouldn’t be in your history at all.`}>
+          <Row title="Reopen Account" titleColor="tint" onPress={onReopen} chevron={false} />
+          <Row title="Delete for Good" titleColor="down" onPress={onDelete} chevron={false} />
+        </Section>
+      ) : (
+        <View style={styles.update}>
+          <Button
+            title={live ? 'Update Quantity' : 'Update Balance'}
+            onPress={() => router.push({ pathname: '/update', params: { id: account.id } })}
+          />
+        </View>
+      )}
 
       {isDebt && !account.closed ? (
         <Section

@@ -3,10 +3,12 @@ import { router } from 'expo-router';
 import { AccountRow } from '@/components/account-row';
 import { Section } from '@/components/list';
 import { Screen } from '@/components/screen';
+import { useMoney } from '@/hooks/use-money';
 import { summarizeAccounts } from '@/lib/networth';
 import { useStore } from '@/store';
 
 export default function ClosedAccountsScreen() {
+  const money = useMoney();
   const accounts = useStore((s) => s.accounts);
   const snapshots = useStore((s) => s.snapshots);
   const categories = useStore((s) => s.nwCategories);
@@ -15,7 +17,7 @@ export default function ClosedAccountsScreen() {
 
   return (
     <Screen title="Closed Accounts">
-      <Section footer="Closed accounts keep their history, so past net worth stays accurate. Open one to reopen it.">
+      <Section footer={`These count as ${money(0, { whole: true })} now, and their past balances stay in your net worth history. Tap one to reopen it or delete it for good.`}>
         {closed.map((a) => (
           <AccountRow
             key={a.id}

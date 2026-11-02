@@ -5,7 +5,7 @@ import { AccountRow, TREND_ROW_INSET, TrendRow } from '@/components/account-row'
 import { Button } from '@/components/button';
 import { EmptyState } from '@/components/empty-state';
 import type { HeaderItem, MenuItem } from '@/components/header-actions';
-import { Section } from '@/components/list';
+import { Row, Section } from '@/components/list';
 import { Screen } from '@/components/screen';
 import { useTabButtons } from '@/components/tab-buttons';
 import { TrendHeader } from '@/components/trend-header';
@@ -202,6 +202,12 @@ export default function NetWorthScreen() {
       <TrendHeader current={totals.net} series={series} />
 
       {view === 'categories' ? categorySections : accountSections}
+
+      {closedCount > 0 ? (
+        <Section style={styles.listSection}>
+          <Row title="Closed Accounts" value={String(closedCount)} onPress={() => router.push('/closed')} />
+        </Section>
+      ) : null}
     </Screen>
   );
 }
