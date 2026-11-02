@@ -149,14 +149,9 @@ test('trends: yearly savings and spending goals', () => {
   assert.equal(g.months, 3);
   assert.equal(g.left, 9);
   assert.ok(Math.abs(g.kept! - 2_400 / 6_600) < 1e-9);
-  assert.deepEqual(
-    g.keptLine.slice(0, 4).map((v) => (v == null ? null : Math.round(v * 1000) / 1000)),
-    [Math.round((800 / 2200) * 1000) / 1000, Math.round((1_800 / 4_400) * 1000) / 1000, Math.round((2_400 / 6_600) * 1000) / 1000, null],
-  );
   // The rest of the year at 2,200 a month: keep 40% of 26,400 = 10,560, so 8,160 of the 19,800 still to earn.
   assert.ok(Math.abs(g.keepFromHere! - 8_160 / 19_800) < 1e-9);
   assert.equal(g.spent, 1_400_00);
-  assert.deepEqual(g.spentLine.slice(0, 4), [1_400_00, 1_300_00, 1_400_00, null]);
   // 1,300 a month over 12 months is 15,600; 4,200 is spent, leaving 11,400 for 9 months.
   assert.equal(g.spendFromHere, Math.round(11_400_00 / 9));
 

@@ -131,13 +131,15 @@ export default function SettingsScreen() {
   };
 
   const onSample = async () => {
-    const ok = await confirm({
+    const i = await choose({
       title: 'Load sample data?',
-      message: 'Replaces everything with made-up accounts and spending so you can try the app.',
-      confirmLabel: 'Load Sample',
-      destructive: true,
+      message: 'Replaces everything with made-up accounts and spending, to see Plainworth as someone new or as someone who’s used it for years.',
+      options: [
+        { label: 'New User: 4 Months', destructive: true },
+        { label: 'Long-Time User: 3 Years', destructive: true },
+      ],
     });
-    if (ok) loadSampleData();
+    if (i != null) loadSampleData(i === 0 ? 4 : 36);
   };
 
   const currencyName = CURRENCIES.find((x) => x.code === settings.currency)?.name ?? settings.currency;
@@ -226,7 +228,13 @@ export default function SettingsScreen() {
             subtitle="See Plainworth with or without Pro"
             accessory={<Switch value={pro} onValueChange={setTestPro} />}
           />
-          <Row title="Load Sample Data" titleColor="tint" onPress={onSample} chevron={false} />
+          <Row
+            title="Load Sample Data"
+            subtitle="New user (4 months) or long-time (3 years)"
+            titleColor="tint"
+            onPress={onSample}
+            chevron={false}
+          />
           <Row
             title="Offer Reminder Again"
             subtitle="Asks after the next account or balance update"

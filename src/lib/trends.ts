@@ -244,8 +244,6 @@ export interface YearGoals {
   left: number;
   /** Share of income kept (saved or invested) so far this year; null without income. */
   kept: number | null;
-  /** The same, as of the end of each month: twelve entries, null where nothing counts yet. */
-  keptLine: (number | null)[];
   /**
    * To end the year at the savings goal: the share of income to keep from here
    * on, assuming income carries on as it has. 0 or less means you're there
@@ -254,8 +252,6 @@ export interface YearGoals {
   keepFromHere: number | null;
   /** Average spent a month so far this year; null before any month counts. */
   spent: Cents | null;
-  /** The same, as of the end of each month. */
-  spentLine: (Cents | null)[];
   /** To end the year at or under the limit: the most to spend in an average month from here on. Null without a limit. */
   spendFromHere: Cents | null;
 }
@@ -277,14 +273,8 @@ export function yearGoals(data: SpendData, goal: SpendingGoal, year: number, tod
   let income = 0;
   let net = 0;
   let incomeMonths = 0;
-  const keptLine: (number | null)[] = [];
-  const spentLine: (Cents | null)[] = [];
   totals.forEach((m, i) => {
-    if (i > lastEntered) {
-      keptLine.push(null);
-      spentLine.push(null);
-      return;
-    }
+    if (i > lastEntered) return;
     if (m.hasData) {
       months++;
       spentSum += m.expenses;
@@ -294,8 +284,6 @@ export function yearGoals(data: SpendData, goal: SpendingGoal, year: number, tod
       net += m.net;
       incomeMonths++;
     }
-    keptLine.push(income > 0 ? net / income : null);
-    spentLine.push(months ? Math.round(spentSum / months) : null);
   });
 
   const left = 12 - lastOver;
@@ -308,5 +296,5 @@ export function yearGoals(data: SpendData, goal: SpendingGoal, year: number, tod
   const spent = months ? Math.round(spentSum / months) : null;
   const spendFromHere =
     goal.limit != null && left > 0 ? Math.round((goal.limit * (months + left) - spentSum) / left) : null;
-  return { months, left, kept, keptLine, keepFromHere, spent, spentLine, spendFromHere };
+  return { months, left, kept, keepFromHere, spent, spendFromHere };
 }

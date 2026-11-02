@@ -33,7 +33,9 @@ import {
   type Creep,
   type NetWorthMonth,
   type PeriodUnit,
+  type YearGoals,
 } from '@/lib/trends';
+import type { SpendingGoal } from '@/lib/types';
 import { useStore } from '@/store';
 import { openPaywall } from '@/store/pro';
 import { useColors } from '@/theme';
@@ -102,6 +104,7 @@ function useLock() {
 const shortMonth = (m: Month) => `${MONTHS_SHORT[m.month - 1]} ${m.year}`;
 const lastIndex = (values: (number | null)[]) => values.reduce<number>((last, v, i) => (v != null ? i : last), -1);
 const MONTH_LABELS: TrendLabel[] = MONTHS_SHORT.map((m, i) => ({ index: i, text: m[0] }));
+const wholePercent = (r: number) => `${Math.round(r * 100)}%`;
 
 function NetWorth() {
   const today = useToday();
@@ -552,17 +555,12 @@ function Spending() {
   const creep = lifestyleCreep(data, today);
   const history = spendHistory(data, today);
   const sp = spendingYear(data, year, today);
-  const goal = useStore((s) => s.settings.spendingGoal);
-  const goals = <YearGoalsCard key="goals" year={year} />;
   const cards = useCards([
-    goal ? goals : null,
     lastIndex(soFar) >= 0 ? (
       <SpentYearCard key="year" year={year} soFar={soFar} before={spentSoFar(data, year - 1, today)} />
     ) : null,
     creep ? <CreepCard key="creep" creep={creep} /> : null,
     sp?.categories.length ? <WhereItWentCard key="where" year={year} /> : null,
-    // Without goals, the card that offers them goes last.
-    goal || !sp ? null : goals,
   ]);
 
   if (!sp && !history.length) {
@@ -583,17 +581,27 @@ function Spending() {
   return <>{cards}</>;
 }
 
-/** Spending added up since January, this year against last. */
+/**
+ * Spending added up since January, this year against last, with the year's
+ * goals once you've set them: a spending limit adds up month by month on the
+ * chart, and each goal gets a bar. Like Net Worth's goal, it's set from here.
+ */
 function SpentYearCard({ year, soFar, before }: { year: number; soFar: (number | null)[]; before: (number | null)[] }) {
   const c = useColors();
   const lock = useLock();
   const money = lock.money;
   const whole = (cents: number) => money(cents, { whole: true });
+  const pct = (r: number) => (lock.locked ? '••%' : wholePercent(r));
+  const today = useToday();
+  const spend = useStore((s) => s.spend);
+  const spendCategories = useStore((s) => s.spendCategories);
+  const goal = useStore((s) => s.settings.spendingGoal);
   const last = lastIndex(soFar);
   const value = soFar[last]!;
   const then = before[last];
   const hasBefore = lastIndex(before) >= 0;
   const [at, setAt] = useState<number | null>(null);
+  const editGoals = () => router.push('/spending-goal');
 
   let sentence = `You’ve spent ${whole(value)} this year through ${MONTHS[last]}`;
   if (then != null) {
@@ -605,6 +613,36 @@ function SpentYearCard({ year, soFar, before }: { year: number; soFar: (number |
   } else {
     sentence += '.';
   }
+
+  const g = goal ? yearGoals({ spend, spendCategories }, goal, year, today) : null;
+  const said = goal && g ? goalSentence(goal, g, whole) : null;
+  if (said) sentence += ` ${said}`;
+
+  const limit = goal?.limit;
+  const limitLine = limit != null ? Array.from({ length: 12 }, (_, i) => limit * (i + 1)) : null;
+  const bars: { key: string; progress: number; color: string; text: string }[] = [];
+  if (goal?.keep != null && g?.kept != null) {
+    bars.push({
+      key: 'keep',
+      progress: g.kept / goal.keep,
+      color: g.kept >= goal.keep ? c.up : c.warning,
+      text: `Kept ${pct(g.kept)} of what you earned · ${pct(goal.keep)} goal`,
+    });
+  }
+  if (limit != null && g?.spent != null) {
+    bars.push({
+      key: 'limit',
+      progress: g.spent / limit,
+      color: g.spent > limit ? c.down : c.bar,
+      text: `Average month: ${whole(g.spent)} of your ${whole(limit)} limit`,
+    });
+  }
+
+  const keyItems = [
+    { label: `${year}, added up`, color: c.bar },
+    ...(hasBefore ? [{ label: `${year - 1}, added up`, color: c.tertiary }] : []),
+    ...(limitLine ? [{ label: 'Limit', color: c.warning, dashed: true }] : []),
+  ];
 
   return (
     <InsightCard
@@ -618,27 +656,78 @@ function SpentYearCard({ year, soFar, before }: { year: number; soFar: (number |
           items={[
             { label: String(year), value: soFar[at] != null ? whole(soFar[at]!) : '—', color: c.bar },
             ...(hasBefore ? [{ label: String(year - 1), value: before[at] != null ? whole(before[at]!) : '—' }] : []),
+            ...(limitLine ? [{ label: 'Limit', value: whole(limitLine[at]) }] : []),
           ]}
         />
-      ) : hasBefore ? (
-        <TrendKey
-          items={[
-            { label: `${year}, added up`, color: c.bar },
-            { label: `${year - 1}, added up`, color: c.tertiary },
-          ]}
-        />
+      ) : keyItems.length > 1 ? (
+        <TrendKey items={keyItems} />
       ) : null}
       <TrendChart
         count={12}
         series={[
           { values: before, color: c.tertiary },
+          ...(limitLine ? [{ values: limitLine, color: c.warning, dashed: true }] : []),
           { values: soFar, color: c.bar, endDot: true },
         ]}
         labels={MONTH_LABELS}
         onScrub={lock.locked ? undefined : setAt}
       />
+      {goal ? (
+        <View style={styles.goals}>
+          {bars.map((b, i) => (
+            <View key={b.key} style={styles.goal}>
+              <View style={[styles.goalTrack, { backgroundColor: c.fill }]}>
+                <View
+                  style={[
+                    styles.goalFill,
+                    { width: `${Math.min(100, Math.max(b.progress * 100, 1.5))}%`, backgroundColor: b.color },
+                  ]}
+                />
+              </View>
+              <View style={styles.goalRow}>
+                <Text variant="footnote" color="secondary" numberOfLines={1} style={styles.goalText}>
+                  {b.text}
+                </Text>
+                {i === bars.length - 1 ? <GoalLink title="Edit Goals" onPress={editGoals} /> : null}
+              </View>
+            </View>
+          ))}
+          {bars.length ? null : (
+            <View style={styles.goalRow}>
+              <GoalLink title="Edit Goals" onPress={editGoals} />
+            </View>
+          )}
+        </View>
+      ) : (
+        <View style={styles.goalRow}>
+          <GoalLink title="Set a Goal" icon="flag" onPress={editGoals} />
+        </View>
+      )}
     </InsightCard>
   );
+}
+
+/**
+ * A sentence on the year's goals, after This Year vs Last Year's own. The
+ * savings goal comes first, unless it's on track and the spending limit isn't.
+ */
+function goalSentence(goal: SpendingGoal, g: YearGoals, whole: (cents: number) => string): string | null {
+  const keepOk = goal.keep != null && g.kept != null && g.kept >= goal.keep;
+  const over = goal.limit != null && g.spent != null && g.spent > goal.limit;
+  if (goal.keep != null && !(keepOk && over)) {
+    if (g.kept == null) return g.months ? 'Enter your income in Spending to see how much of it you keep.' : null;
+    if (keepOk) return `You’ve kept ${wholePercent(g.kept)} of what you earned, above your ${wholePercent(goal.keep)} goal.`;
+    if (g.keepFromHere != null && g.keepFromHere <= 0.9) {
+      return `Keep ${wholePercent(g.keepFromHere)} of what you earn from here on to end the year at your ${wholePercent(goal.keep)} goal.`;
+    }
+    return `You’ve kept ${wholePercent(g.kept)} of what you earned, short of your ${wholePercent(goal.keep)} goal.`;
+  }
+  if (goal.limit == null || g.spent == null) return null;
+  if (!over) return `That’s ${whole(g.spent)} in an average month, under your ${whole(goal.limit)} limit.`;
+  if (g.spendFromHere != null && g.spendFromHere > 0) {
+    return `Averaging ${whole(g.spendFromHere)} a month from here on gets you back under your ${whole(goal.limit)} limit.`;
+  }
+  return `That’s ${whole(g.spent)} in an average month, over your ${whole(goal.limit)} limit.`;
 }
 
 /** Income and spending, each as a change from where it started: spending climbing faster is creep. */
@@ -746,133 +835,6 @@ function WhereItWentCard({ year }: { year: number }) {
   );
 }
 
-const wholePercent = (r: number) => `${Math.round(r * 100)}%`;
-
-/**
- * The year's spending goals: how much of what you earn you've kept, against
- * your goal, month by month as the year adds up; and your average month
- * against a spending limit. Judged over the year, so one big month evens out.
- */
-function YearGoalsCard({ year }: { year: number }) {
-  const c = useColors();
-  const lock = useLock();
-  const money = lock.money;
-  const whole = (cents: number) => money(cents, { whole: true });
-  const today = useToday();
-  const spend = useStore((s) => s.spend);
-  const spendCategories = useStore((s) => s.spendCategories);
-  const goal = useStore((s) => s.settings.spendingGoal);
-  const [at, setAt] = useState<number | null>(null);
-  const edit = () => router.push('/spending-goal');
-  const teaser = 'Set goals for the year, like keeping 20% of what you earn, and see how you’re doing as the months add up.';
-
-  if (!goal) {
-    return (
-      <InsightCard label="Yearly Goals" sentence={teaser} {...lock.card}>
-        <View style={styles.goalRow}>
-          <GoalLink title="Set a Goal" icon="flag" onPress={edit} />
-        </View>
-      </InsightCard>
-    );
-  }
-
-  const g = yearGoals({ spend, spendCategories }, goal, year, today);
-  const pct = (r: number) => (lock.locked ? '••%' : wholePercent(r));
-  let sentence: string;
-  if (goal.keep != null) {
-    if (g.kept == null) {
-      sentence = g.months
-        ? 'Enter your income in Spending to see how much of it you keep.'
-        : 'Your goals start counting once January is over.';
-    } else if (g.kept >= goal.keep) {
-      sentence = `You’ve kept ${wholePercent(g.kept)} of what you earned this year, above your ${wholePercent(goal.keep)} goal.`;
-    } else if (g.keepFromHere != null && g.keepFromHere <= 0.9) {
-      sentence = `You’ve kept ${wholePercent(g.kept)} of what you earned this year. Keep ${wholePercent(g.keepFromHere)} from here on to end the year at ${wholePercent(goal.keep)}.`;
-    } else {
-      sentence = `You’ve kept ${wholePercent(g.kept)} of what you earned this year, short of your ${wholePercent(goal.keep)} goal.`;
-    }
-  } else if (g.spent == null) {
-    sentence = 'Your goals start counting once January is over.';
-  } else if (g.spent <= goal.limit!) {
-    sentence = `You’ve spent ${whole(g.spent)} in an average month this year, under your ${whole(goal.limit!)} limit.`;
-  } else if (g.spendFromHere != null && g.spendFromHere > 0) {
-    sentence = `You’ve spent ${whole(g.spent)} in an average month this year, over your ${whole(goal.limit!)} limit. Averaging ${whole(g.spendFromHere)} from here on gets you back under.`;
-  } else {
-    sentence = `You’ve spent ${whole(g.spent)} in an average month this year, over your ${whole(goal.limit!)} limit.`;
-  }
-
-  // The chart follows the savings goal if there is one, otherwise the spending limit.
-  const saving = goal.keep != null;
-  const line = saving ? g.keptLine : g.spentLine;
-  const target = saving ? goal.keep! : goal.limit!;
-  const color = saving ? c.up : c.bar;
-  const show = (v: number) => (saving ? pct(v) : whole(v));
-  const limitBar = saving && goal.limit != null && g.spent != null;
-
-  return (
-    <InsightCard
-      label="Yearly Goals"
-      sentence={lock.text(sentence, teaser)}
-      note={
-        saving
-          ? 'Saved and invested, out of what you earned, since January. Counts each month once it’s over.'
-          : 'Your average month since January. Counts each month once it’s over.'
-      }
-      {...lock.card}>
-      {lastIndex(line) >= 0 ? (
-        <>
-          {at != null ? (
-            <Readout
-              title={`Through ${MONTHS[at]}`}
-              items={[
-                { label: saving ? 'Kept' : 'Average month', value: line[at] != null ? show(line[at]!) : '—', color },
-                { label: 'Goal', value: show(target) },
-              ]}
-            />
-          ) : (
-            <TrendKey
-              items={[
-                { label: saving ? 'Kept so far' : 'Average month', color },
-                { label: saving ? `${pct(target)} goal` : `${whole(target)} limit`, color: c.warning, dashed: true },
-              ]}
-            />
-          )}
-          <TrendChart
-            count={12}
-            series={[
-              { values: Array(12).fill(target), color: c.warning, dashed: true },
-              { values: line, color, endDot: true },
-            ]}
-            labels={MONTH_LABELS}
-            onScrub={lock.locked ? undefined : setAt}
-          />
-        </>
-      ) : null}
-      {limitBar ? (
-        <View style={styles.goal}>
-          <View style={[styles.goalTrack, { backgroundColor: c.fill }]}>
-            <View
-              style={[
-                styles.goalFill,
-                {
-                  width: `${Math.min(100, Math.max(1.5, (g.spent! / goal.limit!) * 100))}%`,
-                  backgroundColor: g.spent! > goal.limit! ? c.down : c.bar,
-                },
-              ]}
-            />
-          </View>
-          <Text variant="footnote" color="secondary" numberOfLines={1}>
-            {`Average month: ${whole(g.spent!)} of your ${whole(goal.limit!)} limit`}
-          </Text>
-        </View>
-      ) : null}
-      <View style={styles.goalRow}>
-        <GoalLink title="Edit Goals" onPress={edit} />
-      </View>
-    </InsightCard>
-  );
-}
-
 /** What's under the finger, in place of the chart's key while dragging. */
 function Readout({ title, items }: { title: string; items: { label: string; value: string; color?: string }[] }) {
   return (
@@ -945,6 +907,9 @@ const styles = StyleSheet.create({
   goal: {
     marginTop: 16,
     gap: 8,
+  },
+  goals: {
+    marginTop: 4,
   },
   goalTrack: {
     height: 6,

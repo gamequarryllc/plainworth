@@ -75,7 +75,8 @@ interface Actions {
   moveSpendCategory(id: ID, direction: -1 | 1): void;
 
   updateSettings(patch: Partial<Settings>): void;
-  loadSampleData(): void;
+  /** Made-up data covering the last `months` months (36 if left out). */
+  loadSampleData(months?: number): void;
   eraseAll(): void;
   /** Replace everything with a backup made on `date`. */
   restore(data: Data, date: DateKey | null): void;
@@ -364,9 +365,9 @@ export const useStore = create<Store>()((set, get) => ({
     set((s) => ({ settings: { ...s.settings, ...patch } }));
   },
 
-  loadSampleData() {
+  loadSampleData(months) {
     const settings = get().settings;
-    set({ ...sampleData(), settings });
+    set({ ...sampleData(months), settings });
   },
 
   eraseAll() {
