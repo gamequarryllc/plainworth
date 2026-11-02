@@ -28,7 +28,7 @@ const MATERIAL: Partial<Record<SFSymbol, MaterialName>> = {
   'arrow.up.arrow.down': 'swap_vert',
   'arrow.uturn.backward': 'undo',
   lock: 'lock',
-  'flame.fill': 'local_fire_department',
+  person: 'person',
   'lock.fill': 'lock',
   'lock.shield.fill': 'shield_lock',
   'arrow.up.right': 'arrow_outward',

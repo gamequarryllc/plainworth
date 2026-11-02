@@ -2,162 +2,293 @@ import { Image } from 'expo-image';
 import { router } from 'expo-router';
 import * as Sharing from 'expo-sharing';
 import { useRef, useState, type ComponentRef } from 'react';
-import { Platform, StyleSheet, View } from 'react-native';
-import Svg, { Defs, LinearGradient, Path, Stop } from 'react-native-svg';
+import { Alert, Platform, StyleSheet, View } from 'react-native';
 import { captureRef } from 'react-native-view-shot';
 
+import { updatedLabel } from '@/components/account-row';
 import { Button } from '@/components/button';
+import { LineChart } from '@/components/line-chart';
+import { RangePicker } from '@/components/range-picker';
 import { Screen } from '@/components/screen';
-import { Segmented } from '@/components/segmented';
+import { Sparkline } from '@/components/sparkline';
 import { Text } from '@/components/text';
 import { useToday } from '@/hooks/use-today';
-import { MONTHS, parseDateKey } from '@/lib/dates';
 import { notify } from '@/lib/dialogs';
 import { formatMoney, formatPercent } from '@/lib/money';
-import { buildSeries, seriesChange, sliceSeries, type SeriesPoint } from '@/lib/networth';
+import {
+  buildSeries,
+  rangeCaption,
+  seriesChange,
+  sliceSeries,
+  summarizeAccounts,
+  totalsOf,
+  updatesByAccount,
+} from '@/lib/networth';
+import { storage } from '@/lib/storage';
 import { useStore } from '@/store';
-import { layout } from '@/theme';
+import { layout, useColors } from '@/theme';
 
-type Show = 'amount' | 'growth';
-const SHOW: { value: Show; label: string }[] = [
-  { value: 'amount', label: 'Net Worth' },
-  { value: 'growth', label: 'Growth Only' },
-];
+const NAME_KEY = 'plainworth.share.name';
+/** More rows than this and the image gets too tall to post. */
+const MAX_ROWS = 8;
 
-// The card always uses the dark look, so the image looks the same wherever it's posted.
-const CARD = { bg: '#0B0B0D', text: '#FFFFFF', secondary: 'rgba(235,235,245,0.6)', up: '#30D158', down: '#FF453A', line: 'rgba(84,84,88,0.65)' };
-const CARD_W = 340;
-const CHART_H = 110;
+function readName(): string {
+  try {
+    return storage.read(NAME_KEY) ?? '';
+  } catch {
+    return '';
+  }
+}
 
 /**
- * Share your net worth as an image: the amount (or only how much it grew, for
- * anyone who'd rather keep the number private), the past year as a line, and
- * a small "Made with Plainworth" at the bottom. Free for everyone.
+ * Share your net worth as an image, laid out like the Net Worth tab: your
+ * total, the chart for the range you pick, and your accounts with their
+ * sparklines, with a small "Made with Plainworth" at the bottom. The gear
+ * hides amounts (percentages only), hides the accounts, or adds your name.
+ * Free for everyone.
  */
 export default function ShareScreen() {
+  const c = useColors();
   const today = useToday();
   const accounts = useStore((s) => s.accounts);
   const snapshots = useStore((s) => s.snapshots);
   const categories = useStore((s) => s.nwCategories);
   const currency = useStore((s) => s.settings.currency);
-  const hidden = useStore((s) => s.settings.hideAmounts);
-  const [show, setShow] = useState<Show>(hidden ? 'growth' : 'amount');
+  const hideAmounts = useStore((s) => s.settings.hideAmounts);
+  const range = useStore((s) => s.settings.nwRange);
+  const updateSettings = useStore((s) => s.updateSettings);
+  const [amounts, setAmounts] = useState(!hideAmounts);
+  const [showAccounts, setShowAccounts] = useState(true);
+  const [name, setName] = useState(readName);
   const [busy, setBusy] = useState(false);
   const card = useRef<ComponentRef<typeof View>>(null);
 
-  const all = buildSeries(snapshots, accounts, categories, { signed: true });
-  const year = sliceSeries(all, '1Y', today);
-  const current = all.length ? all[all.length - 1].value : 0;
-  const { delta, ratio } = seriesChange(year);
-  const canGrow = year.length >= 2 && year[0].value > 0;
-  const up = delta >= 0;
-  const t = parseDateKey(today);
-  const money = (cents: number, signed?: boolean) => formatMoney(cents, currency, { whole: true, signed });
+  const summaries = summarizeAccounts(accounts, snapshots, categories);
+  const totals = totalsOf(summaries.values());
+  const series = buildSeries(snapshots, accounts, categories, { signed: true });
+  const points = sliceSeries(series, range, today);
+  const change = seriesChange(points);
+  const up = change.delta >= 0;
+  const perAccount = updatesByAccount(snapshots);
+  const rows = accounts
+    .filter((a) => !a.closed)
+    .map((a) => summaries.get(a.id)!)
+    .filter((s) => s.balance !== 0)
+    .sort((x, y) => (y.kind === 'asset' ? 1 : 0) - (x.kind === 'asset' ? 1 : 0) || y.balance - x.balance);
+  const shownRows = rows.slice(0, MAX_ROWS);
+
+  const whole = (cents: number) => formatMoney(cents, currency, { whole: true });
+  const compact = (cents: number) => formatMoney(cents, currency, { compact: true, whole: Math.abs(cents) < 100_000 });
+  const signed = (cents: number) => formatMoney(cents, currency, { compact: true, signed: true, whole: true });
+
+  const askName = () => {
+    if (Platform.OS !== 'ios') return;
+    Alert.prompt(
+      'Your Name',
+      'Shown as “Name’s Net Worth” on the image. Leave it empty for “My Net Worth”.',
+      (text) => {
+        const next = text.trim();
+        setName(next);
+        storage.write(NAME_KEY, next).catch(() => {});
+      },
+      'plain-text',
+      name,
+    );
+  };
 
   const share = async () => {
     if (Platform.OS === 'web') {
-      notify('Sharing works in the app', 'Open Plainworth on your phone to share this card.');
+      notify('Sharing works in the app', 'Open Plainworth on your phone to share this image.');
       return;
     }
     setBusy(true);
     try {
-      const uri = await captureRef(card as unknown as Parameters<typeof captureRef>[0], { format: 'png', quality: 1, result: 'tmpfile' });
-      await Sharing.shareAsync(uri, { mimeType: 'image/png', UTI: 'public.png', dialogTitle: 'Share Net Worth' });
+      const uri = await captureRef(card as unknown as Parameters<typeof captureRef>[0], {
+        format: 'png',
+        quality: 1,
+        result: 'tmpfile',
+      });
+      await Sharing.shareAsync(uri, { mimeType: 'image/png', UTI: 'public.png', dialogTitle: 'Share Your Net Worth' });
     } catch (e) {
-      console.warn('Could not share the card', e);
+      console.warn('Could not share the image', e);
       notify('Couldn’t share', 'Something went wrong making the image. Try again.');
     } finally {
       setBusy(false);
     }
   };
 
-  const growthOnly = show === 'growth';
+  const title = name ? `${name}’s Net Worth` : 'My Net Worth';
   return (
-    <Screen title="Share Net Worth" left={[{ label: 'Close', icon: 'xmark', onPress: () => router.back() }]}>
-      <Segmented options={SHOW} value={show} onChange={setShow} style={styles.picker} />
-      <View style={styles.center}>
-        <View ref={card} collapsable={false} style={styles.card}>
-          <Text variant="subheadline" weight="600" color={CARD.secondary}>
-            {growthOnly ? 'My net worth, past year' : 'My net worth'}
-          </Text>
-          <Text variant="largeTitle" rounded tabular color={growthOnly ? (up ? CARD.up : CARD.down) : CARD.text} numberOfLines={1} adjustsFontSizeToFit>
-            {growthOnly ? (canGrow ? formatPercent(ratio, { signed: true }) : '—') : money(current)}
-          </Text>
-          {canGrow ? (
-            <Text variant="subheadline" color={up ? CARD.up : CARD.down}>
-              {growthOnly ? (up ? 'Up over the past year' : 'Down over the past year') : `${money(delta, true)} (${formatPercent(ratio, { signed: true })}) this past year`}
+    <Screen
+      title="Share Your Net Worth"
+      left={[{ label: 'Close', icon: 'xmark', onPress: () => router.back() }]}
+      right={[
+        {
+          label: 'Options',
+          icon: 'gearshape',
+          menu: [
+            { label: 'Show Amounts', subtitle: 'Off shares percentages only', isOn: amounts, onPress: () => setAmounts(!amounts) },
+            { label: 'Show Accounts', isOn: showAccounts, onPress: () => setShowAccounts(!showAccounts) },
+            ...(Platform.OS === 'ios' ? [{ label: name ? 'Change Name…' : 'Add Your Name…', icon: 'person' as const, onPress: askName }] : []),
+          ],
+        },
+      ]}>
+      <View ref={card} collapsable={false} style={[styles.card, { backgroundColor: c.background }]}>
+        <View style={styles.top}>
+          <View style={styles.topText}>
+            <Text variant="subheadline" weight="600" color="secondary" numberOfLines={1}>
+              {title}
             </Text>
-          ) : null}
-          <YearLine points={year} color={up ? CARD.up : CARD.down} />
-          <Text variant="footnote" color={CARD.secondary}>
-            {`${MONTHS[t.m - 1]} ${t.y}`}
-          </Text>
-          <View style={[styles.plug, { borderTopColor: CARD.line }]}>
-            <Image source={require('@/../assets/images/icon.png')} style={styles.icon} />
-            <Text variant="footnote" color={CARD.secondary}>
-              Made with{' '}
-              <Text variant="footnote" weight="700" color={CARD.text}>
-                Plainworth
+            <Text variant="largeTitle" rounded tabular numberOfLines={1} adjustsFontSizeToFit>
+              {amounts ? whole(totals.net) : points.length > 1 ? formatPercent(change.ratio, { signed: true }) : '—'}
+            </Text>
+            {points.length > 1 ? (
+              <Text variant="subheadline" weight="600" color={up ? 'up' : 'down'} numberOfLines={1}>
+                {`${amounts ? `${signed(change.delta)} (${formatPercent(change.ratio, { signed: true })})` : up ? 'Up' : 'Down'} · ${rangeCaption(range)}`}
               </Text>
-            </Text>
+            ) : null}
           </View>
+          {name ? (
+            <View style={[styles.avatar, { backgroundColor: c.fillStrong }]}>
+              <Text variant="title2" weight="600">
+                {name[0].toUpperCase()}
+              </Text>
+            </View>
+          ) : null}
+        </View>
+        {points.length > 1 ? (
+          <View style={styles.chart}>
+            <LineChart points={points} color={up ? c.up : c.down} baseline={points[0].value} height={170} axis />
+          </View>
+        ) : null}
+        {showAccounts && shownRows.length ? (
+          <View style={styles.list}>
+            <Text variant="headline" style={styles.listTitle}>
+              {rows.some((r) => r.kind === 'liability') ? 'Assets & Liabilities' : 'Accounts'}
+            </Text>
+            {shownRows.map((s) => {
+              const own = sliceSeries(perAccount.get(s.account.id) ?? [], range, today);
+              const ch = seriesChange(own);
+              const debt = s.kind === 'liability';
+              const good = debt ? ch.delta < 0 : ch.delta > 0;
+              const tone = ch.delta === 0 ? 'secondary' : good ? 'up' : 'down';
+              return (
+                <View key={s.account.id} style={[styles.row, { backgroundColor: c.card }]}>
+                  <Sparkline points={own} color={ch.delta === 0 ? c.tertiary : good ? c.up : c.down} />
+                  <View style={styles.rowText}>
+                    <Text numberOfLines={1}>{s.account.name}</Text>
+                    <Text variant="footnote" color="secondary" numberOfLines={1}>
+                      {updatedLabel(s.latest?.date)}
+                    </Text>
+                  </View>
+                  <View style={styles.rowValue}>
+                    <Text weight="600" tabular numberOfLines={1}>
+                      {amounts ? `${debt ? '−' : ''}${compact(s.balance)}` : formatPercent(ch.ratio, { signed: true })}
+                    </Text>
+                    <Text variant="footnote" weight="500" tabular color={tone} numberOfLines={1}>
+                      {amounts ? `${formatPercent(ch.ratio, { signed: true })} · ${signed(ch.delta)}` : debt ? 'Debt' : ' '}
+                    </Text>
+                  </View>
+                </View>
+              );
+            })}
+            {rows.length > shownRows.length ? (
+              <Text variant="footnote" color="secondary" style={styles.more}>
+                {`And ${rows.length - shownRows.length} more`}
+              </Text>
+            ) : null}
+          </View>
+        ) : null}
+        <View style={[styles.plug, { borderTopColor: c.separator }]}>
+          <Image source={require('@/../assets/images/icon.png')} style={styles.icon} />
+          <Text variant="footnote" color="secondary">
+            Made with{' '}
+            <Text variant="footnote" weight="700">
+              Plainworth
+            </Text>
+            {' · Net Worth Tracker'}
+          </Text>
         </View>
       </View>
-      <Button title={busy ? 'Making Image…' : 'Share'} icon="square.and.arrow.up" onPress={share} disabled={busy} style={styles.button} />
+      <RangePicker value={range} onChange={(r) => updateSettings({ nwRange: r })} />
+      <Button
+        title={busy ? 'Making Image…' : 'Share Now'}
+        icon="square.and.arrow.up"
+        onPress={share}
+        disabled={busy}
+        style={styles.button}
+      />
       <Text variant="footnote" color="secondary" align="center" style={styles.footer}>
-        {growthOnly ? 'Only the percentage is shared, not your balance.' : 'Your balance is on the image. Pick Growth Only to keep it private.'}
+        {amounts
+          ? 'Your balances are on the image. Turn off Show Amounts in the gear to share percentages only.'
+          : 'Only percentages are shared, not your balances.'}
       </Text>
     </Screen>
   );
 }
 
-/** The past year as a plain line, like the Stocks share card. */
-function YearLine({ points, color }: { points: SeriesPoint[]; color: string }) {
-  const width = CARD_W - 40;
-  if (points.length < 2) return <View style={{ height: CHART_H, marginVertical: 14 }} />;
-  const minDay = points[0].day;
-  const spanX = points[points.length - 1].day - minDay || 1;
-  const values = points.map((p) => p.value);
-  const min = Math.min(...values);
-  const max = Math.max(...values);
-  const y = (v: number) => (max === min ? CHART_H / 2 : 6 + (CHART_H - 12) * (1 - (v - min) / (max - min)));
-  const line = points.map((p, i) => `${i ? 'L' : 'M'}${(((p.day - minDay) / spanX) * width).toFixed(1)},${y(p.value).toFixed(1)}`).join('');
-  return (
-    <Svg width={width} height={CHART_H} style={{ marginVertical: 14 }}>
-      <Defs>
-        <LinearGradient id="shareFill" x1="0" y1="0" x2="0" y2="1">
-          <Stop offset="0" stopColor={color} stopOpacity={0.3} />
-          <Stop offset="1" stopColor={color} stopOpacity={0} />
-        </LinearGradient>
-      </Defs>
-      <Path d={`${line}L${width},${CHART_H}L0,${CHART_H}Z`} fill="url(#shareFill)" />
-      <Path d={line} stroke={color} strokeWidth={2.5} fill="none" strokeLinejoin="round" strokeLinecap="round" />
-    </Svg>
-  );
-}
-
 const styles = StyleSheet.create({
-  picker: {
-    marginTop: 8,
-    marginBottom: 16,
-  },
-  center: {
-    alignItems: 'center',
-  },
   card: {
-    width: CARD_W,
-    padding: 20,
-    paddingBottom: 14,
-    borderRadius: 22,
+    paddingTop: 8,
+    paddingBottom: 4,
+  },
+  top: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingHorizontal: layout.margin,
+  },
+  topText: {
+    flex: 1,
+  },
+  avatar: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  chart: {
+    marginTop: 14,
+    paddingHorizontal: layout.margin,
+  },
+  list: {
+    marginTop: 18,
+    paddingHorizontal: 10,
+    gap: 6,
+  },
+  listTitle: {
+    marginHorizontal: 6,
+    marginBottom: 2,
+  },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    borderRadius: 12,
     borderCurve: 'continuous',
-    backgroundColor: CARD.bg,
+  },
+  rowText: {
+    flex: 1,
+    gap: 1,
+  },
+  rowValue: {
+    alignItems: 'flex-end',
+    gap: 1,
+  },
+  more: {
+    marginHorizontal: 6,
   },
   plug: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
     marginTop: 14,
-    paddingTop: 12,
+    marginHorizontal: layout.margin,
+    paddingTop: 10,
+    paddingBottom: 6,
     borderTopWidth: StyleSheet.hairlineWidth,
   },
   icon: {
@@ -166,11 +297,12 @@ const styles = StyleSheet.create({
     borderRadius: 5,
   },
   button: {
-    marginTop: 20,
+    marginTop: 14,
     marginHorizontal: layout.margin,
   },
   footer: {
     marginTop: 10,
+    marginBottom: 20,
     marginHorizontal: layout.margin,
   },
 });
