@@ -61,6 +61,7 @@ export default function RootLayout() {
           <Stack.Screen name="settings" options={{ ...modal, headerShown: false }} />
           <Stack.Screen name="pro" options={modal} />
           <Stack.Screen name="share" options={modal} />
+          <Stack.Screen name="export" options={modal} />
           <Stack.Screen name="goal" options={modal} />
           <Stack.Screen name="spending-goal" options={modal} />
         </Stack>

@@ -4,9 +4,29 @@
  * stores them uncompressed, which every spreadsheet app reads.
  */
 
-/** `heading` is bold and right-aligned, for the header of a column of numbers. */
-export type CellStyle = 'bold' | 'heading' | 'money' | 'moneyBold' | 'date' | 'percent' | 'percentBold';
+/** The named styles the export started with. Anything else is a `Style`. */
+export type NamedStyle = 'bold' | 'heading' | 'money' | 'moneyBold' | 'date' | 'percent' | 'percentBold';
 
+/** How a cell looks. Colors are hex RGB like "1E8F46". */
+export interface Style {
+  bold?: boolean;
+  italic?: boolean;
+  /** Font size in points; 11 when not set. */
+  size?: number;
+  color?: string;
+  fill?: string;
+  /** `signedMoney` shows a + on gains. */
+  format?: 'money' | 'signedMoney' | 'date' | 'percent';
+  align?: 'left' | 'center' | 'right';
+  top?: 'thin' | 'medium' | 'double';
+  bottom?: 'thin' | 'medium' | 'double';
+  /** Color of the top and bottom borders. */
+  borderColor?: string;
+}
+
+export type CellStyle = NamedStyle | Style;
+
+/** An empty string with a style is a blank cell that still shows its fill and borders. */
 export type Cell = string | number | null | undefined | { value: string | number; style: CellStyle };
 
 export interface Sheet {
@@ -15,29 +35,45 @@ export interface Sheet {
   rows: Cell[][];
   /** Column widths, in characters. */
   widths?: number[];
+  /** Row heights in points, by row index. */
+  heights?: Record<number, number>;
   /** Rows and columns that stay in view while scrolling. */
   freeze?: { rows?: number; columns?: number };
+  /** False hides the gridlines, for a sheet laid out like a page. */
+  gridlines?: boolean;
+  /** The sheet tab's color, hex RGB. */
+  tabColor?: string;
+  /** Printing fits the sheet to the page width, in this orientation. */
+  print?: 'portrait' | 'landscape';
 }
 
-const STYLE_INDEX: Record<CellStyle, number> = {
-  bold: 1,
-  money: 2,
-  moneyBold: 3,
-  date: 4,
-  percent: 5,
-  percentBold: 6,
-  heading: 7,
+const NAMED: Record<NamedStyle, Style> = {
+  bold: { bold: true },
+  heading: { bold: true, align: 'right' },
+  money: { format: 'money' },
+  moneyBold: { format: 'money', bold: true },
+  date: { format: 'date' },
+  percent: { format: 'percent' },
+  percentBold: { format: 'percent', bold: true },
 };
+
+/** The full look of a style, named or not. */
+export function resolveStyle(style: CellStyle | undefined): Style {
+  if (!style) return {};
+  return typeof style === 'string' ? NAMED[style] : style;
+}
 
 /** The workbook's bytes. `money` is the number format for amounts, see `moneyFormat`. */
 export function buildWorkbook(sheets: Sheet[], money: string): Uint8Array {
+  const styles = new StyleTable();
+  const sheetFiles = sheets.map((s, i): [string, string] => [`xl/worksheets/sheet${i + 1}.xml`, sheetXml(s, styles)]);
   const files: [string, string][] = [
     ['[Content_Types].xml', contentTypes(sheets.length)],
     ['_rels/.rels', ROOT_RELS],
     ['xl/workbook.xml', workbookXml(sheets)],
     ['xl/_rels/workbook.xml.rels', workbookRels(sheets.length)],
-    ['xl/styles.xml', stylesXml(money)],
-    ...sheets.map((s, i): [string, string] => [`xl/worksheets/sheet${i + 1}.xml`, sheetXml(s)]),
+    ['xl/styles.xml', styles.xml(money)],
+    ...sheetFiles,
   ];
   return zip(files.map(([name, xml]) => ({ name, data: utf8(xml) })));
 }
@@ -45,6 +81,11 @@ export function buildWorkbook(sheets: Sheet[], money: string): Uint8Array {
 /** An Excel number format for amounts in a currency, e.g. "$"#,##0.00. */
 export function moneyFormat(symbol: string, decimals: number): string {
   return `"${symbol.replace(/"/g, '')}"#,##0${decimals > 0 ? '.' + '0'.repeat(decimals) : ''}`;
+}
+
+/** The money format with a + on gains: +"$"#,##0.00;-"$"#,##0.00;"$"#,##0.00. */
+export function signedFormat(money: string): string {
+  return `+${money};-${money};${money}`;
 }
 
 /** Days since 1899-12-30, how Excel stores dates, from days since 1970-01-01. */
@@ -112,43 +153,112 @@ function workbookRels(count: number): string {
   );
 }
 
-function stylesXml(money: string): string {
-  // Order matches STYLE_INDEX: normal, bold, money, bold money, date, percent, bold percent, heading.
-  const xf = (numFmt: number, bold: boolean, right = false) =>
-    `<xf numFmtId="${numFmt}" fontId="${bold ? 1 : 0}" fillId="0" borderId="0" xfId="0"` +
-    `${numFmt ? ' applyNumberFormat="1"' : ''}${bold ? ' applyFont="1"' : ''}` +
-    (right ? ' applyAlignment="1"><alignment horizontal="right"/></xf>' : '/>');
-  const xfs = [
-    xf(0, false),
-    xf(0, true),
-    xf(164, false),
-    xf(164, true),
-    xf(165, false),
-    xf(166, false),
-    xf(166, true),
-    xf(0, true, true),
+const FORMAT_ID = {
+  money: 164,
+  date: 165,
+  percent: 166,
+  signedMoney: 167,
+} as const;
+
+/** Fonts, fills, borders and cell formats, each written once and shared by every cell that uses it. */
+class StyleTable {
+  private fonts = ['<font><sz val="11"/><name val="Calibri"/><family val="2"/></font>'];
+  // Excel requires these two fills first.
+  private fills = [
+    '<fill><patternFill patternType="none"/></fill>',
+    '<fill><patternFill patternType="gray125"/></fill>',
   ];
-  return (
-    XML_HEAD +
-    `<styleSheet xmlns="${MAIN_NS}">` +
-    `<numFmts count="3"><numFmt numFmtId="164" formatCode="${escape(money)}"/>` +
-    '<numFmt numFmtId="165" formatCode="mmm d, yyyy"/><numFmt numFmtId="166" formatCode="0.0%"/></numFmts>' +
-    '<fonts count="2"><font><sz val="11"/><name val="Calibri"/><family val="2"/></font>' +
-    '<font><b/><sz val="11"/><name val="Calibri"/><family val="2"/></font></fonts>' +
-    '<fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill></fills>' +
-    '<borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders>' +
-    '<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>' +
-    `<cellXfs count="${xfs.length}">${xfs.join('')}</cellXfs>` +
-    '<cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>' +
-    '</styleSheet>'
-  );
+  private borders = ['<border><left/><right/><top/><bottom/><diagonal/></border>'];
+  private xfs = ['<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>'];
+  private ids = new Map<string, number>();
+
+  /** The index for a cell's `s` attribute; 0 is the default look. */
+  index(style: Style): number {
+    const key = JSON.stringify([
+      style.bold,
+      style.italic,
+      style.size,
+      style.color,
+      style.fill,
+      style.format,
+      style.align,
+      style.top,
+      style.bottom,
+      style.borderColor,
+    ]);
+    const known = this.ids.get(key);
+    if (known != null) return known;
+    const font = this.add(
+      this.fonts,
+      '<font>' +
+        (style.bold ? '<b/>' : '') +
+        (style.italic ? '<i/>' : '') +
+        `<sz val="${style.size ?? 11}"/>` +
+        (style.color ? `<color rgb="FF${style.color.toUpperCase()}"/>` : '') +
+        '<name val="Calibri"/><family val="2"/></font>',
+    );
+    const fill = style.fill
+      ? this.add(
+          this.fills,
+          `<fill><patternFill patternType="solid"><fgColor rgb="FF${style.fill.toUpperCase()}"/><bgColor indexed="64"/></patternFill></fill>`,
+        )
+      : 0;
+    const edge = (side: 'top' | 'bottom', kind?: string) =>
+      kind
+        ? `<${side} style="${kind}">${style.borderColor ? `<color rgb="FF${style.borderColor.toUpperCase()}"/>` : '<color auto="1"/>'}</${side}>`
+        : `<${side}/>`;
+    const border =
+      style.top || style.bottom
+        ? this.add(
+            this.borders,
+            `<border><left/><right/>${edge('top', style.top)}${edge('bottom', style.bottom)}<diagonal/></border>`,
+          )
+        : 0;
+    const numFmt = style.format ? FORMAT_ID[style.format] : 0;
+    const xf =
+      `<xf numFmtId="${numFmt}" fontId="${font}" fillId="${fill}" borderId="${border}" xfId="0"` +
+      (numFmt ? ' applyNumberFormat="1"' : '') +
+      (font ? ' applyFont="1"' : '') +
+      (fill ? ' applyFill="1"' : '') +
+      (border ? ' applyBorder="1"' : '') +
+      (style.align ? ` applyAlignment="1"><alignment horizontal="${style.align}"/></xf>` : '/>');
+    const id = this.add(this.xfs, xf);
+    this.ids.set(key, id);
+    return id;
+  }
+
+  private add(list: string[], xml: string): number {
+    const at = list.indexOf(xml);
+    if (at >= 0) return at;
+    list.push(xml);
+    return list.length - 1;
+  }
+
+  xml(money: string): string {
+    return (
+      XML_HEAD +
+      `<styleSheet xmlns="${MAIN_NS}">` +
+      `<numFmts count="4"><numFmt numFmtId="164" formatCode="${escape(money)}"/>` +
+      '<numFmt numFmtId="165" formatCode="mmm d, yyyy"/><numFmt numFmtId="166" formatCode="0.0%"/>' +
+      `<numFmt numFmtId="167" formatCode="${escape(signedFormat(money))}"/></numFmts>` +
+      `<fonts count="${this.fonts.length}">${this.fonts.join('')}</fonts>` +
+      `<fills count="${this.fills.length}">${this.fills.join('')}</fills>` +
+      `<borders count="${this.borders.length}">${this.borders.join('')}</borders>` +
+      '<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>' +
+      `<cellXfs count="${this.xfs.length}">${this.xfs.join('')}</cellXfs>` +
+      '<cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>' +
+      '</styleSheet>'
+    );
+  }
 }
 
-function sheetXml(sheet: Sheet): string {
+function sheetXml(sheet: Sheet, styles: StyleTable): string {
   const rows = sheet.rows
     .map((row, r) => {
-      const cells = row.map((cell, col) => cellXml(cell, `${columnName(col)}${r + 1}`)).join('');
-      return cells ? `<row r="${r + 1}">${cells}</row>` : '';
+      const cells = row.map((cell, col) => cellXml(cell, `${columnName(col)}${r + 1}`, styles)).join('');
+      const height = sheet.heights?.[r];
+      const ht = height ? ` ht="${height}" customHeight="1"` : '';
+      return cells || ht ? `<row r="${r + 1}"${ht}>${cells}</row>` : '';
     })
     .join('');
   const cols = sheet.widths?.length
@@ -159,33 +269,46 @@ function sheetXml(sheet: Sheet): string {
   return (
     XML_HEAD +
     `<worksheet xmlns="${MAIN_NS}" xmlns:r="${REL_NS}">` +
-    sheetViews(sheet.freeze) +
+    (sheet.tabColor || sheet.print
+      ? '<sheetPr>' +
+        (sheet.tabColor ? `<tabColor rgb="FF${sheet.tabColor.toUpperCase()}"/>` : '') +
+        (sheet.print ? '<pageSetUpPr fitToPage="1"/>' : '') +
+        '</sheetPr>'
+      : '') +
+    sheetViews(sheet.freeze, sheet.gridlines ?? true) +
     '<sheetFormatPr defaultRowHeight="15"/>' +
     cols +
     `<sheetData>${rows}</sheetData>` +
+    (sheet.print
+      ? '<pageMargins left="0.5" right="0.5" top="0.6" bottom="0.6" header="0.3" footer="0.3"/>' +
+        `<pageSetup orientation="${sheet.print}" fitToWidth="1" fitToHeight="0"/>`
+      : '') +
     '</worksheet>'
   );
 }
 
-function sheetViews(freeze: Sheet['freeze']): string {
+function sheetViews(freeze: Sheet['freeze'], gridlines: boolean): string {
   const rows = freeze?.rows ?? 0;
   const columns = freeze?.columns ?? 0;
-  if (!rows && !columns) return '<sheetViews><sheetView workbookViewId="0"/></sheetViews>';
+  const view = `<sheetView${gridlines ? '' : ' showGridLines="0"'} workbookViewId="0"`;
+  if (!rows && !columns) return `<sheetViews>${view}/></sheetViews>`;
   const pane = rows && columns ? 'bottomRight' : rows ? 'bottomLeft' : 'topRight';
   const split = `${columns ? ` xSplit="${columns}"` : ''}${rows ? ` ySplit="${rows}"` : ''}`;
   const topLeft = `${columnName(columns)}${rows + 1}`;
   return (
-    '<sheetViews><sheetView workbookViewId="0">' +
+    `<sheetViews>${view}>` +
     `<pane${split} topLeftCell="${topLeft}" activePane="${pane}" state="frozen"/>` +
     `<selection pane="${pane}" activeCell="${topLeft}" sqref="${topLeft}"/>` +
     '</sheetView></sheetViews>'
   );
 }
 
-function cellXml(cell: Cell, ref: string): string {
+function cellXml(cell: Cell, ref: string, styles: StyleTable): string {
   if (cell == null || cell === '') return '';
   const { value, style } = typeof cell === 'object' ? cell : { value: cell, style: undefined };
-  const s = style ? ` s="${STYLE_INDEX[style]}"` : '';
+  const index = style ? styles.index(resolveStyle(style)) : 0;
+  const s = index ? ` s="${index}"` : '';
+  if (value === '') return s ? `<c r="${ref}"${s}/>` : '';
   if (typeof value === 'number') {
     return Number.isFinite(value) ? `<c r="${ref}"${s}><v>${value}</v></c>` : '';
   }

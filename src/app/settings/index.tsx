@@ -13,13 +13,12 @@ import { TimeField } from '@/components/time-field';
 import { authenticate, biometricLabel, canAuthenticate, systemAppLock } from '@/lib/auth';
 import { dayNumber, formatDate, todayKey } from '@/lib/dates';
 import { choose, confirm, notify } from '@/lib/dialogs';
-import { exportFileName, exportWorkbook } from '@/lib/export';
 import { haptics } from '@/lib/haptics';
 import { CURRENCIES } from '@/lib/money';
 import { askForReminders, reminderPermission, type ReminderPermission } from '@/lib/notifications';
 import { pickTextFile } from '@/lib/pick-file';
 import { firstWeekday, formatReminder, MONTH_DAYS, monthDayName, reminderTimes, WEEKDAYS } from '@/lib/reminders';
-import { BACKUP, EXCEL, shareFile } from '@/lib/share-file';
+import { BACKUP, shareFile } from '@/lib/share-file';
 import type { Data, DateKey, Reminder, ReminderRepeat } from '@/lib/types';
 import { currentData, flushSave, useStore } from '@/store';
 import { BackupError, backupFileName, makeBackup, readBackup, type Backup } from '@/store/backup';
@@ -32,7 +31,6 @@ const DEVICE = Platform.OS === 'android' ? 'phone' : 'iPhone';
 const SOURCE_CODE_URL = Constants.expoConfig?.extra?.sourceCodeUrl as string | undefined;
 
 export default function SettingsScreen() {
-  const c = useColors();
   const settings = useStore((s) => s.settings);
   const hasData = useStore((s) => s.accounts.length > 0 || Object.keys(s.spend).length > 0);
   const [busy, setBusy] = useState(false);
@@ -64,19 +62,6 @@ export default function SettingsScreen() {
       if (!(await authenticate(`Turn on ${lockLabel}`))) return;
     }
     updateSettings({ requireUnlock: on });
-  };
-
-  const onExport = async () => {
-    setBusy(true);
-    try {
-      const today = todayKey();
-      await shareFile(exportFileName(today), exportWorkbook(currentData(), today), EXCEL, 'Export to Excel');
-    } catch (e) {
-      console.warn('Export failed', e);
-      notify('Couldn’t export', 'Something went wrong making the spreadsheet. Please try again.');
-    } finally {
-      setBusy(false);
-    }
   };
 
   const onBackup = async () => {
@@ -206,14 +191,11 @@ export default function SettingsScreen() {
 
       <Section
         header="Export"
-        footer="A spreadsheet of your net worth by month, every balance you’ve entered, and each year of spending. Handy for your own records or to send to a financial advisor. It opens in Excel, Numbers or Google Sheets.">
+        footer="A spreadsheet with an overview page, your net worth by month, every balance you’ve entered, and each year of spending. Handy for your own records or to send to a financial advisor. It opens in Excel, Numbers or Google Sheets.">
         <Row
           title="Export to Excel"
-          titleColor="tint"
-          chevron={false}
-          disabled={(pro && !hasData) || busy}
-          accessory={pro ? <Icon name="square.and.arrow.up" size={17} color={c.tint} /> : <ProBadge />}
-          onPress={pro ? onExport : () => openPaywall('export')}
+          accessory={pro ? undefined : <ProBadge />}
+          onPress={() => router.push('/export')}
         />
       </Section>
 

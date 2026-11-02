@@ -77,7 +77,8 @@ test('xlsx: a workbook is a valid zip of the expected parts', () => {
   ]);
   const sheet = files.get('xl/worksheets/sheet1.xml')!;
   assert.match(sheet, /<c r="A2" t="inlineStr"><is><t>Rent &amp; &lt;stuff&gt;<\/t><\/is><\/c>/);
-  assert.match(sheet, /<c r="B2" s="2"><v>12.5<\/v><\/c>/);
+  // Styles are numbered in the order they're first used: bold, heading, money.
+  assert.match(sheet, /<c r="B2" s="3"><v>12.5<\/v><\/c>/);
   assert.match(sheet, /<row r="4"><c r="B4"><v>3<\/v><\/c><\/row>/);
   assert.doesNotMatch(sheet, /<row r="3">/);
   assert.match(sheet, /<pane xSplit="1" ySplit="1" topLeftCell="B2" activePane="bottomRight" state="frozen"\/>/);
@@ -104,29 +105,54 @@ test('export: net worth by month, every balance, and a sheet per year of spendin
   const sheets = exportSheets(data, '2026-11-01');
   assert.deepEqual(
     sheets.map((s) => s.name),
-    ['Net Worth', 'Balances', 'Spending 2026', 'Spending 2025'],
+    ['Overview', 'Net Worth', 'Balances', 'Spending 2026', 'Spending 2025'],
   );
+  // Blank cells that only carry a fill read as empty.
+  const value = (c: unknown) => {
+    const v = c && typeof c === 'object' ? (c as { value: unknown }).value : c;
+    return v === '' || v === undefined ? null : v;
+  };
+  const find = (rows: unknown[][], name: string) => rows.find((r) => value(r[0]) === name)!.map(value);
 
-  const nw = sheets[0].rows;
-  const value = (c: unknown) => (c && typeof c === 'object' ? (c as { value: unknown }).value : c);
+  const overview = sheets[0].rows;
+  assert.equal(value(overview[0][0]), 'Plainworth');
+  // Net worth today, how it moved this year, and the year's spending.
+  assert.deepEqual(overview[3].map(value).slice(0, 4), ['NET WORTH', 'CHANGE IN 2026', 'SAVED IN 2026', 'SAVINGS RATE']);
+  assert.deepEqual(overview[4].map(value).slice(0, 4), [1_250, 500, 450, 0.225]);
+  assert.deepEqual(find(overview, 'Cash').slice(0, 3), ['Cash', 1_500, 1]);
+  assert.deepEqual(find(overview, 'Credit Cards').slice(0, 2), ['Credit Cards', -250]);
+  assert.deepEqual(find(overview, 'Net Worth').slice(0, 2), ['Net Worth', 1_250]);
+  assert.deepEqual(find(overview, '2026 (1 month)').slice(0, 5), ['2026 (1 month)', 2_000, 1_550, 100, 0.225]);
+
+  const nw = sheets[1].rows;
   assert.deepEqual(nw[0].map(value), ['Account', 'Category', 'Sep 2026', 'Oct 2026', 'Nov 2026']);
-  assert.deepEqual(nw.find((r) => r[0] === 'Checking')!.map(value), ['Checking', 'Cash', 1_000, 1_500, 1_500]);
+  assert.deepEqual(find(nw, 'Checking'), ['Checking', 'Cash', 1_000, 1_500, 1_500]);
   // No balance yet in September: left empty, not zero.
-  assert.deepEqual(nw.find((r) => r[0] === 'Visa')!.map(value), ['Visa', 'Credit Cards', null, 250, 250]);
-  assert.deepEqual(nw[nw.length - 1].map(value), ['Net Worth', null, 1_000, 1_250, 1_250]);
+  assert.deepEqual(find(nw, 'Visa'), ['Visa', 'Credit Cards', null, 250, 250]);
+  assert.deepEqual(find(nw, 'Net Worth'), ['Net Worth', null, 1_000, 1_250, 1_250]);
+  // The Visa added in October counts from its first balance, so October's change is Checking's +500.
+  assert.deepEqual(find(nw, 'Change'), ['Change', null, null, 500, 0]);
 
-  const balances = sheets[1].rows;
+  const balances = sheets[2].rows;
   assert.equal(balances.length, 4);
   assert.deepEqual(balances[3].map(value), [excelDate(dayNumber('2026-10-20')), 'Checking', 'Cash', 'Asset', 1_500, 'Paycheck']);
 
-  const year = sheets[2].rows;
-  const row = (name: string) => year.find((r) => value(r[0]) === name)!.map(value);
+  const year = sheets[3].rows;
+  const row = (name: string) => find(year, name);
   assert.deepEqual(row('Rent').slice(0, 3), ['Rent', 1_250, null]);
   assert.deepEqual(row('Rent').slice(-2), [1_250, 1_250]);
   assert.deepEqual(row('Saved').slice(0, 2), ['Saved', 350]);
   assert.equal(row('Savings Rate (Saved + Invested)')[1], 0.225);
   // A year without investing has no Invested line in its summary.
-  assert.equal(sheets[3].rows.filter((r) => r[0] === 'Invested').length, 0);
+  const older = sheets[4].rows.map((r) => value(r[0]));
+  assert.ok(!older.slice(older.indexOf('Summary')).includes('Invested'));
+
+  // Styled: a navy header, and the Overview prints on one page width without gridlines.
+  const files = unzip(exportWorkbook(data, '2026-11-01'));
+  assert.match(files.get('xl/styles.xml')!, /<fgColor rgb="FF18202F"\/>/);
+  assert.match(files.get('xl/styles.xml')!, /formatCode="\+&quot;\$&quot;#,##0.00;-&quot;\$&quot;#,##0.00;&quot;\$&quot;#,##0.00"/);
+  assert.match(files.get('xl/worksheets/sheet1.xml')!, /<sheetView showGridLines="0" workbookViewId="0"\/>/);
+  assert.match(files.get('xl/worksheets/sheet1.xml')!, /<pageSetup orientation="portrait" fitToWidth="1" fitToHeight="0"\/>/);
 
   // And it all packs into a file.
   assert.ok(exportWorkbook(data, '2026-11-01').length > 2_000);
