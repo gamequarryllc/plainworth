@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { StyleSheet, TextInput } from 'react-native';
 
 import { AmountInput } from '@/components/amount-input';
+import { DragRow, useDragRows } from '@/components/drag-rows';
 import { Hero } from '@/components/hero';
 import { Icon } from '@/components/icon';
 import { KEYBOARD_BAR_ID, KeyboardBar, useFieldChain } from '@/components/keyboard-bar';
@@ -53,8 +54,15 @@ export default function MonthScreen() {
   const fillRecurring = useStore((s) => s.fillRecurring);
   const setMonthNote = useStore((s) => s.setMonthNote);
   const removeSpendCategory = useStore((s) => s.removeSpendCategory);
+  const setSpendCategoryOrder = useStore((s) => s.setSpendCategoryOrder);
   const chain = useFieldChain();
   const [swipes] = useState(() => new SwipeGroup());
+  const lists = GROUPS.map((group) => categoriesForMonth(categories, entries, group.key));
+  const drag = useDragRows(lists.map((list) => list.map((x) => x.id).join(',')).join('|'));
+  const reorder = (ids: string[]) => {
+    setSpendCategoryOrder(ids);
+    haptics.light();
+  };
 
   const byId = new Map(categories.map((x) => [x.id, x]));
   const totals = monthTotals(entries, byId);
@@ -145,8 +153,9 @@ export default function MonthScreen() {
         </Section>
       ) : null}
 
-      {GROUPS.map((group) => {
-        const list = categoriesForMonth(categories, entries, group.key);
+      {GROUPS.map((group, g) => {
+        const list = lists[g];
+        const ids = list.map((x) => x.id);
         const subtotal =
           group.key === 'recurring'
             ? totals.recurring
@@ -160,36 +169,37 @@ export default function MonthScreen() {
             {list.map((cat) => {
               const i = index++;
               return (
-                <SwipeRow
-                  key={cat.id}
-                  group={swipes}
-                  actions={[
-                    {
-                      label: 'Edit',
-                      color: '#8E8E93',
-                      onPress: (close) => {
-                        close();
-                        router.push({ pathname: '/spend-category-form', params: { id: cat.id } });
+                <DragRow key={cat.id} drag={drag} id={cat.id} ids={ids} onReorder={reorder}>
+                  <SwipeRow
+                    group={swipes}
+                    actions={[
+                      {
+                        label: 'Edit',
+                        color: '#8E8E93',
+                        onPress: (close) => {
+                          close();
+                          router.push({ pathname: '/spend-category-form', params: { id: cat.id } });
+                        },
                       },
-                    },
-                    { label: 'Remove', color: c.down, onPress: (close) => remove(cat, close) },
-                  ]}>
-                  <Row
-                    title={cat.name}
-                    subtitle={cat.hidden ? 'Removed from new months' : undefined}
-                    accessory={
-                      <AmountInput
-                        ref={chain.ref(i)}
-                        onFocus={chain.onFocus(i)}
-                        inputAccessoryViewID={KEYBOARD_BAR_ID}
-                        value={entries[cat.id]}
-                        hint={previous?.[cat.id]}
-                        onChange={(cents) => setSpend(month, cat.id, cents)}
-                        accessibilityLabel={`${cat.name} amount`}
-                      />
-                    }
-                  />
-                </SwipeRow>
+                      { label: 'Remove', color: c.down, onPress: (close) => remove(cat, close) },
+                    ]}>
+                    <Row
+                      title={cat.name}
+                      subtitle={cat.hidden ? 'Removed from new months' : undefined}
+                      accessory={
+                        <AmountInput
+                          ref={chain.ref(i)}
+                          onFocus={chain.onFocus(i)}
+                          inputAccessoryViewID={KEYBOARD_BAR_ID}
+                          value={entries[cat.id]}
+                          hint={previous?.[cat.id]}
+                          onChange={(cents) => setSpend(month, cat.id, cents)}
+                          accessibilityLabel={`${cat.name} amount`}
+                        />
+                      }
+                    />
+                  </SwipeRow>
+                </DragRow>
               );
             })}
             <Row
