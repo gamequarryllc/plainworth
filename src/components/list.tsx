@@ -1,16 +1,24 @@
-import { Children, Fragment, isValidElement, type ReactNode } from 'react';
-import { Pressable, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
+import { Children, Fragment, isValidElement, type ReactNode } from "react";
+import {
+  Pressable,
+  StyleSheet,
+  View,
+  type StyleProp,
+  type ViewStyle,
+} from "react-native";
 
-import { layout, useColors } from '@/theme';
+import { layout, useColors } from "@/theme";
 
-import { Icon } from './icon';
-import { Text } from './text';
+import { Icon } from "./icon";
+import { Text } from "./text";
 
 interface SectionProps {
   /** Small caption above the group. */
   header?: string;
   /** Shown at the right end of the header, e.g. the group's total. */
   headerValue?: string;
+  /** A small control after the header value, like a sort button. */
+  headerAccessory?: ReactNode;
   /** Large header row, e.g. a category name with its total. */
   title?: ReactNode;
   footer?: ReactNode;
@@ -21,37 +29,69 @@ interface SectionProps {
 }
 
 /** A grouped list section, edge to edge with hairlines above and below, like iOS's plain grouped tables. */
-export function Section({ header, headerValue, title, footer, children, style, inset = layout.margin }: SectionProps) {
+export function Section({
+  header,
+  headerValue,
+  headerAccessory,
+  title,
+  footer,
+  children,
+  style,
+  inset = layout.margin,
+}: SectionProps) {
   const c = useColors();
-  const rows = Children.toArray(children).filter((child) => isValidElement(child));
+  const rows = Children.toArray(children).filter((child) =>
+    isValidElement(child),
+  );
   return (
     <View style={[styles.section, style]}>
       {title}
       {header ? (
         <View style={styles.header}>
-          <Text variant="footnote" color="secondary" numberOfLines={1} style={styles.headerText}>
+          <Text
+            variant="footnote"
+            color="secondary"
+            numberOfLines={1}
+            style={styles.headerText}
+          >
             {header.toUpperCase()}
           </Text>
           {headerValue ? (
-            <Text variant="footnote" color="secondary" tabular numberOfLines={1}>
+            <Text
+              variant="footnote"
+              color="secondary"
+              tabular
+              numberOfLines={1}
+            >
               {headerValue}
             </Text>
           ) : null}
+          {headerAccessory}
         </View>
       ) : null}
       {rows.length > 0 ? (
-        <View style={[styles.card, { backgroundColor: c.card, borderColor: c.separator }]}>
+        <View
+          style={[
+            styles.card,
+            { backgroundColor: c.card, borderColor: c.separator },
+          ]}
+        >
           {rows.map((row, i) => (
             <Fragment key={(isValidElement(row) && row.key) || i}>
               {i > 0 ? (
-                <View style={[styles.separator, { marginLeft: inset, backgroundColor: c.separator }]} />
+                <View
+                  style={[
+                    styles.separator,
+                    { marginLeft: inset, backgroundColor: c.separator },
+                  ]}
+                />
               ) : null}
               {row}
             </Fragment>
           ))}
         </View>
       ) : null}
-      {typeof footer === 'string' ? (
+      {typeof footer === "string" ? (
         <Text variant="footnote" color="secondary" style={styles.footer}>
           {footer}
         </Text>
@@ -73,7 +113,7 @@ interface RowProps {
   accessory?: ReactNode;
   /** Something on the left, e.g. an icon. */
   leading?: ReactNode;
-  titleColor?: 'text' | 'tint' | 'down' | 'secondary';
+  titleColor?: "text" | "tint" | "down" | "secondary";
   disabled?: boolean;
   /** Center the title (for action rows like "Delete Account"). */
   centered?: boolean;
@@ -89,7 +129,7 @@ export function Row({
   chevron,
   accessory,
   leading,
-  titleColor = 'text',
+  titleColor = "text",
   disabled,
   centered,
   accessibilityLabel,
@@ -100,14 +140,19 @@ export function Row({
     <>
       {leading ? <View style={styles.leading}>{leading}</View> : null}
       <View style={[styles.main, centered && styles.centered]}>
-        {typeof title === 'string' ? (
-          <Text variant="body" color={titleColor} numberOfLines={1} style={centered ? styles.centeredText : null}>
+        {typeof title === "string" ? (
+          <Text
+            variant="body"
+            color={titleColor}
+            numberOfLines={1}
+            style={centered ? styles.centeredText : null}
+          >
             {title}
           </Text>
         ) : (
           title
         )}
-        {typeof subtitle === 'string' ? (
+        {typeof subtitle === "string" ? (
           <Text variant="subheadline" color="secondary" numberOfLines={1}>
             {subtitle}
           </Text>
@@ -117,15 +162,25 @@ export function Row({
       </View>
       {value != null || detail != null ? (
         <View style={styles.trailing}>
-          {typeof value === 'string' ? (
-            <Text variant="body" color={onPress && !detail ? 'secondary' : 'text'} tabular numberOfLines={1}>
+          {typeof value === "string" ? (
+            <Text
+              variant="body"
+              color={onPress && !detail ? "secondary" : "text"}
+              tabular
+              numberOfLines={1}
+            >
               {value}
             </Text>
           ) : (
             value
           )}
-          {typeof detail === 'string' ? (
-            <Text variant="subheadline" color="secondary" tabular numberOfLines={1}>
+          {typeof detail === "string" ? (
+            <Text
+              variant="subheadline"
+              color="secondary"
+              tabular
+              numberOfLines={1}
+            >
               {detail}
             </Text>
           ) : (
@@ -135,13 +190,23 @@ export function Row({
       ) : null}
       {accessory}
       {showChevron ? (
-        <Icon name="chevron.right" size={13} weight="semibold" color={c.tertiary} style={styles.chevron} />
+        <Icon
+          name="chevron.right"
+          size={13}
+          weight="semibold"
+          color={c.tertiary}
+          style={styles.chevron}
+        />
       ) : null}
     </>
   );
 
   if (!onPress) {
-    return <View style={[styles.row, { minHeight: layout.rowHeight }]}>{content}</View>;
+    return (
+      <View style={[styles.row, { minHeight: layout.rowHeight }]}>
+        {content}
+      </View>
+    );
   }
   return (
     <Pressable
@@ -154,7 +219,8 @@ export function Row({
         { minHeight: layout.rowHeight },
         pressed && { backgroundColor: c.cardPressed },
         disabled && { opacity: 0.4 },
-      ]}>
+      ]}
+    >
       {content}
     </Pressable>
   );
@@ -173,12 +239,19 @@ export function SectionTitle({
   const c = useColors();
   const inner = (
     <>
-      <Text variant="title3" weight="700" numberOfLines={1} style={styles.titleText}>
+      <Text
+        variant="title3"
+        weight="700"
+        numberOfLines={1}
+        style={styles.titleText}
+      >
         {title}
       </Text>
-      {onPress ? <Icon name="chevron.right" size={14} weight="bold" color={c.tertiary} /> : null}
+      {onPress ? (
+        <Icon name="chevron.right" size={14} weight="bold" color={c.tertiary} />
+      ) : null}
       <View style={styles.titleSpacer} />
-      {typeof value === 'string' ? (
+      {typeof value === "string" ? (
         <Text variant="headline" color="secondary" tabular>
           {value}
         </Text>
@@ -192,7 +265,8 @@ export function SectionTitle({
     <Pressable
       onPress={onPress}
       accessibilityRole="button"
-      style={({ pressed }) => [styles.titleRow, pressed && { opacity: 0.5 }]}>
+      style={({ pressed }) => [styles.titleRow, pressed && { opacity: 0.5 }]}
+    >
       {inner}
     </Pressable>
   );
@@ -203,8 +277,8 @@ const styles = StyleSheet.create({
     marginTop: 20,
   },
   header: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 8,
     marginHorizontal: layout.margin,
     marginBottom: 6,
@@ -219,21 +293,21 @@ const styles = StyleSheet.create({
   card: {
     borderTopWidth: StyleSheet.hairlineWidth,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    overflow: 'hidden',
+    overflow: "hidden",
   },
   separator: {
     height: StyleSheet.hairlineWidth,
   },
   row: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     paddingHorizontal: layout.margin,
     paddingVertical: 8,
     gap: 12,
   },
   leading: {
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   main: {
     flex: 1,
@@ -241,23 +315,23 @@ const styles = StyleSheet.create({
     gap: 1,
   },
   centered: {
-    alignItems: 'center',
+    alignItems: "center",
   },
   centeredText: {
-    textAlign: 'center',
+    textAlign: "center",
   },
   trailing: {
-    alignItems: 'flex-end',
+    alignItems: "flex-end",
     gap: 1,
     flexShrink: 0,
-    maxWidth: '60%',
+    maxWidth: "60%",
   },
   chevron: {
     marginLeft: -4,
   },
   titleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 6,
     marginHorizontal: layout.margin,
     marginBottom: 6,
