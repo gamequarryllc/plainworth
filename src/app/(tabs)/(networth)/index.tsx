@@ -189,9 +189,6 @@ export default function NetWorthScreen() {
     );
   }
 
-  const totalOf = (kind: CategoryKind) =>
-    money(kind === "asset" ? totals.assets : totals.liabilities);
-
   /** Under the debts: where extra money should go, and what interest costs each month. */
   const debtNotes: string[] = [];
   if (target)
@@ -231,7 +228,6 @@ export default function NetWorthScreen() {
       <Section
         key={kind}
         header={title}
-        headerValue={totalOf(kind)}
         headerAccessory={sortButton(kind)}
         footer={
           kind === "liability" && debtNotes.length
@@ -278,7 +274,6 @@ export default function NetWorthScreen() {
       <Section
         key={kind}
         header={title}
-        headerValue={totalOf(kind)}
         headerAccessory={sortButton(kind)}
         inset={TREND_ROW_INSET}
         style={styles.listSection}
