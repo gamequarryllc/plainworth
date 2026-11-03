@@ -18,7 +18,11 @@ export interface SeriesPoint {
   at?: number;
 }
 
-/** Entries saved this close together (Update Balances, live prices) count as one update. */
+/**
+ * Entries for different accounts saved this close together (Update Balances)
+ * count as one update. A second entry for the same account is always its own
+ * update, however quickly it follows.
+ */
 const SAME_UPDATE_MS = 60_000;
 
 export const RANGES: { key: RangeKey; label: string; caption: string }[] = [
@@ -106,7 +110,8 @@ export function totalsOf(summaries: Iterable<AccountSummary>): Totals {
 
 /**
  * Value over time: one point per update, where an update is a save (entries
- * saved within a minute of each other, like Update Balances, count as one).
+ * for different accounts saved within a minute of each other, like Update
+ * Balances, count as one; the same account entered again is a new update).
  * A value is every included account's latest balance as of that update. When
  * a day has several updates they share the day evenly, in the order they were
  * made, so 100 then 104 on the same day both show on the chart. With `signed`,
@@ -145,7 +150,11 @@ export function updatesByAccount(snapshots: Snapshot[]): Map<ID, SeriesPoint[]> 
 function updateSeries(sorted: Snapshot[], sign: Map<ID, number>): SeriesPoint[] {
   const current = new Map<ID, Cents>();
   // Each day's updates: the total after each one, and when it was saved.
-  const days: { day: number; date: DateKey; updates: { value: Cents; at: number }[] }[] = [];
+  const days: {
+    day: number;
+    date: DateKey;
+    updates: { value: Cents; at: number; accounts: Set<ID> }[];
+  }[] = [];
   let total = 0;
   for (const s of sorted) {
     const k = sign.get(s.accountId)!;
@@ -158,11 +167,12 @@ function updateSeries(sorted: Snapshot[], sign: Map<ID, number>): SeriesPoint[] 
       days.push(entry);
     }
     const last = entry.updates[entry.updates.length - 1];
-    if (last && s.createdAt - last.at < SAME_UPDATE_MS) {
+    if (last && s.createdAt - last.at < SAME_UPDATE_MS && !last.accounts.has(s.accountId)) {
       last.value = total;
       last.at = s.createdAt;
+      last.accounts.add(s.accountId);
     } else {
-      entry.updates.push({ value: total, at: s.createdAt });
+      entry.updates.push({ value: total, at: s.createdAt, accounts: new Set([s.accountId]) });
     }
   }
   const points: SeriesPoint[] = [];

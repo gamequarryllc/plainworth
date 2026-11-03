@@ -55,7 +55,8 @@ test('net worth series and totals', () => {
   const series = buildSeries(snaps, accounts, cats, { signed: true });
   assert.deepEqual(
     series.map((p) => p.value),
-    [70_00, 130_00, 140_00],
+    // Two entries for Savings on Feb 1 are two updates, even saved a moment apart.
+    [70_00, 120_00, 130_00, 140_00],
   );
   const summaries = summarizeAccounts(accounts, snaps, cats);
   assert.equal(summaries.get('a')!.balance, 160_00);
@@ -79,7 +80,7 @@ test('slicing a series to a range', () => {
   assert.equal(oneMonth[0].day, dayNumber('2026-02-15'));
   assert.equal(seriesChange(oneMonth).delta, 10_00);
   const all = sliceSeries(series, 'ALL', '2026-03-01');
-  assert.equal(all.length, 3);
+  assert.equal(all.length, 4);
   const single = sliceSeries([{ day: dayNumber('2026-03-01'), value: 5 }], '1M', '2026-03-01');
   assert.equal(single.length, 2);
 });
@@ -232,6 +233,27 @@ test('entries saved together count as one update', () => {
     series.map((p) => p.value),
     [70_00, 90_00],
   );
+});
+
+test('quick repeat entries for one account each show on the chart', () => {
+  // Three balances typed in a row on one account, seconds apart: a line that climbs, not a flat one.
+  const t = new Date(2026, 10, 2, 22, 10).getTime();
+  const quick: Snapshot[] = [
+    { id: '1', accountId: 'a', date: '2026-11-02', value: 45_088_00, createdAt: t },
+    { id: '2', accountId: 'a', date: '2026-11-02', value: 46_855_00, createdAt: t + 15_000 },
+    { id: '3', accountId: 'a', date: '2026-11-02', value: 55_000_00, createdAt: t + 30_000 },
+  ];
+  const series = buildSeries(quick, accounts, cats, { include: (x) => x.id === 'a' });
+  assert.deepEqual(
+    series.map((p) => p.value),
+    [45_088_00, 46_855_00, 55_000_00],
+  );
+  const shown = sliceSeries(series, '6M', '2026-11-02');
+  assert.deepEqual(
+    shown.map((p) => p.value),
+    [45_088_00, 46_855_00, 55_000_00],
+  );
+  assert.equal(updatesByAccount(quick).get('a')?.length, 3);
 });
 
 test('a backdated entry on a busy day has no time of day', () => {
