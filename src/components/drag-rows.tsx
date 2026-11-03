@@ -1,4 +1,5 @@
 import { useLayoutEffect, useState, type ReactNode } from 'react';
+import { StyleSheet } from 'react-native';
 import { usePanGesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { makeMutable, useAnimatedStyle, withTiming } from 'react-native-reanimated';
 import { scheduleOnRN } from 'react-native-worklets';
@@ -6,8 +7,6 @@ import { scheduleOnRN } from 'react-native-worklets';
 import { haptics } from '@/lib/haptics';
 
 import { useScrollLock } from './screen';
-
-type Box = { y: number; h: number };
 
 /**
  * Shared state for rows that can be held and dragged into a new order, like
@@ -23,8 +22,8 @@ class DragState {
   start = makeMutable<string[]>([]);
   /** The same ids in the order they'd drop in now. */
   order = makeMutable<string[]>([]);
-  /** Where each row sits in its list, from onLayout. */
-  boxes = makeMutable<Record<string, Box>>({});
+  /** Each row's height, from onLayout. */
+  heights = makeMutable<Record<string, number>>({});
 }
 
 /**
@@ -43,34 +42,38 @@ export function useDragRows(version: string): DragState {
   return state;
 }
 
-/** Where `id` would sit if the rows were in `order`, as an offset from where it's laid out. */
-function offsetIn(order: string[], start: string[], boxes: Record<string, Box>, id: string): number {
+/** The hairline Section draws between rows. */
+const GAP = StyleSheet.hairlineWidth;
+
+/**
+ * How far down the list `id` starts when the rows are in `list` order. Worked
+ * out from row heights rather than layout positions, because the gesture
+ * detector around each row makes onLayout report every row at the top.
+ */
+function topOf(list: string[], heights: Record<string, number>, id: string): number {
   'worklet';
-  const own = boxes[id];
-  const first = boxes[start[0]];
-  if (!own || !first) return 0;
-  const second = start.length > 1 ? boxes[start[1]] : undefined;
-  // The hairline between rows.
-  const gap = second ? Math.max(0, second.y - first.y - first.h) : 0;
-  let top = first.y;
-  for (const other of order) {
+  let top = 0;
+  for (const other of list) {
     if (other === id) break;
-    top += (boxes[other]?.h ?? 0) + gap;
+    top += (heights[other] ?? 0) + GAP;
   }
-  return top - own.y;
+  return top;
+}
+
+/** Where `id` would sit if the rows were in `order`, as an offset from where it's laid out. */
+function offsetIn(order: string[], start: string[], heights: Record<string, number>, id: string): number {
+  'worklet';
+  return topOf(order, heights, id) - topOf(start, heights, id);
 }
 
 /** The order with `id` moved to wherever its middle now is. */
-function orderAt(start: string[], boxes: Record<string, Box>, id: string, dragY: number): string[] {
+function orderAt(start: string[], heights: Record<string, number>, id: string, dragY: number): string[] {
   'worklet';
-  const own = boxes[id];
-  if (!own) return start;
-  const middle = own.y + dragY + own.h / 2;
+  const middle = topOf(start, heights, id) + dragY + (heights[id] ?? 0) / 2;
   const rest = start.filter((x) => x !== id);
   let slot = 0;
   for (const other of rest) {
-    const box = boxes[other];
-    if (box && middle > box.y + box.h / 2) slot += 1;
+    if (middle > topOf(start, heights, other) + (heights[other] ?? 0) / 2) slot += 1;
   }
   return [...rest.slice(0, slot), id, ...rest.slice(slot)];
 }
@@ -101,7 +104,7 @@ export function DragRow({
   children: ReactNode;
 }) {
   const lockScroll = useScrollLock();
-  const { active, dragY, start, order, boxes } = drag;
+  const { active, dragY, start, order, heights } = drag;
 
   const begin = () => {
     lockScroll(true);
@@ -126,8 +129,14 @@ export function DragRow({
     onUpdate: (e) => {
       'worklet';
       if (active.value !== id) return;
-      dragY.set(e.translationY);
-      const next = orderAt(start.value, boxes.value, id, e.translationY);
+      // Keep the row within its own list, clear of Add Category and the next section.
+      const list = start.value;
+      const top = topOf(list, heights.value, id);
+      const last = list[list.length - 1];
+      const bottom = topOf(list, heights.value, last) + (heights.value[last] ?? 0) - (heights.value[id] ?? 0);
+      const y = Math.min(Math.max(e.translationY, -top), bottom - top);
+      dragY.set(y);
+      const next = orderAt(list, heights.value, id, y);
       if (!same(next, order.value)) {
         order.set(next);
         scheduleOnRN(haptics.selection);
@@ -139,7 +148,7 @@ export function DragRow({
       const next = order.value;
       const changed = !same(next, start.value);
       dragY.set(
-        withTiming(offsetIn(next, start.value, boxes.value, id), { duration: 160 }, (done) => {
+        withTiming(offsetIn(next, start.value, heights.value, id), { duration: 160 }, (done) => {
           if (!done) return;
           if (changed) {
             // The rows drop their offsets once they're laid out in the new order.
@@ -169,7 +178,7 @@ export function DragRow({
         shadowOpacity: 0.18,
       };
     }
-    const target = offsetIn(order.value, start.value, boxes.value, id);
+    const target = offsetIn(order.value, start.value, heights.value, id);
     return {
       transform: [{ translateY: withTiming(target, { duration: 160 }) }, { scale: 1 }],
       zIndex: 0,
@@ -181,10 +190,10 @@ export function DragRow({
     <GestureDetector gesture={gesture}>
       <Animated.View
         onLayout={(e) => {
-          const { y, height } = e.nativeEvent.layout;
-          boxes.modify((all) => {
+          const { height } = e.nativeEvent.layout;
+          heights.modify((all) => {
             'worklet';
-            all[id] = { y, h: height };
+            all[id] = height;
             return all;
           });
         }}
