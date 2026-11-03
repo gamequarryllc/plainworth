@@ -30,6 +30,13 @@ interface Props {
   formatTick?: (value: number) => string;
   /** Draws a dashed line at this value, marked "avg", like Screen Time. */
   average?: number | null;
+  /** The bars' color. Defaults to the chart blue. */
+  color?: string;
+  /**
+   * For more bars than fit a label each (two years of months): only these
+   * labels, each centered under its bar, in place of one per bar.
+   */
+  axisLabels?: { index: number; text: string }[];
 }
 
 /** Room on the right for the gridline labels. */
@@ -37,14 +44,16 @@ const AXIS = 40;
 /** Space above the top gridline so its label isn't cut off. */
 const TOP = 8;
 const RADIUS = 4;
+const LABEL_BOX = 48;
 
 /**
  * A year of months as bars, drawn like the charts in Health and Settings › Battery:
  * one color, rounded at the top and square on the baseline, with light gridlines
  * labeled on the right. Tap a bar to select it.
  */
-export function BarChart({ bars, height = 150, selected = null, onSelect, formatTick, average }: Props) {
+export function BarChart({ bars, height = 150, selected = null, onSelect, formatTick, average, color, axisLabels }: Props) {
   const c = useColors();
+  const fill = color ?? c.bar;
   const [width, setWidth] = useState(0);
   const onLayout = (e: LayoutChangeEvent) => setWidth(e.nativeEvent.layout.width);
   const clipId = `bars${useId().replace(/[^a-zA-Z0-9]/g, '')}`;
@@ -56,7 +65,8 @@ export function BarChart({ bars, height = 150, selected = null, onSelect, format
   const plotH = height - TOP;
   const y = (v: number) => TOP + plotH - (v / ceiling) * plotH;
   const slot = plotW / bars.length;
-  const barW = Math.max(4, Math.min(18, slot * 0.58));
+  // Thin bars keep a gap between them even when years of months share the width.
+  const barW = Math.min(18, Math.max(slot * 0.58, Math.min(4, slot * 0.75)));
   const avgY = average != null && average > 0 ? y(average) : null;
   // A gridline label that would sit on top of "avg" makes way for it.
   const shownTicks = ticks.filter((t) => avgY == null || Math.abs(y(t) - avgY) > 13);
@@ -98,12 +108,12 @@ export function BarChart({ bars, height = 150, selected = null, onSelect, format
               return (
                 <G key={i} clipPath={`url(#${clipId}-${i})`} opacity={selected != null && selected !== i ? 0.3 : 1}>
                   {total === 0 ? (
-                    <Rect x={x} y={0} width={slot} height={base} fill={c.bar} />
+                    <Rect x={x} y={0} width={slot} height={base} fill={fill} />
                   ) : (
                     <>
                       <Rect x={x} y={0} width={slot} height={base} fill={c.barMuted} />
                       {value > 0 ? (
-                        <Rect x={x} y={y(Math.min(value, total))} width={slot} height={base} fill={c.bar} />
+                        <Rect x={x} y={y(Math.min(value, total))} width={slot} height={base} fill={fill} />
                       ) : null}
                       {value > total ? <Rect x={x} y={0} width={slot} height={y(total)} fill={c.down} /> : null}
                     </>
@@ -154,19 +164,43 @@ export function BarChart({ bars, height = 150, selected = null, onSelect, format
           )}
         </View>
       </View>
-      <View style={[styles.labels, { marginRight: AXIS }]}>
-        {bars.map((b, i) => (
-          <Text
-            key={i}
-            variant="caption"
-            weight={selected === i ? '700' : '500'}
-            color={selected === i ? 'text' : 'secondary'}
-            align="center"
-            style={styles.label}>
-            {b.label}
-          </Text>
-        ))}
-      </View>
+      {axisLabels ? (
+        <View style={[styles.axisRow, { marginRight: AXIS }]}>
+          {width > 0
+            ? axisLabels.map((l) => {
+                const center = l.index * slot + slot / 2;
+                const left = Math.min(Math.max(center - LABEL_BOX / 2, 0), plotW - LABEL_BOX);
+                const align = left === 0 ? 'left' : left === plotW - LABEL_BOX ? 'right' : 'center';
+                return (
+                  <Text
+                    key={l.index}
+                    variant="caption"
+                    weight={selected === l.index ? '700' : '500'}
+                    color={selected === l.index ? 'text' : 'secondary'}
+                    align={align}
+                    numberOfLines={1}
+                    style={[styles.axisLabel, { left }]}>
+                    {l.text}
+                  </Text>
+                );
+              })
+            : null}
+        </View>
+      ) : (
+        <View style={[styles.labels, { marginRight: AXIS }]}>
+          {bars.map((b, i) => (
+            <Text
+              key={i}
+              variant="caption"
+              weight={selected === i ? '700' : '500'}
+              color={selected === i ? 'text' : 'secondary'}
+              align="center"
+              style={styles.label}>
+              {b.label}
+            </Text>
+          ))}
+        </View>
+      )}
     </View>
   );
 }
@@ -197,6 +231,15 @@ const styles = StyleSheet.create({
   labels: {
     flexDirection: 'row',
     marginTop: 6,
+  },
+  axisRow: {
+    height: 14,
+    marginTop: 6,
+  },
+  axisLabel: {
+    position: 'absolute',
+    top: 0,
+    width: LABEL_BOX,
   },
   label: {
     flex: 1,

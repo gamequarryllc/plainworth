@@ -2,6 +2,8 @@ import { router } from 'expo-router';
 import { useState, type ReactElement } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
+import { BarChart } from '@/components/bar-chart';
+import { CategoryPills, categoryBars, categorySentence, useGroupColor } from '@/components/category-trend';
 import { EmptyState } from '@/components/empty-state';
 import { Icon } from '@/components/icon';
 import { InsightCard, RankRow } from '@/components/insight-card';
@@ -15,6 +17,7 @@ import { Text } from '@/components/text';
 import { TrendChart, TrendKey, type TrendLabel } from '@/components/trend-chart';
 import { useMoney } from '@/hooks/use-money';
 import { useToday } from '@/hooks/use-today';
+import { averageOf, categoryChange, chartableCategories, recentCategoryMonths } from '@/lib/category-trend';
 import { MONTHS, MONTHS_SHORT, parseDateKey } from '@/lib/dates';
 import { firstYear, spendingYear, type Month } from '@/lib/insights';
 import { formatPercent, MASK } from '@/lib/money';
@@ -36,7 +39,7 @@ import {
   type PeriodUnit,
   type YearGoals,
 } from '@/lib/trends';
-import type { SpendingGoal } from '@/lib/types';
+import type { SpendCategory, SpendingGoal } from '@/lib/types';
 import { useStore } from '@/store';
 import { openPaywall } from '@/store/pro';
 import { useColors } from '@/theme';
@@ -565,11 +568,13 @@ function Spending() {
   const creep = lifestyleCreep(data, today);
   const history = spendHistory(data, today);
   const sp = spendingYear(data, year, today);
+  const chartable = chartableCategories(data, today);
   const cards = useCards([
     lastIndex(soFar) >= 0 ? (
       <SpentYearCard key="year" year={year} soFar={soFar} lastYear={spentSoFar(data, year - 1, today)} />
     ) : null,
     creep ? <CreepCard key="creep" creep={creep} /> : null,
+    chartable.length ? <CategoryCard key="category" categories={chartable} /> : null,
     sp?.categories.length ? <WhereItWentCard key="where" year={year} /> : null,
   ]);
 
@@ -806,6 +811,71 @@ function CreepCard({ creep }: { creep: Creep }) {
   );
 }
 
+/**
+ * One category at a time, month by month for the last year, like Screen
+ * Time's daily bars: eating out at $150 in January and $500 by October shows
+ * at a glance. Pills pick the category; every month it has is a tap away.
+ */
+function CategoryCard({ categories }: { categories: SpendCategory[] }) {
+  const lock = useLock();
+  const money = lock.money;
+  const groupColor = useGroupColor();
+  const today = useToday();
+  const spend = useStore((s) => s.spend);
+  const spendCategories = useStore((s) => s.spendCategories);
+  const hidden = useStore((s) => s.settings.hideAmounts);
+  const [picked, setPicked] = useState<string | null>(null);
+  const [at, setAt] = useState<number | null>(null);
+  const category = categories.find((x) => x.id === picked) ?? categories[0];
+  const whole = (cents: number) => money(cents, { whole: true });
+
+  const data = { spend, spendCategories };
+  const months = recentCategoryMonths(data, category.id, today, 12);
+  const average = averageOf(months);
+  const change = categoryChange(recentCategoryMonths(data, category.id, today, 24));
+  const sentence = categorySentence(category.name, months, change, average, whole);
+  const pick = (id: string) => {
+    setPicked(id);
+    setAt(null);
+  };
+  const open = () => router.push({ pathname: '/insights/category', params: { id: category.id } });
+  const selected = at != null ? months[at] : null;
+  const verb = category.group === 'income' ? 'Earned' : category.group === 'invest' ? 'Invested' : 'Spent';
+
+  return (
+    <InsightCard
+      label="By Category"
+      sentence={lock.text(sentence, 'See how each category, like eating out or rent, changes month to month.')}
+      note="Lately means your last three months. Counts each month once it’s over."
+      {...lock.card}>
+      <CategoryPills categories={categories} value={category.id} onChange={pick} locked={lock.locked} />
+      {selected ? (
+        <Readout
+          title={`${MONTHS[selected.month - 1]} ${selected.year}`}
+          items={[{ label: verb, value: selected.value == null ? 'Nothing entered' : whole(selected.value) }]}
+        />
+      ) : (
+        <Readout
+          title="Last 12 Months"
+          items={average != null ? [{ label: 'Average', value: `${whole(average)}/mo` }] : []}
+        />
+      )}
+      <BarChart
+        bars={categoryBars(months, money)}
+        color={groupColor(category.group)}
+        average={average}
+        selected={at}
+        onSelect={lock.locked ? undefined : setAt}
+        formatTick={hidden || lock.locked ? undefined : (v) => money(v, { compact: true, whole: true })}
+        height={130}
+      />
+      <View style={[styles.goalRow, styles.more]}>
+        <GoalLink title="See Every Month" onPress={open} />
+      </View>
+    </InsightCard>
+  );
+}
+
 /** The year's biggest spending categories, with the full list a tap away. */
 function WhereItWentCard({ year }: { year: number }) {
   const c = useColors();
@@ -944,6 +1014,9 @@ const styles = StyleSheet.create({
   },
   goalText: {
     flex: 1,
+  },
+  more: {
+    marginTop: 12,
   },
   link: {
     flexDirection: 'row',

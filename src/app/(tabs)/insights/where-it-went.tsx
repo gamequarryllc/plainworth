@@ -51,6 +51,7 @@ export default function WhereItWentScreen() {
     );
   }
 
+  const openCategory = (id: string) => router.push({ pathname: '/insights/category', params: { id } });
   const top = sp.categories[0]?.share ?? 0;
   const investTop = sp.invested[0]?.share ?? 0;
   const investedTotal = sp.invested.reduce((sum, x) => sum + x.total, 0);
@@ -78,6 +79,7 @@ export default function WhereItWentScreen() {
                   color={c.bar}
                   note={change == null ? formatPercent(x.share) : change === 0 ? 'Same' : signed(change)}
                   noteColor={change == null || change === 0 ? 'secondary' : change > 0 ? 'down' : 'up'}
+                  onPress={preview ? undefined : () => openCategory(x.category.id)}
                 />
               );
             })}
@@ -97,12 +99,13 @@ export default function WhereItWentScreen() {
               color={c.invest}
               note={formatPercent(x.share)}
               noteColor="secondary"
+              onPress={preview ? undefined : () => openCategory(x.category.id)}
             />
           ))}
         </InsightCard>
       ) : null}
       <Text variant="footnote" color="secondary" style={styles.footer}>
-        {`Amounts are a month, on average over ${counted}.`}
+        {`Amounts are a month, on average over ${counted}.${preview ? '' : ' Tap one to see it month by month.'}`}
         {canCompare
           ? ` Next to each bar is how much more or less you spent a month than in ${year - 1}.`
           : ' Next to each bar is its share of your spending.'}

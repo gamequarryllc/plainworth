@@ -127,6 +127,7 @@ export function RankRow({
   color,
   note,
   noteColor,
+  onPress,
 }: {
   title: string;
   value: string;
@@ -136,10 +137,12 @@ export function RankRow({
   color: string;
   note?: string;
   noteColor?: 'up' | 'down' | 'secondary';
+  /** Makes the row a button, e.g. to open its month-by-month chart. */
+  onPress?: () => void;
 }) {
   const c = useColors();
-  return (
-    <View style={styles.rank}>
+  const body = (
+    <>
       <View style={styles.rankTop}>
         <Text numberOfLines={1} style={styles.rankTitle}>
           {title}
@@ -158,7 +161,17 @@ export function RankRow({
           </Text>
         ) : null}
       </View>
-    </View>
+    </>
+  );
+  if (!onPress) return <View style={styles.rank}>{body}</View>;
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityHint="Shows it month by month"
+      style={({ pressed }) => [styles.rank, pressed && { opacity: 0.5 }]}>
+      {body}
+    </Pressable>
   );
 }
 
