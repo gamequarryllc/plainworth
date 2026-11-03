@@ -24,6 +24,7 @@ import {
   totalsOf,
   type AccountSummary,
 } from '@/lib/networth';
+import { groupSortable, NW_SORTS, DEFAULT_NW_SORT, sortAccounts, sortBy } from '@/lib/sort';
 import type { CategoryKind } from '@/lib/types';
 import { useStore } from '@/store';
 import { refreshSpotPrices } from '@/store/spot';
@@ -44,21 +45,21 @@ export default function NetWorthScreen() {
   const view = useStore((s) => s.settings.nwView);
   const currency = useStore((s) => s.settings.currency);
   const payoffOrder = useStore((s) => s.settings.payoffOrder);
+  const sort = useStore((s) => s.settings.nwSort) ?? DEFAULT_NW_SORT;
   const updateSettings = useStore((s) => s.updateSettings);
 
   const summaries = summarizeAccounts(accounts, snapshots, categories);
   const totals = totalsOf(summaries.values());
   const series = buildSeries(snapshots, accounts, categories, { signed: true });
   const perAccount = updatesByAccount(snapshots);
-  const open = accounts
-    .filter((a) => !a.closed)
-    .map((a) => summaries.get(a.id)!)
-    .sort((x, y) => y.balance - x.balance);
-  const closedCount = accounts.length - open.length;
-  const debts = sortDebts(
-    open.filter((s) => s.kind === 'liability'),
-    payoffOrder,
+  const open = sortAccounts(
+    accounts.filter((a) => !a.closed).map((a) => summaries.get(a.id)!),
+    sort,
   );
+  const closedCount = accounts.length - open.length;
+  // A payoff order puts debts in the order to pay them; with it off they follow Sort By.
+  const liabilities = open.filter((s) => s.kind === 'liability');
+  const debts = payoffOrder === 'off' ? liabilities : sortDebts(liabilities, payoffOrder);
   const target = payFirst(debts, payoffOrder);
   const interest = debts.reduce((sum, s) => sum + monthlyInterest(s.balance, s.account.apr), 0);
   // Pull down for fresh metal prices.
@@ -69,6 +70,19 @@ export default function NetWorthScreen() {
 
   // View options live in a menu at the top, so the page itself is just the accounts.
   const menu: MenuItem[] = [
+    {
+      label: 'Sort By',
+      icon: 'arrow.up.arrow.down',
+      items: NW_SORTS.map((o) => ({
+        label: o.title,
+        subtitle: o.detail,
+        isOn: o.key === sort,
+        onPress: () => {
+          haptics.selection();
+          updateSettings({ nwSort: o.key });
+        },
+      })),
+    },
     {
       label: 'Group by Category',
       icon: 'rectangle.stack',
@@ -165,12 +179,12 @@ export default function NetWorthScreen() {
         const items: AccountSummary[] = open.filter((s) => s.account.categoryId === category.id);
         return { category, items, total: items.reduce((sum, s) => sum + s.balance, 0) };
       })
-      .filter((g) => g.items.length > 0)
-      .sort((a, b) => b.total - a.total);
+      .filter((g) => g.items.length > 0);
+    const sortedGroups = sortBy(groups, sort, (g) => groupSortable(g.category.name, g.items));
     if (groups.length === 0) return null;
     return (
       <Section key={kind} header={title} headerValue={totalOf(kind)} inset={TREND_ROW_INSET} style={styles.listSection}>
-        {groups.map(({ category, items, total }) => {
+        {sortedGroups.map(({ category, items, total }) => {
           const catSeries = buildSeries(snapshots, accounts, categories, {
             include: (a) => a.categoryId === category.id,
           });

@@ -65,6 +65,8 @@ export interface SpendCategory {
 export type RangeKey = '1M' | '3M' | '6M' | 'YTD' | '1Y' | 'ALL';
 /** How the net worth list is grouped. */
 export type NWView = 'accounts' | 'categories';
+/** How accounts are ordered within Assets and Liabilities. */
+export type NWSort = 'value' | 'valueAsc' | 'updated' | 'stale' | 'change' | 'name';
 /** The order debts are listed in: highest rate first, smallest balance first, or by balance. */
 export type PayoffOrder = 'off' | 'avalanche' | 'snowball';
 
@@ -119,6 +121,8 @@ export interface Settings {
   nwRange: RangeKey;
   nwView: NWView;
   payoffOrder: PayoffOrder;
+  /** Sort By on the Net Worth list. Missing in older data, which means highest value first. */
+  nwSort?: NWSort;
   /** The day of the last backup, shown in Settings. */
   lastBackup?: DateKey;
   reminder: Reminder;

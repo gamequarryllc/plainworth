@@ -16,6 +16,7 @@ import { relativeDate } from '@/lib/dates';
 import { haptics } from '@/lib/haptics';
 import { liveCurrencySupported, metalName } from '@/lib/metals';
 import { summarizeAccounts, type AccountSummary } from '@/lib/networth';
+import { sortAccounts } from '@/lib/sort';
 import type { ID } from '@/lib/types';
 import { useStore, type NewSnapshot } from '@/store';
 import { offerReminder } from '@/store/reminder-offer';
@@ -27,6 +28,7 @@ export default function UpdateAllScreen() {
   const accounts = useStore((s) => s.accounts);
   const snapshots = useStore((s) => s.snapshots);
   const categories = useStore((s) => s.nwCategories);
+  const sort = useStore((s) => s.settings.nwSort);
   const currency = useStore((s) => s.settings.currency);
   const addSnapshots = useStore((s) => s.addSnapshots);
   const [date, setDate] = useState(today);
@@ -38,10 +40,10 @@ export default function UpdateAllScreen() {
   // Metals on a live price keep themselves current, so they are left out.
   const isLive = (s: AccountSummary) => !!s.account.metal && liveCurrencySupported(currency);
   // Same order as the Net Worth list, so you can work down it top to bottom.
-  const all = accounts
-    .filter((a) => !a.closed)
-    .map((a) => summaries.get(a.id)!)
-    .sort((x, y) => y.balance - x.balance);
+  const all = sortAccounts(
+    accounts.filter((a) => !a.closed).map((a) => summaries.get(a.id)!),
+    sort,
+  );
   const open = all.filter((s) => !isLive(s));
   const live = all.filter(isLive);
   const liveNote =

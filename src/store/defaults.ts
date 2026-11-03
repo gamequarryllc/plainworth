@@ -81,6 +81,7 @@ export const defaultSettings = (): Settings => ({
   nwRange: '6M',
   nwView: 'accounts',
   payoffOrder: 'off',
+  nwSort: 'value',
   reminder: defaultReminder(),
   outlook: defaultOutlook(),
 });
