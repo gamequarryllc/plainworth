@@ -217,7 +217,7 @@ function DistributionCard() {
       />
       <View style={styles.mixList}>
         <Text variant="footnote" weight="600" color="secondary">
-          {`${periodName(d.periods[at])}${at === last ? ' (so far)' : ''} · ${money(totalAt(at), { whole: true })}`}
+          {`${periodName(d.periods[at])}${at === last ? ' (so far)' : ''}`}
         </Text>
         {d.categories.map((cat, k) =>
           d.values[at][k] > 0 ? (
