@@ -72,7 +72,8 @@ interface Actions {
    * Take a category out of the list from a month screen: clears its amount for
    * that month, then hides it if other months still use it, or deletes it.
    */
-  removeSpendCategory(id: ID, month: MonthKey): 'hidden' | 'deleted';
+  /** Stop offering a category in new months, keeping every amount; deletes it only if it was never used. */
+  removeSpendCategory(id: ID): 'hidden' | 'deleted';
   moveSpendCategory(id: ID, direction: -1 | 1): void;
   /**
    * Put the categories a month shows in this order (after a drag). Categories
@@ -340,8 +341,9 @@ export const useStore = create<Store>()((set, get) => ({
     }));
   },
 
-  removeSpendCategory(id, month) {
-    get().setSpend(month, id, null);
+  removeSpendCategory(id) {
+    // Stopping a category never touches amounts already entered: those months,
+    // the totals and Insights keep them. Only a category with no amounts at all goes away.
     const stillUsed = Object.values(get().spend).some((entries) => !!entries[id]);
     if (stillUsed) {
       get().updateSpendCategory(id, { hidden: true });
