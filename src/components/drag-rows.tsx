@@ -4,6 +4,7 @@ import { usePanGesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { makeMutable, useAnimatedStyle, withTiming } from 'react-native-reanimated';
 import { scheduleOnRN } from 'react-native-worklets';
 
+import { maxDrag, orderAt, topOf as topOfRows } from '@/lib/drag-order';
 import { haptics } from '@/lib/haptics';
 
 import { useScrollLock } from './screen';
@@ -45,37 +46,15 @@ export function useDragRows(version: string): DragState {
 /** The hairline Section draws between rows. */
 const GAP = StyleSheet.hairlineWidth;
 
-/**
- * How far down the list `id` starts when the rows are in `list` order. Worked
- * out from row heights rather than layout positions, because the gesture
- * detector around each row makes onLayout report every row at the top.
- */
 function topOf(list: string[], heights: Record<string, number>, id: string): number {
   'worklet';
-  let top = 0;
-  for (const other of list) {
-    if (other === id) break;
-    top += (heights[other] ?? 0) + GAP;
-  }
-  return top;
+  return topOfRows(list, heights, id, GAP);
 }
 
 /** Where `id` would sit if the rows were in `order`, as an offset from where it's laid out. */
 function offsetIn(order: string[], start: string[], heights: Record<string, number>, id: string): number {
   'worklet';
   return topOf(order, heights, id) - topOf(start, heights, id);
-}
-
-/** The order with `id` moved to wherever its middle now is. */
-function orderAt(start: string[], heights: Record<string, number>, id: string, dragY: number): string[] {
-  'worklet';
-  const middle = topOf(start, heights, id) + dragY + (heights[id] ?? 0) / 2;
-  const rest = start.filter((x) => x !== id);
-  let slot = 0;
-  for (const other of rest) {
-    if (middle > topOf(start, heights, other) + (heights[other] ?? 0) / 2) slot += 1;
-  }
-  return [...rest.slice(0, slot), id, ...rest.slice(slot)];
 }
 
 function same(a: string[], b: string[]): boolean {
@@ -132,11 +111,9 @@ export function DragRow({
       // Keep the row within its own list, clear of Add Category and the next section.
       const list = start.value;
       const top = topOf(list, heights.value, id);
-      const last = list[list.length - 1];
-      const bottom = topOf(list, heights.value, last) + (heights.value[last] ?? 0) - (heights.value[id] ?? 0);
-      const y = Math.min(Math.max(e.translationY, -top), bottom - top);
+      const y = Math.min(Math.max(e.translationY, -top), maxDrag(list, heights.value, id, GAP));
       dragY.set(y);
-      const next = orderAt(list, heights.value, id, y);
+      const next = orderAt(list, heights.value, id, y, GAP);
       if (!same(next, order.value)) {
         order.set(next);
         scheduleOnRN(haptics.selection);
