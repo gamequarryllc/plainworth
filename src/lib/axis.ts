@@ -112,6 +112,31 @@ export function gridlines(max: number): number[] {
   return best;
 }
 
+/**
+ * Gridlines for a chart that doesn't start at zero: two to four even, round
+ * steps that just cover `min` to `max` (cents), like $45K, $47.5K, … $55K.
+ */
+export function valueTicks(min: number, max: number): number[] {
+  if (!(max > min)) {
+    const pad = Math.abs(max) * 0.1 || 100_00;
+    min -= pad;
+    max += pad;
+  }
+  let best: number[] = [];
+  // On a tie, more lines win.
+  for (const steps of [4, 3, 2]) {
+    const step = niceStep((max - min) / steps);
+    const lo = Math.floor(min / step) * step;
+    const hi = Math.ceil(max / step) * step;
+    const n = Math.round((hi - lo) / step);
+    if (n > 5) continue;
+    if (!best.length || hi - lo < best[best.length - 1] - best[0]) {
+      best = Array.from({ length: n + 1 }, (_, i) => lo + i * step);
+    }
+  }
+  return best;
+}
+
 /** 1, 2, 2.5 or 5 times a power of ten, at or above `x`. */
 function niceStep(x: number): number {
   const power = 10 ** Math.floor(Math.log10(x));

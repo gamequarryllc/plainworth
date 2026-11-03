@@ -17,6 +17,7 @@ import { notify } from '@/lib/dialogs';
 import { formatMoney, formatPercent } from '@/lib/money';
 import {
   buildSeries,
+  leadStart,
   rangeCaption,
   seriesChange,
   sliceSeries,
@@ -161,7 +162,14 @@ export default function ShareScreen() {
         </View>
         {points.length > 1 ? (
           <View style={styles.chart}>
-            <LineChart points={points} color={up ? c.up : c.down} baseline={points[0].value} height={130} axis />
+            <LineChart
+              points={points}
+              color={up ? c.up : c.down}
+              baseline={points[0].value}
+              from={leadStart(series, range, today)}
+              height={130}
+              axis
+            />
           </View>
         ) : null}
         {showAccounts && shownRows.length ? (
@@ -177,7 +185,10 @@ export default function ShareScreen() {
               const tone = ch.delta === 0 ? 'secondary' : good ? 'up' : 'down';
               return (
                 <View key={s.account.id} style={[styles.row, { backgroundColor: c.card }]}>
-                  <Sparkline points={own} color={ch.delta === 0 ? c.tertiary : good ? c.up : c.down} />
+                  <Sparkline
+                    points={own}
+                    from={leadStart(perAccount.get(s.account.id) ?? [], range, today)}
+                    color={ch.delta === 0 ? c.tertiary : good ? c.up : c.down} />
                   <View style={styles.rowText}>
                     <Text numberOfLines={1}>{s.account.name}</Text>
                     <Text variant="footnote" color="secondary" numberOfLines={1}>

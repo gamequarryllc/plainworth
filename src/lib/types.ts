@@ -62,7 +62,7 @@ export interface SpendCategory {
   hidden: boolean;
 }
 
-export type RangeKey = '1M' | '3M' | '6M' | 'YTD' | '1Y' | 'ALL';
+export type RangeKey = '1M' | '3M' | '6M' | 'YTD' | '1Y' | '2Y' | '4Y' | '8Y' | 'ALL';
 /** How the net worth list is grouped. */
 export type NWView = 'accounts' | 'categories';
 /** How accounts are ordered within Assets and Liabilities. */

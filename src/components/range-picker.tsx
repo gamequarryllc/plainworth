@@ -23,7 +23,7 @@ export function RangePicker({ value, onChange }: { value: RangeKey; onChange: (r
             accessibilityRole="tab"
             accessibilityState={{ selected }}
             accessibilityLabel={r.caption}
-            hitSlop={6}
+            hitSlop={{ top: 8, bottom: 8, left: 2, right: 2 }}
             style={[styles.pill, selected && { backgroundColor: c.fillStrong }]}>
             <Text variant="footnote" weight="600" color={selected ? 'text' : 'secondary'}>
               {r.label}
@@ -42,9 +42,9 @@ const styles = StyleSheet.create({
     marginHorizontal: layout.margin,
     marginTop: 8,
   },
+  // Nine ranges fit on a 375 pt wide iPhone SE: each pill is only as wide as its label.
   pill: {
-    minWidth: 44,
-    paddingHorizontal: 10,
+    paddingHorizontal: 8,
     paddingVertical: 5,
     borderRadius: 13,
     alignItems: 'center',

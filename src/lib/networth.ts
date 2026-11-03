@@ -31,6 +31,9 @@ export const RANGES: { key: RangeKey; label: string; caption: string }[] = [
   { key: '6M', label: '6M', caption: 'Past 6 Months' },
   { key: 'YTD', label: 'YTD', caption: 'Year to Date' },
   { key: '1Y', label: '1Y', caption: 'Past Year' },
+  { key: '2Y', label: '2Y', caption: 'Past 2 Years' },
+  { key: '4Y', label: '4Y', caption: 'Past 4 Years' },
+  { key: '8Y', label: '8Y', caption: 'Past 8 Years' },
   { key: 'ALL', label: 'All', caption: 'All Time' },
 ];
 
@@ -217,6 +220,12 @@ export function rangeStart(range: RangeKey, today: DateKey): number | null {
       return dayNumber(addMonths(today, -6));
     case '1Y':
       return dayNumber(addMonths(today, -12));
+    case '2Y':
+      return dayNumber(addMonths(today, -24));
+    case '4Y':
+      return dayNumber(addMonths(today, -48));
+    case '8Y':
+      return dayNumber(addMonths(today, -96));
     case 'YTD':
       return dayNumber(`${parseDateKey(today).y}-01-01`);
     case 'ALL':
@@ -248,6 +257,17 @@ export function sliceSeries(points: SeriesPoint[], range: RangeKey, today: DateK
   if (last && last.day < todayDay) out.push({ day: todayDay, value: last.value });
   if (out.length === 1) out.unshift({ day: out[0].day - 1, value: out[0].value });
   return out;
+}
+
+/**
+ * Where the chart's time axis starts when tracking began after the start of
+ * the range: the chart still covers the whole range and sits at zero until the
+ * first entry. Undefined when the series already reaches back that far (or on All).
+ */
+export function leadStart(points: SeriesPoint[], range: RangeKey, today: DateKey): number | undefined {
+  const start = rangeStart(range, today);
+  if (start == null || points.length === 0 || points[0].day <= start) return undefined;
+  return start;
 }
 
 export function seriesChange(points: SeriesPoint[], upTo?: number): { delta: Cents; ratio: number } {

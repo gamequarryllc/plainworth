@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet } from 'react-native';
 
 import { dayNumber, formatDate, formatTime, keyFromDayNumber, parseDateKey } from '@/lib/dates';
-import { rangeCaption, rangeStart, seriesChange, sliceSeries, type SeriesPoint } from '@/lib/networth';
+import { leadStart, rangeCaption, rangeStart, seriesChange, sliceSeries, type SeriesPoint } from '@/lib/networth';
 import type { DateKey, RangeKey } from '@/lib/types';
 import { useAnimatedNumber } from '@/hooks/use-animated-number';
 import { useMoney } from '@/hooks/use-money';
@@ -40,6 +40,7 @@ export function TrendHeader({
   const today = useToday();
   const range = useStore((s) => s.settings.nwRange);
   const updateSettings = useStore((s) => s.updateSettings);
+  const hidden = useStore((s) => s.settings.hideAmounts);
   const [scrub, setScrub] = useState<number | null>(null);
   const animated = useAnimatedNumber(current);
   // Without Pro, dragging reads exact values only on All. Other ranges show a
@@ -98,7 +99,15 @@ export function TrendHeader({
         }
       />
       {points.length > 0 ? (
-        <LineChart points={points} color={good ? c.up : c.down} baseline={points[0].value} onScrub={onScrub} axis />
+        <LineChart
+          points={points}
+          color={good ? c.up : c.down}
+          from={leadStart(series, range, today)}
+          grid
+          formatTick={hidden ? undefined : (v) => money(v, { compact: true, whole: true })}
+          onScrub={onScrub}
+          axis
+        />
       ) : null}
       <RangePicker value={range} onChange={(r) => updateSettings({ nwRange: r })} />
     </>

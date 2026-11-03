@@ -8,15 +8,17 @@ const HEIGHT = 30;
 const PAD = 2;
 
 /** A tiny trend line for list rows, like the ones in Stocks. */
-export function Sparkline({ points, color }: { points: SeriesPoint[]; color: string }) {
+export function Sparkline({ points, color, from }: { points: SeriesPoint[]; color: string; from?: number }) {
   const gradientId = `spark${useId().replace(/[^a-zA-Z0-9]/g, '')}`;
   const width = SPARKLINE_WIDTH;
   if (points.length === 0) return <Svg width={width} height={HEIGHT} />;
 
-  const minDay = points[0].day;
+  // As on the big chart: flat at zero from the start of the range until the first entry.
+  const lead = from != null && from < points[0].day ? from : null;
+  const minDay = lead ?? points[0].day;
   const spanX = points[points.length - 1].day - minDay || 1;
-  let min = Infinity;
-  let max = -Infinity;
+  let min = lead != null ? 0 : Infinity;
+  let max = lead != null ? 0 : -Infinity;
   for (const p of points) {
     min = Math.min(min, p.value);
     max = Math.max(max, p.value);
@@ -25,6 +27,7 @@ export function Sparkline({ points, color }: { points: SeriesPoint[]; color: str
   const innerH = HEIGHT - PAD * 2;
   const y = (v: number) => (spanY === 0 ? HEIGHT / 2 : PAD + innerH - ((v - min) / spanY) * innerH);
   const coords = points.map((p) => [((p.day - minDay) / spanX) * width, y(p.value)] as const);
+  if (lead != null) coords.unshift([0, y(0)], [coords[0][0], y(0)]);
   const line = coords.map(([x, yy], i) => `${i === 0 ? 'M' : 'L'}${x.toFixed(1)},${yy.toFixed(1)}`).join('');
   const area = `${line}L${width},${HEIGHT}L0,${HEIGHT}Z`;
 

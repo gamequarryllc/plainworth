@@ -2,10 +2,10 @@ import { useEffect, useId, useRef, useState } from 'react';
 import { StyleSheet, View, type GestureResponderEvent, type LayoutChangeEvent } from 'react-native';
 import Svg, { Circle, Defs, Line, LinearGradient, Path, Stop } from 'react-native-svg';
 
-import { timeAxis } from '@/lib/axis';
+import { timeAxis, valueTicks } from '@/lib/axis';
 import { haptics } from '@/lib/haptics';
 import type { SeriesPoint } from '@/lib/networth';
-import { useColors } from '@/theme';
+import { layout, useColors } from '@/theme';
 
 import { useScrollLock } from './screen';
 import { Text } from './text';
@@ -20,9 +20,20 @@ interface Props {
   onScrub?: (index: number | null) => void;
   /** Month (or date, or year) names along the bottom. */
   axis?: boolean;
+  /**
+   * Day the chart starts on when it's earlier than the first point: the line
+   * sits flat at zero until the first entry, so a range longer than the
+   * history still shows the whole range.
+   */
+  from?: number;
+  /** Faint dashed gridlines, labeled on the left with this (leave out to show them unlabeled, e.g. when amounts are hidden). */
+  grid?: boolean;
+  formatTick?: (value: number) => string;
 }
 
 const PAD_Y = 10;
+/** Rough width of one character of a gridline label at the caption size, to size the room for them. */
+const TICK_CHAR = 6.6;
 /** Width of the box each axis label is centered in. */
 const LABEL_BOX = 44;
 /** A drag this far sideways, or a hold this long, makes the chart keep the finger. */
@@ -32,7 +43,7 @@ const HOLD_MS = 250;
 const UPDOWN = 8;
 
 /** A minimal line chart in the style of Stocks: no axes, drag to read values. */
-export function LineChart({ points, color, height = 160, baseline, onScrub, axis }: Props) {
+export function LineChart({ points, color, height = 160, baseline, onScrub, axis, from, grid, formatTick }: Props) {
   const c = useColors();
   const gradientId = `fill${useId().replace(/[^a-zA-Z0-9]/g, '')}`;
   const [width, setWidth] = useState(0);
@@ -61,33 +72,58 @@ export function LineChart({ points, color, height = 160, baseline, onScrub, axis
 
   const onLayout = (e: LayoutChangeEvent) => setWidth(e.nativeEvent.layout.width);
 
+  // The line starts at zero on `from` when tracking began after the start of the range.
+  const lead = from != null && points.length > 0 && from < points[0].day ? from : null;
+
+  let min = Infinity;
+  let max = -Infinity;
+  for (const p of points) {
+    min = Math.min(min, p.value);
+    max = Math.max(max, p.value);
+  }
+  if (baseline != null) {
+    min = Math.min(min, baseline);
+    max = Math.max(max, baseline);
+  }
+  if (lead != null) {
+    min = Math.min(min, 0);
+    max = Math.max(max, 0);
+  }
+  const ticks = grid && points.length > 0 ? valueTicks(min, max) : [];
+  if (ticks.length) {
+    min = ticks[0];
+    max = ticks[ticks.length - 1];
+  }
+  const tickLabels = formatTick ? ticks.map(formatTick) : [];
+  // Room on the left for the labels, which line up with the page's text.
+  const gutter = tickLabels.length
+    ? layout.margin + Math.max(...tickLabels.map((t) => t.length)) * TICK_CHAR + 6
+    : 0;
+  const plotW = Math.max(0, width - gutter);
+
   let xs: number[] = [];
   let ys: number[] = [];
   let baseY: number | null = null;
+  let leadPath = '';
+  let y = (_v: number) => height / 2;
   if (width > 0 && points.length > 0) {
-    const minDay = points[0].day;
+    const minDay = lead ?? points[0].day;
     const maxDay = points[points.length - 1].day;
     const spanX = maxDay - minDay || 1;
-    let min = Infinity;
-    let max = -Infinity;
-    for (const p of points) {
-      min = Math.min(min, p.value);
-      max = Math.max(max, p.value);
-    }
-    if (baseline != null) {
-      min = Math.min(min, baseline);
-      max = Math.max(max, baseline);
-    }
     const spanY = max - min;
     const innerH = height - PAD_Y * 2;
-    const y = (v: number) => (spanY === 0 ? height / 2 : PAD_Y + innerH - ((v - min) / spanY) * innerH);
-    xs = points.map((p) => ((p.day - minDay) / spanX) * width);
+    y = (v: number) => (spanY === 0 ? height / 2 : PAD_Y + innerH - ((v - min) / spanY) * innerH);
+    const x = (day: number) => gutter + ((day - minDay) / spanX) * plotW;
+    xs = points.map((p) => x(p.day));
     ys = points.map((p) => y(p.value));
     baseY = baseline != null ? y(baseline) : null;
+    if (lead != null) leadPath = `M${gutter.toFixed(2)},${y(0).toFixed(2)}L${xs[0].toFixed(2)},${y(0).toFixed(2)}`;
   }
 
-  const line = xs.map((x, i) => `${i === 0 ? 'M' : 'L'}${x.toFixed(2)},${ys[i].toFixed(2)}`).join('');
-  const area = xs.length ? `${line}L${xs[xs.length - 1].toFixed(2)},${height}L${xs[0].toFixed(2)},${height}Z` : '';
+  const body = xs.map((x, i) => `${i === 0 ? 'M' : 'L'}${x.toFixed(2)},${ys[i].toFixed(2)}`).join('');
+  const line = leadPath ? `${leadPath}${body.replace(/^M/, 'L')}` : body;
+  const left = leadPath ? gutter : xs[0];
+  const area = xs.length ? `${line}L${xs[xs.length - 1].toFixed(2)},${height}L${(left ?? 0).toFixed(2)},${height}Z` : '';
 
   const indexAt = (x: number) => {
     if (!xs.length) return null;
@@ -144,7 +180,10 @@ export function LineChart({ points, color, height = 160, baseline, onScrub, axis
   const activeY = active != null ? ys[active] : null;
   const activeDay = active != null ? points[active]?.day : undefined;
   const dim = active != null;
-  const labels = axis && points.length > 1 ? timeAxis(points[0].day, points[points.length - 1].day, width) : [];
+  const labels =
+    axis && points.length > 1
+      ? timeAxis(lead ?? points[0].day, points[points.length - 1].day, plotW).map((l) => ({ ...l, x: l.x + gutter }))
+      : [];
 
   return (
     <View onLayout={onLayout} {...touch}>
@@ -157,9 +196,21 @@ export function LineChart({ points, color, height = 160, baseline, onScrub, axis
                 <Stop offset="1" stopColor={color} stopOpacity={0} />
               </LinearGradient>
             </Defs>
+            {ticks.map((t) => (
+              <Line
+                key={t}
+                x1={gutter}
+                x2={width}
+                y1={y(t)}
+                y2={y(t)}
+                stroke={c.chartGrid}
+                strokeWidth={1}
+                strokeDasharray="3,4"
+              />
+            ))}
             {baseY != null ? (
               <Line
-                x1={0}
+                x1={gutter}
                 x2={width}
                 y1={baseY}
                 y2={baseY}
@@ -186,6 +237,21 @@ export function LineChart({ points, color, height = 160, baseline, onScrub, axis
               </>
             ) : null}
           </Svg>
+        ) : null}
+        {width > 0 && tickLabels.length ? (
+          <View style={StyleSheet.absoluteFill} pointerEvents="none">
+            {tickLabels.map((text, i) => (
+              <Text
+                key={`${ticks[i]}`}
+                variant="caption"
+                color="secondary"
+                tabular
+                numberOfLines={1}
+                style={[styles.tick, { top: y(ticks[i]) - 7 }]}>
+                {text}
+              </Text>
+            ))}
+          </View>
         ) : null}
       </View>
       {axis ? (
@@ -215,6 +281,10 @@ const styles = StyleSheet.create({
   axis: {
     height: 13,
     marginTop: 6,
+  },
+  tick: {
+    position: 'absolute',
+    left: layout.margin,
   },
   label: {
     position: 'absolute',

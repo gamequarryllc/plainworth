@@ -2,7 +2,7 @@ import { StyleSheet, View } from 'react-native';
 
 import { relativeDate } from '@/lib/dates';
 import { formatRate, monthlyInterest } from '@/lib/debts';
-import { seriesChange, sliceSeries, type AccountSummary, type SeriesPoint } from '@/lib/networth';
+import { leadStart, seriesChange, sliceSeries, type AccountSummary, type SeriesPoint } from '@/lib/networth';
 import { useMoney } from '@/hooks/use-money';
 import { useToday } from '@/hooks/use-today';
 import { useStore } from '@/store';
@@ -64,7 +64,13 @@ export function TrendRow({
     const points = sliceSeries(series, range, today);
     const { delta } = seriesChange(points);
     const good = invert ? delta < 0 : delta > 0;
-    leading = <Sparkline points={points} color={delta === 0 ? c.tertiary : good ? c.up : c.down} />;
+    leading = (
+      <Sparkline
+        points={points}
+        from={leadStart(series, range, today)}
+        color={delta === 0 ? c.tertiary : good ? c.up : c.down}
+      />
+    );
   }
 
   return (
