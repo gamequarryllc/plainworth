@@ -19,6 +19,12 @@ import { offerReminder } from '@/store/reminder-offer';
 import { loadSpotPrice, useSpotPrice } from '@/store/spot';
 import { type, useColors } from '@/theme';
 
+/** The default Precious Metals category, or one the user named for metals. */
+function isMetalsCategory(category: { id: string; name: string } | undefined): boolean {
+  if (!category) return false;
+  return category.id === 'metals' || /\b(metals?|gold|silver|platinum|palladium|bullion)\b/i.test(category.name);
+}
+
 const KIND_TITLES: Record<CategoryKind, string> = { asset: 'Assets', liability: 'Liabilities' };
 
 /** Add a new account (?categoryId= to preselect) or edit one (?id=). */
@@ -54,8 +60,12 @@ export default function AccountFormScreen() {
 
   const category = categories.find((x) => x.id === categoryId);
   const isAsset = category?.kind !== 'liability';
-  const liveMetal = isAsset ? (metalPicked ? metal : guessMetal(name)) : undefined;
-  const tracksQuantity = byQuantity || !!liveMetal;
+  // Quantity tracking only shows for metals: a metals category, a name like "Gold Coins",
+  // or an account that already tracks by quantity and stays in its category.
+  const offersQuantity =
+    isAsset && (isMetalsCategory(category) || !!guessMetal(name) || (!!existing?.unit && existing.categoryId === categoryId));
+  const liveMetal = offersQuantity ? (metalPicked ? metal : guessMetal(name)) : undefined;
+  const tracksQuantity = offersQuantity && (byQuantity || !!liveMetal);
   const unitLabel = liveMetal ? 'oz' : unit.trim();
   /** The price fills itself in, so only the quantity is needed. */
   const autoPriced = !!liveMetal && liveCurrencySupported(currency);
@@ -141,7 +151,7 @@ export default function AccountFormScreen() {
       ? `Follows today’s ${metalLabel} price on its own. You only enter how many troy ounces you have.`
       : `Live prices aren’t available in ${currency}, so enter the price per ounce yourself.`;
   } else if (tracksQuantity) {
-    quantityFooter = `Enter how many ${unitLabel || 'units'} you hold and the price per ${unitLabel || 'unit'}. Good for shares or crypto.`;
+    quantityFooter = `Enter how many ${unitLabel || 'units'} you hold and the price per ${unitLabel || 'unit'}.`;
   }
 
   let balanceFooter: string | undefined;
@@ -283,48 +293,50 @@ export default function AccountFormScreen() {
         </Section>
       ) : null}
 
-      <Section footer={pickMetal ? undefined : quantityFooter}>
-        <Row
-          title="Track by Quantity"
-          accessory={
-            <Switch
-              value={tracksQuantity}
-              onValueChange={(on) => {
-                setByQuantity(on);
-                if (!on) {
-                  setMetal(undefined);
-                  setMetalPicked(true);
-                  setPickMetal(false);
-                }
-              }}
-            />
-          }
-        />
-        {tracksQuantity && isAsset ? (
+      {offersQuantity ? (
+        <Section footer={pickMetal ? undefined : quantityFooter}>
           <Row
-            title="Live Price"
-            value={liveMetal ? metalName(liveMetal) : 'Off'}
-            chevron={false}
-            accessory={<Icon name="chevron.up.chevron.down" size={14} color={c.tertiary} />}
-            onPress={() => setPickMetal((v) => !v)}
-          />
-        ) : null}
-        {tracksQuantity && !liveMetal ? (
-          <Row
-            title="Unit"
+            title="Track by Quantity"
             accessory={
-              <TextInput
-                value={unit}
-                onChangeText={setUnit}
-                placeholder="oz"
-                placeholderTextColor={c.tertiary}
-                autoCapitalize="none"
-                style={numeric}
+              <Switch
+                value={tracksQuantity}
+                onValueChange={(on) => {
+                  setByQuantity(on);
+                  if (!on) {
+                    setMetal(undefined);
+                    setMetalPicked(true);
+                    setPickMetal(false);
+                  }
+                }}
               />
             }
           />
-        ) : null}
-      </Section>
+          {tracksQuantity && isAsset ? (
+            <Row
+              title="Live Price"
+              value={liveMetal ? metalName(liveMetal) : 'Off'}
+              chevron={false}
+              accessory={<Icon name="chevron.up.chevron.down" size={14} color={c.tertiary} />}
+              onPress={() => setPickMetal((v) => !v)}
+            />
+          ) : null}
+          {tracksQuantity && !liveMetal ? (
+            <Row
+              title="Unit"
+              accessory={
+                <TextInput
+                  value={unit}
+                  onChangeText={setUnit}
+                  placeholder="oz"
+                  placeholderTextColor={c.tertiary}
+                  autoCapitalize="none"
+                  style={numeric}
+                />
+              }
+            />
+          ) : null}
+        </Section>
+      ) : null}
 
       {pickMetal && tracksQuantity && isAsset ? (
         <Section header="Live Price" footer="Gold, silver, platinum and palladium follow the market price per troy ounce.">
