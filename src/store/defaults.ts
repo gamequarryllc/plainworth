@@ -10,17 +10,16 @@ const nw = (id: string, name: string, kind: NWCategory['kind'], order: number): 
 export const defaultNWCategories = (): NWCategory[] => [
   nw('cash', 'Cash', 'asset', 0),
   nw('investments', 'Investments', 'asset', 1),
-  nw('retirement', 'Retirement', 'asset', 2),
-  nw('metals', 'Precious Metals', 'asset', 3),
-  nw('crypto', 'Crypto', 'asset', 4),
-  nw('real-estate', 'Real Estate', 'asset', 5),
-  nw('vehicles', 'Vehicles', 'asset', 6),
-  nw('other-assets', 'Other Assets', 'asset', 7),
-  nw('credit-cards', 'Credit Cards', 'liability', 8),
-  nw('auto-loans', 'Auto Loans', 'liability', 9),
-  nw('mortgages', 'Mortgages', 'liability', 10),
-  nw('student-loans', 'Student Loans', 'liability', 11),
-  nw('other-debt', 'Other Debt', 'liability', 12),
+  nw('metals', 'Precious Metals', 'asset', 2),
+  nw('crypto', 'Crypto', 'asset', 3),
+  nw('real-estate', 'Real Estate', 'asset', 4),
+  nw('vehicles', 'Vehicles', 'asset', 5),
+  nw('other-assets', 'Other Assets', 'asset', 6),
+  nw('credit-cards', 'Credit Cards', 'liability', 7),
+  nw('auto-loans', 'Auto Loans', 'liability', 8),
+  nw('mortgages', 'Mortgages', 'liability', 9),
+  nw('student-loans', 'Student Loans', 'liability', 10),
+  nw('other-debt', 'Other Debt', 'liability', 11),
 ];
 
 const sc = (id: string, name: string, group: SpendGroup, order: number): SpendCategory => ({
@@ -55,7 +54,7 @@ export const defaultSpendCategories = (): SpendCategory[] => [
 export const defaultInvestCategories = (): SpendCategory[] => [sc('investing', 'Investing', 'invest', 0)];
 
 /** Bump when stored data needs migrating (see `migrate` in the store). */
-export const DATA_VERSION = 2;
+export const DATA_VERSION = 3;
 
 /** Off until turned on; when on, the 1st of each month at 9:00 AM. */
 export const defaultReminder = (): Reminder => ({

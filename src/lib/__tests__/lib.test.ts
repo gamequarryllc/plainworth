@@ -180,7 +180,7 @@ test('invested money is kept, not spent', () => {
 test('older saved data gets the Invested group once', () => {
   const old = { version: 1, spendCategories: [{ id: 'rent', name: 'Rent', group: 'recurring', order: 0, hidden: false }] };
   const migrated = migrate(old);
-  assert.equal(migrated.version, 2);
+  assert.equal(migrated.version, 3);
   assert.deepEqual(
     migrated.spendCategories.map((c) => c.group),
     ['recurring', 'invest'],
@@ -189,6 +189,28 @@ test('older saved data gets the Invested group once', () => {
   const later = migrate({ ...migrated, spendCategories: migrated.spendCategories.filter((c) => c.group !== 'invest') });
   assert.deepEqual(later.spendCategories.map((c) => c.group), ['recurring']);
   assert.ok(migrate(null).spendCategories.some((c) => c.group === 'invest'));
+});
+
+test('Retirement accounts move into Investments', () => {
+  const cats = [
+    { id: 'cash', name: 'Cash', kind: 'asset', order: 0 },
+    { id: 'investments', name: 'Investments', kind: 'asset', order: 1 },
+    { id: 'retirement', name: 'Retirement', kind: 'asset', order: 2 },
+  ];
+  const accounts = [
+    { id: 'a', name: '401(k)', categoryId: 'retirement', createdAt: 0 },
+    { id: 'b', name: 'Checking', categoryId: 'cash', createdAt: 0 },
+  ];
+  const snapshots = [{ id: 's', accountId: 'a', date: '2026-10-01', value: 5000_00, createdAt: 0 }];
+  const migrated = migrate({ version: 2, nwCategories: cats, accounts, snapshots });
+  assert.deepEqual(migrated.nwCategories.map((c) => c.id), ['cash', 'investments']);
+  assert.deepEqual(migrated.accounts.map((a) => a.categoryId), ['investments', 'cash']);
+  assert.equal(migrated.snapshots.length, 1);
+  // If Investments was removed, Retirement takes its place.
+  const noInvest = migrate({ version: 2, nwCategories: cats.filter((c) => c.id !== 'investments'), accounts });
+  assert.deepEqual(noInvest.nwCategories.map((c) => c.name), ['Cash', 'Investments']);
+  assert.equal(noInvest.accounts[0].categoryId, 'investments');
+  assert.ok(!emptyData().nwCategories.some((c) => c.id === 'retirement'));
 });
 
 test('two updates on the same day both show on the chart', () => {

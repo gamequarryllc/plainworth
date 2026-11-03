@@ -45,8 +45,8 @@ export function sampleData(months = HISTORY): Data {
     { name: 'High-Yield Savings', categoryId: 'cash', start: 1_200, everyDays: 30, step: (v) => v + 420 + r() * 200 },
     { name: 'Checking', categoryId: 'cash', start: 2_400, everyDays: 14, step: () => 1_800 + r() * 2_600 },
     { name: 'Brokerage', categoryId: 'investments', start: 4_000, everyDays: 9, step: (v) => v * (1.004 + (r() - 0.45) * 0.05) + 150 },
-    { name: '401(k)', categoryId: 'retirement', start: 16_000, everyDays: 14, step: (v) => v * (1.003 + (r() - 0.45) * 0.035) + 410 },
-    { name: 'Roth IRA', categoryId: 'retirement', start: 7_000, everyDays: 30, step: (v) => v * (1.004 + (r() - 0.45) * 0.05) + 290 },
+    { name: '401(k)', categoryId: 'investments', start: 16_000, everyDays: 14, step: (v) => v * (1.003 + (r() - 0.45) * 0.035) + 410 },
+    { name: 'Roth IRA', categoryId: 'investments', start: 7_000, everyDays: 30, step: (v) => v * (1.004 + (r() - 0.45) * 0.05) + 290 },
     {
       name: 'Silver',
       categoryId: 'metals',

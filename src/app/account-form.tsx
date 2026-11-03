@@ -184,6 +184,61 @@ export default function AccountFormScreen() {
         />
       </Section>
 
+      {isNew ? (
+        <Section header="Starting Balance" footer={balanceFooter}>
+          {tracksQuantity ? (
+            <Row
+              title={`Quantity (${unitLabel || 'units'})`}
+              accessory={
+                <TextInput
+                  value={qty}
+                  onChangeText={(t) => setQty(formatTyping(t, 6))}
+                  placeholder="0"
+                  placeholderTextColor={c.tertiary}
+                  keyboardType="decimal-pad"
+                  accessibilityLabel="Quantity"
+                  style={numeric}
+                />
+              }
+            />
+          ) : null}
+          {tracksQuantity ? (
+            <Row
+              title={`Price per ${unitLabel || 'unit'}`}
+              accessory={
+                <TextInput
+                  value={price}
+                  onChangeText={(t) => setPrice(formatTyping(t))}
+                  placeholder={autoPriced && spot.price != null ? formatTyping(centsToInput(spot.price)) : '0.00'}
+                  placeholderTextColor={c.tertiary}
+                  keyboardType="decimal-pad"
+                  accessibilityLabel="Price per unit"
+                  style={numeric}
+                />
+              }
+            />
+          ) : null}
+          {!tracksQuantity ? (
+            <Row
+              title={category?.kind === 'liability' ? 'Amount Owed' : 'Balance'}
+              accessory={
+                <TextInput
+                  value={balance}
+                  onChangeText={(t) => setBalance(formatTyping(t))}
+                  placeholder="0.00"
+                  placeholderTextColor={c.tertiary}
+                  keyboardType="decimal-pad"
+                  style={numeric}
+                />
+              }
+            />
+          ) : null}
+          {!autoPriced ? (
+            <Row title="As of" accessory={<DateField value={date} onChange={setDate} maximum={today} />} />
+          ) : null}
+        </Section>
+      ) : null}
+
       {pickCategory
         ? (['asset', 'liability'] as const).map((kind) => (
             <Section key={kind} header={KIND_TITLES[kind]}>
@@ -285,60 +340,6 @@ export default function AccountFormScreen() {
         </Section>
       ) : null}
 
-      {isNew ? (
-        <Section header="Starting Balance" footer={balanceFooter}>
-          {tracksQuantity ? (
-            <Row
-              title={`Quantity (${unitLabel || 'units'})`}
-              accessory={
-                <TextInput
-                  value={qty}
-                  onChangeText={(t) => setQty(formatTyping(t, 6))}
-                  placeholder="0"
-                  placeholderTextColor={c.tertiary}
-                  keyboardType="decimal-pad"
-                  accessibilityLabel="Quantity"
-                  style={numeric}
-                />
-              }
-            />
-          ) : null}
-          {tracksQuantity ? (
-            <Row
-              title={`Price per ${unitLabel || 'unit'}`}
-              accessory={
-                <TextInput
-                  value={price}
-                  onChangeText={(t) => setPrice(formatTyping(t))}
-                  placeholder={autoPriced && spot.price != null ? formatTyping(centsToInput(spot.price)) : '0.00'}
-                  placeholderTextColor={c.tertiary}
-                  keyboardType="decimal-pad"
-                  accessibilityLabel="Price per unit"
-                  style={numeric}
-                />
-              }
-            />
-          ) : null}
-          {!tracksQuantity ? (
-            <Row
-              title={category?.kind === 'liability' ? 'Amount Owed' : 'Balance'}
-              accessory={
-                <TextInput
-                  value={balance}
-                  onChangeText={(t) => setBalance(formatTyping(t))}
-                  placeholder="0.00"
-                  placeholderTextColor={c.tertiary}
-                  keyboardType="decimal-pad"
-                  style={numeric}
-                />
-              }
-            />
-          ) : null}
-          {!autoPriced ? (
-            <Row title="As of" accessory={<DateField value={date} onChange={setDate} maximum={today} />} />
-          ) : null}
-        </Section>
-      ) : null}
     </Screen>
   );
 }

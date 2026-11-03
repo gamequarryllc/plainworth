@@ -1,4 +1,4 @@
-import type { Data } from '@/lib/types';
+import type { Account, Data, NWCategory } from '@/lib/types';
 
 import { DATA_VERSION, defaultInvestCategories, defaultOutlook, defaultReminder, defaultSettings, emptyData } from './defaults';
 
@@ -13,10 +13,14 @@ export function migrate(raw: unknown): Data {
   if (version < 2 && !spendCategories.some((c) => c.group === 'invest')) {
     spendCategories = [...spendCategories, ...defaultInvestCategories()];
   }
+  let nwCategories = d.nwCategories ?? base.nwCategories;
+  let accounts = d.accounts ?? [];
+  // Version 3 folded the Retirement category into Investments.
+  if (version < 3) ({ nwCategories, accounts } = foldRetirement(nwCategories, accounts));
   return {
     version: DATA_VERSION,
-    nwCategories: d.nwCategories ?? base.nwCategories,
-    accounts: d.accounts ?? [],
+    nwCategories,
+    accounts,
     snapshots: d.snapshots ?? [],
     spendCategories,
     spend: d.spend ?? {},
@@ -27,5 +31,23 @@ export function migrate(raw: unknown): Data {
       reminder: { ...defaultReminder(), ...d.settings?.reminder },
       outlook: { ...defaultOutlook(), ...d.settings?.outlook },
     },
+  };
+}
+
+/**
+ * Move every Retirement account into Investments and drop the Retirement
+ * category. If Investments was removed, Retirement becomes Investments instead.
+ */
+function foldRetirement(categories: NWCategory[], accounts: Account[]): { nwCategories: NWCategory[]; accounts: Account[] } {
+  if (!categories.some((c) => c.id === 'retirement')) return { nwCategories: categories, accounts };
+  if (!categories.some((c) => c.id === 'investments')) {
+    return {
+      nwCategories: categories.map((c) => (c.id === 'retirement' ? { ...c, id: 'investments', name: 'Investments' } : c)),
+      accounts: accounts.map((a) => (a.categoryId === 'retirement' ? { ...a, categoryId: 'investments' } : a)),
+    };
+  }
+  return {
+    nwCategories: categories.filter((c) => c.id !== 'retirement'),
+    accounts: accounts.map((a) => (a.categoryId === 'retirement' ? { ...a, categoryId: 'investments' } : a)),
   };
 }
