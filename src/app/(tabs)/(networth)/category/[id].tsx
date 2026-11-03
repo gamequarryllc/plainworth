@@ -9,6 +9,7 @@ import { TrendHeader } from '@/components/trend-header';
 import { useMoney } from '@/hooks/use-money';
 import { formatPercent } from '@/lib/money';
 import { buildSeries, updatesByAccount, summarizeAccounts, totalsOf } from '@/lib/networth';
+import { sortAccounts } from '@/lib/sort';
 import { useStore } from '@/store';
 
 export default function CategoryScreen() {
@@ -17,6 +18,7 @@ export default function CategoryScreen() {
   const accounts = useStore((s) => s.accounts);
   const snapshots = useStore((s) => s.snapshots);
   const categories = useStore((s) => s.nwCategories);
+  const sort = useStore((s) => s.settings.nwSort);
   const category = categories.find((c) => c.id === id);
 
   if (!category) {
@@ -70,9 +72,7 @@ export default function CategoryScreen() {
       />
       {open.length > 0 ? (
         <Section header="Accounts" inset={TREND_ROW_INSET}>
-          {open
-            .sort((a, b) => b.balance - a.balance)
-            .map((s) => (
+          {sortAccounts(open, sort).map((s) => (
               <AccountRow
                 key={s.account.id}
                 summary={s}

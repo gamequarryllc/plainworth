@@ -4,7 +4,7 @@ import type { Cents, PayoffOrder } from './types';
 export const PAYOFF_ORDERS: { key: PayoffOrder; title: string; detail: string }[] = [
   { key: 'avalanche', title: 'Avalanche', detail: 'Highest interest rate first. Saves the most.' },
   { key: 'snowball', title: 'Snowball', detail: 'Smallest balance first. Quicker wins.' },
-  { key: 'off', title: 'Off', detail: 'Largest balance first.' },
+  { key: 'off', title: 'Off', detail: 'Debts follow Sort By.' },
 ];
 
 /** "22.9%": up to two decimals, no trailing zeros. */
