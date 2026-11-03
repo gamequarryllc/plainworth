@@ -1,5 +1,5 @@
 import { Fragment } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
 
 import { layout, useColors } from '@/theme';
 
@@ -22,8 +22,10 @@ export interface TableRow {
   accessibilityLabel?: string;
 }
 
-/** Width of each number column. */
+/** Widest a number column gets. */
 const COLUMN = 72;
+/** Room kept for the row name ("September") before the columns narrow. */
+const NAME_MIN = 78;
 /** Room for the chevron at the end of each row. */
 const CHEVRON = 21;
 
@@ -43,6 +45,10 @@ export function MonthsTable({
   total?: TableRow;
 }) {
   const c = useColors();
+  const { width } = useWindowDimensions();
+  // Columns narrow on small phones so the names still fit.
+  const fit = Math.floor((width - 2 * layout.margin - CHEVRON - NAME_MIN) / Math.max(1, columns.length));
+  const column = { width: Math.max(52, Math.min(COLUMN, fit)) };
   return (
     <View style={styles.section}>
       <View style={styles.header} accessibilityRole="header">
@@ -50,7 +56,14 @@ export function MonthsTable({
           {title.toUpperCase()}
         </Text>
         {columns.map((col) => (
-          <Text key={col} variant="footnote" color="secondary" numberOfLines={1} style={styles.column}>
+          <Text
+            key={col}
+            variant="footnote"
+            color="secondary"
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.8}
+            style={[styles.column, column]}>
             {col.toUpperCase()}
           </Text>
         ))}
@@ -80,7 +93,7 @@ export function MonthsTable({
                   minimumFontScale={0.8}
                   weight={isTotal ? '600' : undefined}
                   color={cell?.color ?? 'text'}
-                  style={styles.column}>
+                  style={[styles.column, column]}>
                   {cell?.text ?? ''}
                 </Text>
               ))}
@@ -145,7 +158,6 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   column: {
-    width: COLUMN,
     textAlign: 'right',
   },
   chevron: {

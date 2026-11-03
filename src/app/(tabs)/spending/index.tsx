@@ -77,7 +77,8 @@ export default function SpendingScreen() {
 
   const dash: TableCell = { text: '—', color: 'tertiary' };
   const signed = (v: number): TableCell => ({ text: whole(v), color: v > 0 ? 'up' : v < 0 ? 'down' : undefined });
-  const columns = ['Spent', 'Saved', ...(hasInvested ? ['Invested'] : [])];
+  // Income first: what came in, then where it went (spent, saved, invested).
+  const columns = [...(hasIncome ? ['Income'] : []), 'Spent', 'Saved', ...(hasInvested ? ['Invested'] : [])];
   const rows: TableRow[] = shown.map(({ m, i }) => {
     const saved = savedCash(m);
     return {
@@ -86,14 +87,15 @@ export default function SpendingScreen() {
       muted: !m.hasData && isFuture(i),
       cells: m.hasData
         ? [
+            ...(hasIncome ? [m.income > 0 ? { text: whole(m.income) } : dash] : []),
             { text: whole(m.expenses) },
             m.income > 0 ? signed(saved) : dash,
             ...(hasInvested ? [m.invested > 0 ? { text: whole(m.invested) } : dash] : []),
           ]
-        : [isFuture(i) ? null : dash, null, ...(hasInvested ? [null] : [])],
+        : [...(hasIncome ? [null] : []), isFuture(i) ? null : dash, null, ...(hasInvested ? [null] : [])],
       onPress: () => router.push({ pathname: '/spending/[month]', params: { month: m.key } }),
       accessibilityLabel: m.hasData
-        ? `${MONTHS[i]}: spent ${money(m.expenses)}${m.income > 0 ? `, saved ${money(saved)}` : ''}${m.invested > 0 ? `, invested ${money(m.invested)}` : ''}`
+        ? `${MONTHS[i]}: ${m.income > 0 ? `earned ${money(m.income)}, ` : ''}spent ${money(m.expenses)}${m.income > 0 ? `, saved ${money(saved)}` : ''}${m.invested > 0 ? `, invested ${money(m.invested)}` : ''}`
         : `${MONTHS[i]}: nothing entered`,
     };
   });
@@ -102,6 +104,7 @@ export default function SpendingScreen() {
         key: 'total',
         name: 'Total',
         cells: [
+          ...(hasIncome ? [{ text: whole(summary.income) }] : []),
           { text: whole(summary.expenses) },
           hasIncome ? signed(savedCash(earned)) : dash,
           ...(hasInvested ? [{ text: whole(summary.invested) }] : []),
@@ -139,7 +142,7 @@ export default function SpendingScreen() {
             value: m.expenses,
             total: m.income > 0 ? m.income : undefined,
             accessibilityLabel: m.hasData
-              ? `${MONTHS[i]}: spent ${money(m.expenses)}${m.income > 0 ? `, earned ${money(m.income)}` : ''}`
+              ? `${MONTHS[i]}: ${m.income > 0 ? `earned ${money(m.income)}, ` : ''}spent ${money(m.expenses)}${m.income > 0 ? `, earned ${money(m.income)}` : ''}`
               : `${MONTHS[i]}: nothing entered`,
           }))}
           selected={selected}
