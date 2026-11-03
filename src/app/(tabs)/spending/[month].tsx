@@ -54,6 +54,7 @@ export default function MonthScreen() {
   const fillRecurring = useStore((s) => s.fillRecurring);
   const setMonthNote = useStore((s) => s.setMonthNote);
   const removeSpendCategory = useStore((s) => s.removeSpendCategory);
+  const updateSpendCategory = useStore((s) => s.updateSpendCategory);
   const setSpendCategoryOrder = useStore((s) => s.setSpendCategoryOrder);
   const chain = useFieldChain();
   const [swipes] = useState(() => new SwipeGroup());
@@ -86,26 +87,27 @@ export default function MonthScreen() {
 
   const go = (step: number) => router.setParams({ month: shiftMonth(month, step) });
 
-  const remove = async (cat: SpendCategory, close: () => void) => {
-    const here = entries[cat.id] ?? 0;
+  /**
+   * Stop a category from showing up in new months. Nothing already entered is
+   * cleared: this month and every other month keep their amounts, and so do the
+   * totals and Insights. A category that was never used is simply removed.
+   */
+  const stop = async (cat: SpendCategory, close: () => void) => {
     const spend = useStore.getState().spend;
-    const others = Object.keys(spend).filter((m) => m !== month && !!spend[m][cat.id]).length;
-    if (here || others) {
+    const used = Object.keys(spend).filter((m) => !!spend[m][cat.id]);
+    if (used.length) {
+      const here = used.includes(month);
       const monthName = MONTHS[parseMonthKey(month).month - 1];
-      const keep = others
-        ? `${others === 1 ? 'The other month' : `The ${others} other months`} that use it keep ${others === 1 ? 'its amount' : 'their amounts'}.`
-        : '';
+      const others = used.length - (here ? 1 : 0);
+      const where = here
+        ? others
+          ? `${monthName} and ${others === 1 ? '1 other month' : `${others} other months`} keep`
+          : `${monthName} keeps`
+        : `The ${used.length === 1 ? 'month that uses it keeps its amount' : `${used.length} months that use it keep their amounts`}`;
       const ok = await confirm({
-        title: `Remove ${cat.name}?`,
-        message: [
-          here ? `This clears the ${money(here)} entered for ${monthName}.` : '',
-          keep,
-          'It won’t show up in new months.',
-        ]
-          .filter(Boolean)
-          .join(' '),
-        confirmLabel: 'Remove',
-        destructive: true,
+        title: `Stop Tracking ${cat.name}?`,
+        message: `It won’t show up in new months. ${here ? `${where} ${used.length === 1 ? 'its amount' : 'their amounts'}` : where}, and your totals and Insights stay the same.`,
+        confirmLabel: 'Stop Tracking',
       });
       if (!ok) {
         close();
@@ -114,7 +116,7 @@ export default function MonthScreen() {
     }
     // Let the tap finish before the row (and its swipe gesture) goes away.
     requestAnimationFrame(() => {
-      removeSpendCategory(cat.id, month);
+      removeSpendCategory(cat.id);
       haptics.light();
     });
   };
@@ -181,11 +183,21 @@ export default function MonthScreen() {
                           router.push({ pathname: '/spend-category-form', params: { id: cat.id } });
                         },
                       },
-                      { label: 'Remove', color: c.down, onPress: (close) => remove(cat, close) },
+                      cat.hidden
+                        ? {
+                            label: 'Resume',
+                            color: c.tint,
+                            onPress: (close) => {
+                              close();
+                              updateSpendCategory(cat.id, { hidden: false });
+                              haptics.light();
+                            },
+                          }
+                        : { label: 'Stop', color: c.down, onPress: (close) => stop(cat, close) },
                     ]}>
                     <Row
                       title={cat.name}
-                      subtitle={cat.hidden ? 'Removed from new months' : undefined}
+                      subtitle={cat.hidden ? 'Not tracked in new months' : undefined}
                       accessory={
                         <AmountInput
                           ref={chain.ref(i)}

@@ -39,7 +39,7 @@ export default function SpendCategoryFormScreen() {
     const ok = await confirm({
       title: `Delete ${existing.name}?`,
       message: usedMonths
-        ? `It has amounts in ${usedMonths} ${usedMonths === 1 ? 'month' : 'months'}, and those will be removed from your totals. To keep them, turn off Show in New Months instead.`
+        ? `It has amounts in ${usedMonths} ${usedMonths === 1 ? 'month' : 'months'}, and those will be removed from your totals. To keep them, turn off Track in New Months instead.`
         : undefined,
       confirmLabel: 'Delete',
       destructive: true,
@@ -86,8 +86,8 @@ export default function SpendCategoryFormScreen() {
       </Section>
       {existing ? (
         <>
-          <Section footer="Turn this off to stop the category showing up in new months. Months that already use it keep their amounts.">
-            <Row title="Show in New Months" accessory={<Switch value={!hidden} onValueChange={(on) => setHidden(!on)} />} />
+          <Section footer="Turn this off when you’re done with a category, like paying a friend back. It stops showing up in new months, and months that already use it keep their amounts.">
+            <Row title="Track in New Months" accessory={<Switch value={!hidden} onValueChange={(on) => setHidden(!on)} />} />
           </Section>
           <Section>
             <Row title="Delete Category" titleColor="down" centered onPress={remove} />
