@@ -4,6 +4,7 @@ import { shiftMonth } from '@/lib/dates';
 import { newId } from '@/lib/id';
 import { spotUpdates } from '@/lib/metals';
 import { compareSnapshots } from '@/lib/networth';
+import { placeInOrder } from '@/lib/order';
 import { storage } from '@/lib/storage';
 import type {
   Account,
@@ -73,6 +74,11 @@ interface Actions {
    */
   removeSpendCategory(id: ID, month: MonthKey): 'hidden' | 'deleted';
   moveSpendCategory(id: ID, direction: -1 | 1): void;
+  /**
+   * Put the categories a month shows in this order (after a drag). Categories
+   * the month doesn't show keep their places among the rest of their group.
+   */
+  setSpendCategoryOrder(ids: ID[]): void;
 
   updateSettings(patch: Partial<Settings>): void;
   /** Made-up data covering the last `months` months (36 if left out). */
@@ -359,6 +365,10 @@ export const useStore = create<Store>()((set, get) => ({
     set((s) => ({
       spendCategories: reorder(s.spendCategories, id, direction, (a, b) => a.group === b.group),
     }));
+  },
+
+  setSpendCategoryOrder(ids) {
+    set((s) => ({ spendCategories: placeInOrder(s.spendCategories, ids, (a, b) => a.group === b.group) }));
   },
 
   updateSettings(patch) {
