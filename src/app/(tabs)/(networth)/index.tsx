@@ -24,6 +24,7 @@ import {
 } from "@/lib/debts";
 import { haptics } from "@/lib/haptics";
 import { liveCurrencySupported } from "@/lib/metals";
+import { netWorthTitle } from "@/lib/name";
 import { formatPercent } from "@/lib/money";
 import {
   buildSeries,
@@ -62,6 +63,7 @@ export default function NetWorthScreen() {
   const currency = useStore((s) => s.settings.currency);
   const payoffOrder = useStore((s) => s.settings.payoffOrder);
   const sort = useStore((s) => s.settings.nwSort) ?? DEFAULT_NW_SORT;
+  const title = netWorthTitle(useStore((s) => s.settings.name));
   const updateSettings = useStore((s) => s.updateSettings);
 
   const summaries = summarizeAccounts(accounts, snapshots, categories);
@@ -173,7 +175,7 @@ export default function NetWorthScreen() {
 
   if (accounts.length === 0) {
     return (
-      <Screen title="Net Worth" large left={tabButtons} right={[addButton]}>
+      <Screen title={title} large left={tabButtons} right={[addButton]}>
         <EmptyState
           icon="chart.line.uptrend.xyaxis"
           title="Track your net worth"
@@ -306,7 +308,7 @@ export default function NetWorthScreen() {
 
   return (
     <Screen
-      title="Net Worth"
+      title={title}
       large
       left={tabButtons}
       right={right}

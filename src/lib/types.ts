@@ -116,6 +116,8 @@ export interface SpendingGoal {
 
 export interface Settings {
   currency: string;
+  /** Optional, for "Alex’s Net Worth" and shared images. Empty means none was given or it was cleared. */
+  name?: string;
   hideAmounts: boolean;
   requireUnlock: boolean;
   nwRange: RangeKey;

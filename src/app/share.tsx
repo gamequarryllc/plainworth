@@ -24,10 +24,12 @@ import {
   totalsOf,
   updatesByAccount,
 } from '@/lib/networth';
+import { cleanName, possessive } from '@/lib/name';
 import { storage } from '@/lib/storage';
 import { useStore } from '@/store';
 import { layout, useColors } from '@/theme';
 
+/** Where the share screen kept a name before Settings had one. */
 const NAME_KEY = 'plainworth.share.name';
 /** Only the biggest accounts, so the image stays about phone-screen shaped. */
 const MAX_ROWS = 5;
@@ -59,7 +61,9 @@ export default function ShareScreen() {
   const updateSettings = useStore((s) => s.updateSettings);
   const [amounts, setAmounts] = useState(!hideAmounts);
   const [showAccounts, setShowAccounts] = useState(true);
-  const [name, setName] = useState(readName);
+  const savedName = useStore((s) => s.settings.name);
+  const [oldName] = useState(readName);
+  const name = cleanName(savedName ?? oldName);
   const [busy, setBusy] = useState(false);
   const card = useRef<ComponentRef<typeof View>>(null);
 
@@ -85,11 +89,10 @@ export default function ShareScreen() {
     if (Platform.OS !== 'ios') return;
     Alert.prompt(
       'Your Name',
-      'Shown as “Name’s Net Worth” on the image. Leave it empty for “My Net Worth”.',
+      'Shown as “Name’s Net Worth” on the image, and on the Net Worth tab when it fits. Leave it empty for “My Net Worth”.',
       (text) => {
-        const next = text.trim();
-        setName(next);
-        storage.write(NAME_KEY, next).catch(() => {});
+        updateSettings({ name: cleanName(text) });
+        storage.write(NAME_KEY, '').catch(() => {});
       },
       'plain-text',
       name,
@@ -117,7 +120,7 @@ export default function ShareScreen() {
     }
   };
 
-  const title = name ? `${name}’s Net Worth` : 'My Net Worth';
+  const title = name ? `${possessive(name)} Net Worth` : 'My Net Worth';
   return (
     <Screen
       title="Share Your Net Worth"

@@ -2,7 +2,7 @@ import Constants from 'expo-constants';
 import { router } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import { useEffect, useState } from 'react';
-import { AppState, Linking, Platform, Pressable, StyleSheet, Switch, View } from 'react-native';
+import { AppState, Linking, Platform, Pressable, StyleSheet, Switch, TextInput, View } from 'react-native';
 
 import { Icon } from '@/components/icon';
 import { Row, Section } from '@/components/list';
@@ -15,6 +15,7 @@ import { dayNumber, formatDate, todayKey } from '@/lib/dates';
 import { choose, confirm, notify } from '@/lib/dialogs';
 import { haptics } from '@/lib/haptics';
 import { CURRENCIES } from '@/lib/money';
+import { cleanName, NAME_MAX, netWorthTitle, possessive } from '@/lib/name';
 import { askForReminders, reminderPermission, type ReminderPermission } from '@/lib/notifications';
 import { pickTextFile } from '@/lib/pick-file';
 import { firstWeekday, formatReminder, MONTH_DAYS, monthDayName, reminderTimes, WEEKDAYS } from '@/lib/reminders';
@@ -24,7 +25,7 @@ import { currentData, flushSave, useStore } from '@/store';
 import { BackupError, backupFileName, makeBackup, readBackup, type Backup } from '@/store/backup';
 import { openPaywall, restorePurchases, setTestPro, useProStore } from '@/store/pro';
 import { markReminderOffered, resetReminderOffer } from '@/store/reminder-offer';
-import { layout, useColors } from '@/theme';
+import { layout, type, useColors } from '@/theme';
 
 const DEVICE = Platform.OS === 'android' ? 'phone' : 'iPhone';
 // Set `extra.sourceCodeUrl` in app.json once the repository is public; until then the link and the sentence stay hidden.
@@ -158,6 +159,8 @@ export default function SettingsScreen() {
           />
         ) : null}
       </Section>
+
+      <YourName />
 
       <Section
         header="General"
@@ -390,7 +393,55 @@ function PrivacyNote() {
   );
 }
 
+/** An optional name that makes the Net Worth title "Alex’s Net Worth". */
+function YourName() {
+  const c = useColors();
+  const name = useStore((s) => s.settings.name) ?? '';
+  const updateSettings = useStore((s) => s.updateSettings);
+  return (
+    <Section footer={nameFooter(name)}>
+      <Row
+        title="Name"
+        accessory={
+          <TextInput
+            value={name}
+            onChangeText={(v) => updateSettings({ name: v })}
+            onEndEditing={() => updateSettings({ name: cleanName(name) })}
+            placeholder="Optional"
+            placeholderTextColor={c.tertiary}
+            maxLength={NAME_MAX}
+            autoCapitalize="words"
+            autoCorrect={false}
+            textContentType="givenName"
+            autoComplete="name-given"
+            returnKeyType="done"
+            textAlign="right"
+            accessibilityLabel="Your Name"
+            style={[styles.nameInput, { color: c.text }]}
+          />
+        }
+      />
+    </Section>
+  );
+}
+
+function nameFooter(raw: string): string {
+  const name = cleanName(raw);
+  if (!name) return 'Add your name to make the Net Worth title yours, like “Sam’s Net Worth”.';
+  const title = netWorthTitle(name);
+  const full = `${possessive(name)} Net Worth`;
+  if (title === full) return `Net Worth shows as “${title}”, and so do images you share.`;
+  if (title !== 'Net Worth') return `Net Worth shows as “${title}”, since the full name doesn’t fit on one line.`;
+  return `“${full}” is too long for the top of Net Worth, so it stays “Net Worth” there. A shorter name or a nickname will fit.`;
+}
+
 const styles = StyleSheet.create({
+  nameInput: {
+    flex: 1,
+    marginLeft: 16,
+    fontSize: type.body.fontSize,
+    paddingVertical: 4,
+  },
   privacy: {
     alignItems: 'center',
     marginTop: 36,

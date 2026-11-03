@@ -393,6 +393,7 @@ export const useStore = create<Store>()((set, get) => ({
         reminder: { ...settings.reminder, on: false },
         goal: undefined,
         birthYear: undefined,
+        name: '',
         outlook: { ...settings.outlook, monthly: undefined },
         spendingGoal: undefined,
       },
