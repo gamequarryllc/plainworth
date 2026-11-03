@@ -290,13 +290,15 @@ export default function NetWorthScreen() {
           const share = kindTotal
             ? ` · ${formatPercent(total / kindTotal)}`
             : "";
+          const catChange = seriesChange(sliceSeries(catSeries, range, today));
           return (
             <TrendRow
               key={category.id}
               title={category.name}
               subtitle={`${items.length} ${items.length === 1 ? "account" : "accounts"}${share}`}
               value={money(total)}
-              change={seriesChange(sliceSeries(catSeries, range, today)).delta}
+              change={catChange.delta}
+              changeRatio={catChange.ratio}
               invert={kind === "liability"}
               series={catSeries}
               onPress={() => openCategory(category.id)}

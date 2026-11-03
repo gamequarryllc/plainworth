@@ -35,6 +35,7 @@ export function TrendRow({
   subtitle,
   value,
   change,
+  changeRatio,
   invert,
   series,
   tag,
@@ -46,6 +47,8 @@ export function TrendRow({
   /** A short label beside the name, like "Pay first". */
   tag?: string;
   change?: number | null;
+  /** The change as a share of the earlier value, shown as a percent beside it. */
+  changeRatio?: number | null;
   /** For debts: a falling balance is good news. */
   invert?: boolean;
   /** Full history; it is cut to the range picked on the chart above. */
@@ -93,7 +96,7 @@ export function TrendRow({
           {value}
         </Text>
       }
-      detail={change ? <Change delta={change} invert={invert} variant="footnote" weight="500" /> : undefined}
+      detail={change ? <Change delta={change} ratio={changeRatio} invert={invert} variant="footnote" weight="500" /> : undefined}
       chevron={false}
       onPress={onPress}
     />
@@ -113,7 +116,9 @@ export function AccountRow({
 }) {
   const money = useMoney();
   const today = useToday();
-  const { account, latest, lastChange, kind } = summary;
+  const { account, latest, previous, lastChange, kind } = summary;
+  // Percent change versus the entry before, the same basis as the dollar change.
+  const changeRatio = lastChange && previous?.value ? lastChange / Math.abs(previous.value) : null;
   let subtitle = updatedLabel(latest?.date);
   if (account.unit && latest?.quantity != null) {
     // A metal on today's price shows the price; anything else shows when it was last updated.
@@ -133,6 +138,7 @@ export function AccountRow({
       subtitle={subtitle}
       value={money(summary.balance)}
       change={lastChange}
+      changeRatio={changeRatio}
       invert={kind === 'liability'}
       series={series}
       tag={tag}
