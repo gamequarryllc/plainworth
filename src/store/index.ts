@@ -23,6 +23,7 @@ import type {
 import { DATA_VERSION, emptyData } from './defaults';
 import { migrate } from './migrate';
 import { sampleData } from './sample';
+import { DECADE, decadeSampleData } from './sample-decade';
 
 const STORAGE_KEY = 'tally.data';
 
@@ -379,7 +380,7 @@ export const useStore = create<Store>()((set, get) => ({
 
   loadSampleData(months) {
     const settings = get().settings;
-    set({ ...sampleData(months), settings });
+    set({ ...(months === DECADE ? decadeSampleData() : sampleData(months)), settings });
   },
 
   eraseAll() {

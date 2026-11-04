@@ -123,9 +123,10 @@ export default function SettingsScreen() {
       options: [
         { label: 'New User: 4 Months', destructive: true },
         { label: 'Long-Time User: 3 Years', destructive: true },
+        { label: 'Ten-Year User: 10 Years', destructive: true },
       ],
     });
-    if (i != null) loadSampleData(i === 0 ? 4 : 36);
+    if (i != null) loadSampleData([4, 36, 120][i]);
   };
 
   const currencyName = CURRENCIES.find((x) => x.code === settings.currency)?.name ?? settings.currency;
