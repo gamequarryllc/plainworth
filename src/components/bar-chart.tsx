@@ -120,7 +120,7 @@ export function BarChart({
               const total = Math.max(0, b.total ?? 0);
               // Each bar is clipped to its rounded outline, so the parts are plain rectangles.
               return (
-                <G key={i} clipPath={`url(#${clipId}-${i})`} opacity={selected != null && selected !== i ? 0.3 : b.faded ? 0.35 : 1}>
+                <G key={i} clipPath={`url(#${clipId}-${i})`} opacity={barOpacity(i, selected, b.faded)}>
                   {total === 0 ? (
                     <Rect x={x} y={0} width={slot} height={base} fill={fill} />
                   ) : (
@@ -238,6 +238,16 @@ export function BarChart({
       )}
     </View>
   );
+}
+
+/**
+ * A tapped bar shows in full, even a faded one, and the rest step back.
+ * Faded bars step back further, so they stay apart from the others.
+ */
+function barOpacity(i: number, selected: number | null, faded?: boolean): number {
+  if (selected === i) return 1;
+  if (selected != null) return faded ? 0.15 : 0.3;
+  return faded ? 0.35 : 1;
 }
 
 /** A bar standing on `base`, `h` tall, rounded at the top only. */
