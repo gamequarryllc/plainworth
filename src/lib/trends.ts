@@ -161,61 +161,76 @@ export function spendHistory(data: SpendData, today: DateKey): SpendMonth[] {
     .filter((m) => m.totals.hasData && monthsBetween(m, now) > 0);
 }
 
+export interface CreepMonth extends Month {
+  /** Spent in the month (not counting investing), or null when nothing was entered. */
+  spent: Cents | null;
+  /** Earned in the month, or null when nothing was entered. */
+  earned: Cents | null;
+}
+
+/** A run of entered months averaged together: where spending was, or is now. */
+export interface CreepWindow {
+  /** The first and last month in it, and where they sit in `Creep.months`. */
+  from: Month;
+  to: Month;
+  start: number;
+  end: number;
+  /** Average spent a month. */
+  spent: Cents;
+  /** Average earned a month, or null when no income was entered in these months. */
+  earned: Cents | null;
+}
+
 export interface Creep {
-  year: number;
-  /** This year's average month against last year's, e.g. 0.08 for 8% more. Null without income last year. */
-  income: number | null;
-  spending: number;
-  /** From January last year to the latest finished month: each month's six-month average, as a change from the first. */
-  months: Month[];
-  incomeLine: (number | null)[];
-  spendingLine: (number | null)[];
+  /** Every month in the range, oldest first, including empty ones so the chart keeps time. */
+  months: CreepMonth[];
+  before: CreepWindow;
+  now: CreepWindow;
+}
+
+/** How many entered months each side averages, at most. */
+const CREEP_WINDOW = 6;
+
+/**
+ * Every month from the first one entered in Spending through the latest
+ * finished one entered, oldest first. Months in between with nothing
+ * entered are kept, empty, so a chart of them keeps time.
+ */
+export function creepMonths(data: SpendData, today: DateKey): CreepMonth[] {
+  const history = spendHistory(data, today);
+  if (!history.length) return [];
+  const byKey = new Map(history.map((m) => [monthKey(m.year, m.month), m.totals]));
+  const first = history[0];
+  return Array.from({ length: monthsBetween(first, history[history.length - 1]) + 1 }, (_, i) => {
+    const m = shift(first, i);
+    const t = byKey.get(monthKey(m.year, m.month));
+    return { ...m, spent: t ? t.expenses : null, earned: t ? t.income : null };
+  });
 }
 
 /**
- * Lifestyle creep: whether spending is growing faster than income. Compares
- * this year's average month with last year's, once each has two finished months.
+ * Lifestyle creep in dollars: what an average month cost at the start of
+ * `months` against what it costs now. "Before" is the first six entered
+ * months and "now" the last six (fewer when there are fewer than twelve, so
+ * they never overlap). Null until there are four entered months.
  */
-export function lifestyleCreep(data: SpendData, today: DateKey): Creep | null {
-  const year = parseDateKey(today).y;
-  const history = spendHistory(data, today);
-  const of = (y: number) => history.filter((m) => m.year === y);
-  const now = of(year);
-  const before = of(year - 1);
-  if (now.length < 2 || before.length < 2) return null;
-  const avg = (list: SpendMonth[], pick: (t: MonthTotals) => number) =>
-    list.reduce((s, m) => s + pick(m.totals), 0) / list.length;
-  const spendBefore = avg(before, (t) => t.expenses);
-  if (spendBefore <= 0) return null;
-  const incomeBefore = avg(before, (t) => t.income);
-  const spending = avg(now, (t) => t.expenses) / spendBefore - 1;
-  const income = incomeBefore > 0 ? avg(now, (t) => t.income) / incomeBefore - 1 : null;
-
-  // The chart: a six-month average smooths out bonuses and one-off months.
-  const start: Month = { year: year - 1, month: 1 };
-  const last = now[now.length - 1];
-  const months = Array.from({ length: monthsBetween(start, last) + 1 }, (_, i) => shift(start, i));
-  const byKey = new Map(history.map((m) => [monthKey(m.year, m.month), m.totals]));
-  const smooth = (pick: (t: MonthTotals) => number) => {
-    const raw = months.map((m) => {
-      const window = [0, -1, -2, -3, -4, -5].flatMap((k) => {
-        const s = shift(m, k);
-        const totals = byKey.get(monthKey(s.year, s.month));
-        return totals ? [pick(totals)] : [];
-      });
-      return byKey.has(monthKey(m.year, m.month)) && window.length ? window.reduce((a, b) => a + b, 0) / window.length : null;
-    });
-    const base = raw.find((v) => v != null && v > 0);
-    return raw.map((v) => (v == null || base == null ? null : v / base - 1));
+export function lifestyleCreep(months: CreepMonth[]): Creep | null {
+  const entered = months.flatMap((m, i) => (m.spent != null ? [i] : []));
+  const size = Math.min(CREEP_WINDOW, Math.floor(entered.length / 2));
+  if (size < 2) return null;
+  const window = (indexes: number[]): CreepWindow => {
+    const list = indexes.map((i) => months[i]);
+    const earned = list.reduce((s, m) => s + (m.earned ?? 0), 0);
+    return {
+      from: { year: list[0].year, month: list[0].month },
+      to: { year: list[list.length - 1].year, month: list[list.length - 1].month },
+      start: indexes[0],
+      end: indexes[indexes.length - 1],
+      spent: Math.round(list.reduce((s, m) => s + (m.spent ?? 0), 0) / list.length),
+      earned: earned > 0 ? Math.round(earned / list.length) : null,
+    };
   };
-  return {
-    year,
-    income,
-    spending,
-    months,
-    incomeLine: income == null ? months.map(() => null) : smooth((t) => t.income),
-    spendingLine: smooth((t) => t.expenses),
-  };
+  return { months, before: window(entered.slice(0, size)), now: window(entered.slice(-size)) };
 }
 
 export type PeriodUnit = 'month' | 'quarter' | 'year';

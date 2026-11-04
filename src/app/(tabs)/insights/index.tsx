@@ -3,7 +3,7 @@ import { useState, type ReactElement } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
 import { BarChart } from '@/components/bar-chart';
-import { CategoryPills, categoryBars, categorySentence, useGroupColor } from '@/components/category-trend';
+import { CategoryPills, categoryBars, categorySentence, useGroupColor, yearLabels } from '@/components/category-trend';
 import { EmptyState } from '@/components/empty-state';
 import { Icon } from '@/components/icon';
 import { InsightCard, RankRow } from '@/components/insight-card';
@@ -24,6 +24,7 @@ import { formatPercent, MASK } from '@/lib/money';
 import { goalStatus, goalYear, makePlan, MAX_MONTHS, monthlyRate, monthsToReach, project, ratePercent } from '@/lib/outlook';
 import {
   compareYears,
+  creepMonths,
   distribution,
   lifestyleCreep,
   netWorthHistory,
@@ -34,7 +35,7 @@ import {
   spendHistory,
   spentSoFar,
   yearGoals,
-  type Creep,
+  type CreepMonth,
   type NetWorthMonth,
   type PeriodUnit,
   type YearGoals,
@@ -565,7 +566,7 @@ function Spending() {
   const data = { spend, spendCategories };
 
   const soFar = spentSoFar(data, year, today);
-  const creep = lifestyleCreep(data, today);
+  const creepAll = creepMonths(data, today);
   const history = spendHistory(data, today);
   const sp = spendingYear(data, year, today);
   const chartable = chartableCategories(data, today);
@@ -573,7 +574,7 @@ function Spending() {
     lastIndex(soFar) >= 0 ? (
       <SpentYearCard key="year" year={year} soFar={soFar} lastYear={spentSoFar(data, year - 1, today)} />
     ) : null,
-    creep ? <CreepCard key="creep" creep={creep} /> : null,
+    lifestyleCreep(creepAll) ? <CreepCard key="creep" all={creepAll} /> : null,
     chartable.length ? <CategoryCard key="category" categories={chartable} /> : null,
     sp?.categories.length ? <WhereItWentCard key="where" year={year} /> : null,
   ]);
@@ -751,61 +752,138 @@ function goalSentence(goal: SpendingGoal, g: YearGoals, whole: (cents: number) =
   return `That’s ${whole(g.spent)} in an average month, over your ${whole(goal.limit)} limit.`;
 }
 
-/** Income and spending, each as a change from where it started: spending climbing faster is creep. */
-function CreepCard({ creep }: { creep: Creep }) {
+type CreepRange = '12' | '24' | '60' | 'all';
+const CREEP_RANGES: { value: CreepRange; label: string }[] = [
+  { value: '12', label: '1Y' },
+  { value: '24', label: '2Y' },
+  { value: '60', label: '5Y' },
+  { value: 'all', label: 'All' },
+];
+
+/** "Jan–Jun 2025", or "Nov 2024–Apr 2025" across a new year. */
+function monthSpan(from: Month, to: Month): string {
+  const a = MONTHS_SHORT[from.month - 1];
+  const b = MONTHS_SHORT[to.month - 1];
+  if (from.year === to.year && from.month === to.month) return `${a} ${to.year}`;
+  return from.year === to.year ? `${a}–${b} ${to.year}` : `${a} ${from.year}–${b} ${to.year}`;
+}
+
+/**
+ * Lifestyle creep in plain dollars: every month's spending as a bar, with
+ * what an average month cost back then next to what it costs now. A raise
+ * that lifted spending from $1,800 to $3,200 a month reads at a glance, and
+ * income, when it's entered, says whether you're keeping more or less.
+ */
+function CreepCard({ all }: { all: CreepMonth[] }) {
   const c = useColors();
   const lock = useLock();
-  const { income, spending, year } = creep;
+  const money = lock.money;
+  const whole = (cents: number) => money(cents, { whole: true });
+  const hidden = useStore((s) => s.settings.hideAmounts);
+  const [range, setRange] = useState<CreepRange | null>(null);
   const [at, setAt] = useState<number | null>(null);
-  const pct = (r: number | null) => (r == null ? '—' : `${r < 0 ? '−' : '+'}${Math.round(Math.abs(r) * 100)}%`);
-  const moved = (r: number) =>
-    Math.round(Math.abs(r) * 100) === 0 ? 'held steady' : `${r >= 0 ? 'grew' : 'fell'} ${Math.round(Math.abs(r) * 100)}%`;
-  let sentence: string;
-  if (income == null) {
-    sentence = `Your spending ${moved(spending)} this year, month for month.`;
-  } else {
-    sentence = `Your income ${moved(income)} this year and your spending ${moved(spending)}.`;
-    if (spending > income + 0.01) sentence += ' That’s lifestyle creep.';
-    else if (income > spending + 0.01) sentence += ' You’re keeping the difference.';
-    else sentence += ' They’re moving together.';
+
+  // A range shows once there's more history than the one before it, and enough in it to compare.
+  const options = CREEP_RANGES.filter((r, i) => {
+    if (i > 0 && all.length <= Number(CREEP_RANGES[i - 1].value)) return false;
+    if (r.value === 'all') return all.length > 60;
+    return lifestyleCreep(all.slice(-Number(r.value))) != null;
+  });
+  // Two years by default: long enough to reach back before a raise.
+  const fallback = [...options].reverse().find((r) => r.value !== 'all' && Number(r.value) <= 24) ?? options[options.length - 1];
+  const picked = options.find((r) => r.value === range) ?? fallback;
+  const months = picked && picked.value !== 'all' ? all.slice(-Number(picked.value)) : all;
+  const creep = lifestyleCreep(months);
+  if (!creep) return null;
+  const { before, now } = creep;
+  const then = monthSpan(before.from, before.to);
+  const lately = monthSpan(now.from, now.to);
+
+  const diff = now.spent - before.spent;
+  let sentence =
+    Math.abs(diff) < before.spent * 0.05
+      ? `You spend about ${whole(now.spent)} a month now, about the same as the ${whole(before.spent)} you spent in ${then}.`
+      : `You spent about ${whole(before.spent)} a month in ${then}. Now it’s ${whole(now.spent)}, ${diff > 0 ? 'up' : 'down'} ${whole(Math.abs(diff))}.`;
+  if (before.earned != null && now.earned != null) {
+    const raise = now.earned - before.earned;
+    const kept = raise - diff;
+    const keeping =
+      Math.abs(kept) < now.earned * 0.03
+        ? 'you’re keeping about the same each month'
+        : `you’re keeping ${whole(Math.abs(kept))} ${kept > 0 ? 'more' : 'less'}`;
+    sentence +=
+      Math.abs(raise) < before.earned * 0.03
+        ? ` Your income stayed about the same, so ${keeping}.`
+        : ` Your income ${raise > 0 ? 'rose' : 'fell'} ${whole(Math.abs(raise))} a month, so ${keeping}.`;
+    if (diff > 0 && kept < 0 && Math.abs(kept) >= now.earned * 0.03) sentence += ' That’s lifestyle creep.';
   }
-  const count = creep.months.length;
-  const labels: TrendLabel[] = [
-    { index: 0, text: shortMonth(creep.months[0]) },
-    ...(count > 14 ? [{ index: 12, text: shortMonth(creep.months[12]) }] : []),
-    { index: count - 1, text: shortMonth(creep.months[count - 1]) },
-  ];
+
+  const count = months.length;
+  const selected = at != null && at < count ? months[at] : null;
+  const pick = (r: CreepRange) => {
+    setRange(r);
+    setAt(null);
+  };
+  const bars = months.map((m) => ({
+    value: m.spent ?? 0,
+    label: MONTHS_SHORT[m.month - 1][0],
+    accessibilityLabel: `${MONTHS[m.month - 1]} ${m.year}: ${m.spent == null ? 'nothing entered' : `spent ${money(m.spent, { whole: true })}`}`,
+  }));
+
   return (
     <InsightCard
       label="Lifestyle Creep"
-      sentence={lock.text(sentence, 'See whether your spending is growing faster than your income.')}
+      sentence={lock.text(sentence, 'See what an average month cost you back then next to what it costs now.')}
       {...lock.card}
-      note={`Compares your average month in ${year} with ${year - 1}. Each line is a six-month average, as a change from where it started. When the blue line climbs faster than the green one, that’s creep.`}>
-      {at != null ? (
+      note={`Each bar is what you spent that month, not counting investing. The dashed lines are an average month back then (${then}) and now (${lately}). Counts each month once it’s over.`}>
+      {options.length > 1 ? (
+        <View pointerEvents={lock.locked ? 'none' : 'auto'}>
+          <Segmented options={options} value={picked.value} onChange={pick} style={styles.horizon} />
+        </View>
+      ) : null}
+      {selected ? (
         <Readout
-          title={shortMonth(creep.months[at])}
-          items={[
-            ...(income != null ? [{ label: 'Income', value: pct(creep.incomeLine[at]), color: c.up }] : []),
-            { label: 'Spending', value: pct(creep.spendingLine[at]), color: c.bar },
-          ]}
+          title={`${MONTHS[selected.month - 1]} ${selected.year}`}
+          items={
+            selected.spent == null
+              ? [{ label: 'Nothing entered', value: '' }]
+              : [
+                  { label: 'Spent', value: whole(selected.spent), color: c.bar },
+                  ...(selected.earned ? [{ label: 'Earned', value: whole(selected.earned), color: c.up }] : []),
+                ]
+          }
         />
       ) : (
-        <TrendKey
-          items={[
-            ...(income != null ? [{ label: 'Income', color: c.up }] : []),
-            { label: 'Spending', color: c.bar },
-          ]}
-        />
+        <View style={styles.creepStats}>
+          {[
+            { label: 'Before', span: then, value: before.spent, color: undefined },
+            { label: 'Now', span: lately, value: now.spent, color: c.warning },
+          ].map((x) => (
+            <View key={x.label} style={styles.creepStat}>
+              <Text variant="footnote" color="secondary" numberOfLines={1}>
+                {`${x.label} · ${x.span}`}
+              </Text>
+              <Text variant="title3" weight="700" rounded tabular numberOfLines={1} style={x.color ? { color: x.color } : null}>
+                {whole(x.value)}
+                <Text variant="footnote" weight="500" color="secondary">
+                  {' a month'}
+                </Text>
+              </Text>
+            </View>
+          ))}
+        </View>
       )}
-      <TrendChart
-        count={count}
-        zero
-        series={[
-          { values: creep.incomeLine, color: c.up, endDot: true },
-          { values: creep.spendingLine, color: c.bar, endDot: true },
+      <BarChart
+        bars={bars}
+        levels={[
+          { from: before.start, to: before.end, value: before.spent, label: 'Before', color: c.secondary },
+          { from: now.start, to: now.end, value: now.spent, label: 'Now', color: c.warning, end: true },
         ]}
-        labels={labels}
-        onScrub={lock.locked ? undefined : setAt}
+        selected={at}
+        onSelect={lock.locked ? undefined : setAt}
+        formatTick={hidden || lock.locked ? undefined : (v) => money(v, { compact: true, whole: true })}
+        axisLabels={count > 13 ? yearLabels(months.map((m) => ({ ...m, value: m.spent }))) : undefined}
+        height={150}
       />
     </InsightCard>
   );
@@ -1023,6 +1101,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 5,
     paddingVertical: 2,
+  },
+  creepStats: {
+    flexDirection: 'row',
+    gap: 16,
+    marginBottom: 12,
+  },
+  creepStat: {
+    flex: 1,
+    gap: 2,
   },
   readout: {
     flexDirection: 'row',

@@ -3,6 +3,7 @@ import { test } from 'node:test';
 
 import {
   distribution,
+  creepMonths,
   lifestyleCreep,
   monthsUntil,
   netWorthHistory,
@@ -109,22 +110,34 @@ test('trends: spending so far this year', () => {
 });
 
 
-test('trends: lifestyle creep compares average months', () => {
-  const c = lifestyleCreep(sp, '2026-04-15')!;
-  assert.equal(c.year, 2026);
-  assert.ok(Math.abs(c.income! - 0.1) < 1e-9);
-  // 1,300 a month last year, 1,400 this year.
-  assert.ok(Math.abs(c.spending - 100 / 1300) < 1e-9);
-  assert.equal(c.months.length, 15);
-  assert.equal(c.spendingLine[0], 0);
-  // April to December 2025 had nothing entered.
-  assert.equal(c.spendingLine[5], null);
-  // March 2026: the average of January to March, against January 2025.
-  assert.ok(Math.abs(c.spendingLine[14]! - 1400 / 1200 + 1) < 1e-9);
-  // Too early in the year.
-  assert.equal(lifestyleCreep(sp, '2026-02-15'), null);
-});
+test('trends: lifestyle creep compares an average month before and now, in dollars', () => {
+  const months = creepMonths(sp, '2026-04-15');
+  // January 2025 through March 2026, empty months kept.
+  assert.equal(months.length, 15);
+  assert.deepEqual(months[0], { year: 2025, month: 1, spent: 1_200_00, earned: 2_000_00 });
+  assert.equal(months[5].spent, null);
 
+  // Six entered months: the first three against the last three.
+  const c = lifestyleCreep(months)!;
+  assert.deepEqual(c.before, {
+    from: { year: 2025, month: 1 },
+    to: { year: 2025, month: 3 },
+    start: 0,
+    end: 2,
+    spent: 1_300_00,
+    earned: 2_000_00,
+  });
+  assert.equal(c.now.start, 12);
+  assert.equal(c.now.end, 14);
+  assert.equal(c.now.spent, 1_400_00);
+  assert.equal(c.now.earned, 2_200_00);
+
+  // A shorter range: only this year's months, too few to compare.
+  assert.equal(lifestyleCreep(months.slice(-3)), null);
+  // Too early: one month entered.
+  assert.equal(lifestyleCreep(creepMonths(sp, '2025-02-15')), null);
+  assert.deepEqual(creepMonths({ spend: {}, spendCategories }, '2026-04-15'), []);
+});
 
 test('trends: what you own by category, period by period', () => {
   const cats = [...nwCategories, { id: 'inv', name: 'Investments', kind: 'asset' as const, order: 2 }];

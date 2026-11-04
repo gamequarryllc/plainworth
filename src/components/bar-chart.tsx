@@ -37,6 +37,21 @@ interface Props {
    * labels, each centered under its bar, in place of one per bar.
    */
   axisLabels?: { index: number; text: string }[];
+  /**
+   * Dashed lines over a run of bars, each at its own height: an average for
+   * just those months, like "before" and "now" for lifestyle creep. The label
+   * sits above the line, at its start (or its end, for `end`).
+   */
+  levels?: Level[];
+}
+
+export interface Level {
+  from: number;
+  to: number;
+  value: number;
+  label: string;
+  color: string;
+  end?: boolean;
 }
 
 /** Room on the right for the gridline labels. */
@@ -51,7 +66,17 @@ const LABEL_BOX = 48;
  * one color, rounded at the top and square on the baseline, with light gridlines
  * labeled on the right. Tap a bar to select it.
  */
-export function BarChart({ bars, height = 150, selected = null, onSelect, formatTick, average, color, axisLabels }: Props) {
+export function BarChart({
+  bars,
+  height = 150,
+  selected = null,
+  onSelect,
+  formatTick,
+  average,
+  color,
+  axisLabels,
+  levels,
+}: Props) {
   const c = useColors();
   const fill = color ?? c.bar;
   const [width, setWidth] = useState(0);
@@ -59,7 +84,7 @@ export function BarChart({ bars, height = 150, selected = null, onSelect, format
   const clipId = `bars${useId().replace(/[^a-zA-Z0-9]/g, '')}`;
 
   const tops = bars.map((b) => Math.max(0, b.value, b.total ?? 0));
-  const ticks = gridlines(Math.max(...tops, average ?? 0, 0));
+  const ticks = gridlines(Math.max(...tops, average ?? 0, ...(levels ?? []).map((l) => l.value), 0));
   const ceiling = ticks[ticks.length - 1];
   const plotW = Math.max(0, width - AXIS);
   const plotH = height - TOP;
@@ -121,11 +146,41 @@ export function BarChart({ bars, height = 150, selected = null, onSelect, format
                 </G>
               );
             })}
+            {levels?.map((l) => (
+              <Line
+                key={l.label}
+                x1={l.from * slot + 1}
+                x2={(l.to + 1) * slot - 1}
+                y1={y(l.value)}
+                y2={y(l.value)}
+                stroke={l.color}
+                strokeWidth={2}
+                strokeDasharray="5 3"
+                strokeLinecap="round"
+              />
+            ))}
             {avgY != null ? (
               <Line x1={0} x2={plotW} y1={avgY} y2={avgY} stroke={c.secondary} strokeWidth={1} strokeDasharray="4 3" />
             ) : null}
           </Svg>
         ) : null}
+        {width > 0
+          ? levels?.map((l) => (
+              <Text
+                key={l.label}
+                variant="caption"
+                weight="700"
+                numberOfLines={1}
+                align={l.end ? 'right' : 'left'}
+                style={[
+                  styles.level,
+                  { top: y(l.value) - 18, color: l.color, backgroundColor: c.card },
+                  l.end ? { right: AXIS + plotW - (l.to + 1) * slot } : { left: l.from * slot },
+                ]}>
+                {l.label}
+              </Text>
+            ))
+          : null}
         {avgY != null && width > 0 ? (
           <Text variant="caption" weight="600" color="secondary" style={[styles.tick, { top: avgY - 7, left: plotW + 6 }]}>
             avg
@@ -223,6 +278,12 @@ const styles = StyleSheet.create({
   },
   hit: {
     flex: 1,
+  },
+  level: {
+    position: 'absolute',
+    paddingHorizontal: 3,
+    borderRadius: 4,
+    overflow: 'hidden',
   },
   tick: {
     position: 'absolute',
