@@ -5,6 +5,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 import { AppState, useColorScheme } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { configureReanimatedLogger, ReanimatedLogLevel } from 'react-native-reanimated';
 
 import { LockGate } from '@/components/lock-gate';
 import { useStackOptions } from '@/components/stack-options';
@@ -13,6 +14,11 @@ import { flushSave, useStore } from '@/store';
 import { startPro } from '@/store/pro';
 import { useSpotPriceRefresh } from '@/store/spot';
 import { useColors } from '@/theme';
+
+// The swipe rows' library (Gesture Handler's Swipeable) reads its own animated
+// values while drawing, which only trips Reanimated's strict-mode warning in
+// development. It's harmless, so keep warnings but turn the strict check off.
+configureReanimatedLogger({ level: ReanimatedLogLevel.warn, strict: false });
 
 export default function RootLayout() {
   const scheme = useColorScheme();
