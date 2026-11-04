@@ -1,4 +1,4 @@
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 
 import { haptics } from '@/lib/haptics';
 import { RANGES } from '@/lib/networth';
@@ -7,12 +7,35 @@ import { layout, useColors } from '@/theme';
 
 import { Text } from './text';
 
-export function RangePicker({ value, onChange }: { value: RangeKey; onChange: (r: RangeKey) => void }) {
+export function RangePicker({
+  value,
+  onChange,
+  style,
+  locked,
+}: {
+  value: RangeKey;
+  onChange: (r: RangeKey) => void;
+  style?: StyleProp<ViewStyle>;
+  /** In a card that opens Pro when tapped: drawn the same, but not buttons of their own. */
+  locked?: boolean;
+}) {
   const c = useColors();
   return (
-    <View style={styles.row} accessibilityRole="tablist">
+    <View style={[styles.row, style]} accessibilityRole="tablist">
       {RANGES.map((r) => {
         const selected = r.key === value;
+        const label = (
+          <Text variant="footnote" weight="600" color={selected ? 'text' : 'secondary'}>
+            {r.label}
+          </Text>
+        );
+        if (locked) {
+          return (
+            <View key={r.key} style={[styles.pill, selected && { backgroundColor: c.fillStrong }]}>
+              {label}
+            </View>
+          );
+        }
         return (
           <Pressable
             key={r.key}
@@ -25,9 +48,7 @@ export function RangePicker({ value, onChange }: { value: RangeKey; onChange: (r
             accessibilityLabel={r.caption}
             hitSlop={{ top: 8, bottom: 8, left: 2, right: 2 }}
             style={[styles.pill, selected && { backgroundColor: c.fillStrong }]}>
-            <Text variant="footnote" weight="600" color={selected ? 'text' : 'secondary'}>
-              {r.label}
-            </Text>
+            {label}
           </Pressable>
         );
       })}
