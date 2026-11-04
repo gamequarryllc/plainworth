@@ -72,8 +72,8 @@ export default function GoalScreen() {
     target > 0 && dateOk
       ? { amount: target, ...(when === 'year' ? { year: yearNum } : when === 'age' ? { age: ageNum } : null) }
       : null;
-  // An empty amount saves the assumptions alone, with no goal.
-  const canSave = amount === '' || draft != null;
+  // A goal needs an amount; the placeholder is only an example.
+  const canSave = draft != null;
 
   const history = netWorthHistory({ accounts, snapshots, nwCategories }, today);
   const now = history.length ? history[history.length - 1] : null;
