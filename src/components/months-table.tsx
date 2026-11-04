@@ -28,6 +28,8 @@ const COLUMN = 72;
 const NAME_MIN = 78;
 /** Room for the chevron at the end of each row. */
 const CHEVRON = 21;
+/** Space kept between number columns, so wide amounts (bold totals) never run together. */
+const GAP = 6;
 
 /**
  * Rows of numbers in columns, like a statement: the column names sit in the
@@ -48,7 +50,8 @@ export function MonthsTable({
   const { width } = useWindowDimensions();
   // Columns narrow on small phones so the names still fit.
   const fit = Math.floor((width - 2 * layout.margin - CHEVRON - NAME_MIN) / Math.max(1, columns.length));
-  const column = { width: Math.max(52, Math.min(COLUMN, fit)) };
+  // Each column's width includes the gap on its left; the amount fits in what's left.
+  const column = { width: Math.max(52, Math.min(COLUMN + GAP, fit)), paddingLeft: GAP };
   return (
     <View style={styles.section}>
       <View style={styles.header} accessibilityRole="header">
@@ -86,11 +89,12 @@ export function MonthsTable({
               {row.cells.map((cell, j) => (
                 <Text
                   key={j}
-                  variant="callout"
+                  // Bold digits run wider, so totals sit a size down to keep clear of each other.
+                  variant={isTotal ? 'subheadline' : 'callout'}
                   tabular
                   numberOfLines={1}
                   adjustsFontSizeToFit
-                  minimumFontScale={0.8}
+                  minimumFontScale={isTotal ? 0.7 : 0.8}
                   weight={isTotal ? '600' : undefined}
                   color={cell?.color ?? 'text'}
                   style={[styles.column, column]}>
