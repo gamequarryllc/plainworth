@@ -116,7 +116,10 @@ export function TrendChart({
             ) : null}
             {series.map((s, k) => (
               <Path
-                key={k}
+                // Keyed by look as well as place: react-native-svg on iOS keeps an old dash
+                // pattern when a reused Path's strokeDasharray goes back to undefined, so a
+                // solid line that takes over a dotted one's slot would stay dotted.
+                key={`${k}-${s.dashed ? 'dotted' : 'solid'}-${s.color}`}
                 d={pathOf(s.values)}
                 stroke={s.color}
                 strokeWidth={s.dashed ? 2 : 2.2}

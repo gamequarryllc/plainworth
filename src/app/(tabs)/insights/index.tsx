@@ -301,8 +301,9 @@ function HeadedCard({ history, pace, counted }: { history: NetWorthMonth[]; pace
   const milestone = nextMilestone(current);
   const away = status ? null : monthsToReach(current, plan, milestone);
 
-  // As much history as the projection is long, so the chart stays balanced.
-  const shown = history.slice(-Math.min(ahead, history.length));
+  // As much history as the projection is long, so the chart stays balanced:
+  // 10Y runs from this month ten years ago to this month ten years ahead.
+  const shown = history.slice(-Math.min(ahead + 1, history.length));
   const nowIndex = shown.length - 1;
   const count = nowIndex + ahead + 1;
   const actual = [...shown.map((m) => m.end), ...Array(ahead).fill(null)];
