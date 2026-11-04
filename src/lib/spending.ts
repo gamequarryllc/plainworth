@@ -159,3 +159,23 @@ export function categoriesForMonth(
     .filter((c) => c.group === group && (!c.hidden || !!entries?.[c.id]))
     .sort((a, b) => a.order - b.order);
 }
+
+/** Which spending Insights count: everything, only the Recurring bills, or only the Spending you choose day to day. */
+export type SpendFilter = 'all' | 'recurring' | 'variable';
+
+export const SPEND_FILTERS: { value: SpendFilter; label: string }[] = [
+  { value: 'all', label: 'All' },
+  { value: 'recurring', label: 'Recurring' },
+  { value: 'variable', label: 'Spending' },
+];
+
+/**
+ * The same data with only one side of expenses left in: Recurring bills like
+ * rent and insurance, or Spending like eating out. Income and investing stay,
+ * so months still count as entered. With 'all', the data as it is.
+ */
+export function filterSpend<T extends Pick<Data, 'spendCategories'>>(data: T, filter: SpendFilter | undefined): T {
+  if (!filter || filter === 'all') return data;
+  const drop: SpendGroup = filter === 'recurring' ? 'variable' : 'recurring';
+  return { ...data, spendCategories: data.spendCategories.filter((c) => c.group !== drop) };
+}

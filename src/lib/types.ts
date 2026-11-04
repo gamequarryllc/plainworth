@@ -133,6 +133,8 @@ export interface Settings {
   birthYear?: number;
   outlook: Outlook;
   spendingGoal?: SpendingGoal;
+  /** Insights › Spending: all expenses, or only Recurring or only Spending. Missing means all. */
+  spendFilter?: 'all' | 'recurring' | 'variable';
 }
 
 export interface Data {

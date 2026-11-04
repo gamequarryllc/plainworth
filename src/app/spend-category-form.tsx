@@ -72,7 +72,7 @@ export default function SpendCategoryFormScreen() {
       </Section>
       <Section
         header="Group"
-        footer="Recurring is for fixed monthly bills. Spending is everything that varies. Income is money coming in.">
+        footer="Recurring is for bills you have to pay, like rent, utilities and insurance. Spending is everything you choose, like eating out. Insights can show either one on its own. Income is money coming in.">
         <Row
           title={
             <Segmented

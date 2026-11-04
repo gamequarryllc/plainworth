@@ -67,6 +67,11 @@ import {
   type PeriodUnit,
   type YearGoals,
 } from "@/lib/trends";
+import {
+  filterSpend,
+  SPEND_FILTERS,
+  type SpendFilter,
+} from "@/lib/spending";
 import type { SpendCategory, SpendingGoal } from "@/lib/types";
 import { useStore } from "@/store";
 import { openPaywall } from "@/store/pro";
@@ -766,18 +771,40 @@ function NetWorthYearCard({
   );
 }
 
-function Spending() {
-  const today = useToday();
+/**
+ * Spending data as Insights › Spending counts it: everything, or only the
+ * Recurring bills (rent, insurance) or only Spending (eating out, shopping),
+ * so a one-off bill doesn't read as a month off the rails.
+ */
+function useSpendData() {
   const spend = useStore((s) => s.spend);
   const spendCategories = useStore((s) => s.spendCategories);
+  const filter = useStore((s) => s.settings.spendFilter ?? "all");
+  return { data: filterSpend({ spend, spendCategories }, filter), filter };
+}
+
+/** "spending", "recurring spending" or "everyday spending", for sentences. */
+function spendWord(filter: SpendFilter): string {
+  return filter === "recurring"
+    ? "recurring spending"
+    : filter === "variable"
+      ? "everyday spending"
+      : "spending";
+}
+
+function Spending() {
+  const today = useToday();
   const year = parseDateKey(today).y;
-  const data = { spend, spendCategories };
+  const { data, filter } = useSpendData();
+  const updateSettings = useStore((s) => s.updateSettings);
 
   const soFar = spentSoFar(data, year, today);
   const creepAll = creepMonths(data, today);
   const history = spendHistory(data, today);
   const sp = spendingYear(data, year, today);
-  const chartable = chartableCategories(data, today);
+  const chartable = chartableCategories(data, today).filter(
+    (x) => filter === "all" || x.group === filter,
+  );
   const cards = useCards([
     lastIndex(soFar) >= 0 ? (
       <SpentYearCard
@@ -794,7 +821,17 @@ function Spending() {
     sp?.categories.length ? <WhereItWentCard key="where" year={year} /> : null,
   ]);
 
-  if (!sp && !history.length) {
+  const toggle = (
+    <Segmented
+      key="filter"
+      options={SPEND_FILTERS}
+      value={filter}
+      onChange={(spendFilter) => updateSettings({ spendFilter })}
+      style={styles.filter}
+    />
+  );
+
+  if (!sp && !history.length && filter === "all") {
     return (
       <Section footer="Nothing entered in Spending yet.">
         <Row
@@ -808,13 +845,21 @@ function Spending() {
   }
   if (!cards.length) {
     return (
-      <InsightCard
-        label="This Year vs Last Year"
-        sentence="Once a month you’ve entered is over, this page shows how your spending adds up over the year."
-      />
+      <>
+        {toggle}
+        <InsightCard
+          label="This Year vs Last Year"
+          sentence={`Once a month you’ve entered is over, this page shows how your ${spendWord(filter)} adds up over the year.`}
+        />
+      </>
     );
   }
-  return <>{cards}</>;
+  return (
+    <>
+      {toggle}
+      {cards}
+    </>
+  );
 }
 
 /**
@@ -837,9 +882,11 @@ function SpentYearCard({
   const whole = (cents: number) => money(cents, { whole: true });
   const pct = (r: number) => (lock.locked ? "••%" : wholePercent(r));
   const today = useToday();
-  const spend = useStore((s) => s.spend);
-  const spendCategories = useStore((s) => s.spendCategories);
-  const goal = useStore((s) => s.settings.spendingGoal);
+  const { data, filter } = useSpendData();
+  // Goals are for all spending, so they show only when all of it is counted.
+  const savedGoal = useStore((s) => s.settings.spendingGoal);
+  const goal = filter === "all" ? savedGoal : undefined;
+  const on = filter === "all" ? "" : ` on ${filter === "recurring" ? "recurring bills" : "everyday spending"}`;
   // Someone who started partway through the year is counted from their first month, against the same months last year.
   const { from, last, before, then } = compareYears(soFar, lastYear)!;
   const value = soFar[last]!;
@@ -849,10 +896,10 @@ function SpentYearCard({
 
   let sentence =
     from === 0
-      ? `You’ve spent ${whole(value)} this year through ${MONTHS[last]}`
+      ? `You’ve spent ${whole(value)}${on} this year through ${MONTHS[last]}`
       : from === last
-        ? `You’ve spent ${whole(value)} in ${MONTHS[last]}`
-        : `You’ve spent ${whole(value)} from ${MONTHS[from]} through ${MONTHS[last]}`;
+        ? `You’ve spent ${whole(value)}${on} in ${MONTHS[last]}`
+        : `You’ve spent ${whole(value)}${on} from ${MONTHS[from]} through ${MONTHS[last]}`;
   if (then != null) {
     const diff = value - then;
     const ref =
@@ -869,9 +916,7 @@ function SpentYearCard({
     sentence += ".";
   }
 
-  const g = goal
-    ? yearGoals({ spend, spendCategories }, goal, year, today)
-    : null;
+  const g = goal ? yearGoals(data, goal, year, today) : null;
   const said = goal && g ? goalSentence(goal, g, whole) : null;
   if (said) sentence += ` ${said}`;
 
@@ -961,7 +1006,7 @@ function SpentYearCard({
         labels={MONTH_LABELS}
         onScrub={lock.locked ? undefined : setAt}
       />
-      {goal ? (
+      {filter !== "all" ? null : goal ? (
         <View style={styles.goals}>
           {bars.map((b, i) => (
             <View key={b.key} style={styles.goal}>
@@ -1070,6 +1115,8 @@ function CreepCard({ all }: { all: CreepMonth[] }) {
   const whole = (cents: number) => money(cents, { whole: true });
   const hidden = useStore((s) => s.settings.hideAmounts);
   const today = useToday();
+  const { filter } = useSpendData();
+  const word = spendWord(filter);
   const [range, setRange] = useState<CreepRange | null>(null);
   const [at, setAt] = useState<number | null>(null);
 
@@ -1100,9 +1147,10 @@ function CreepCard({ all }: { all: CreepMonth[] }) {
   const diff = lately.spent - before.spent;
   let sentence =
     direction === "steady" || start == null
-      ? `Your spending has held steady at about ${whole(lately.spent)} a month.`
-      : `Your spending started ${direction === "up" ? "climbing" : "falling"} in ${when(months[start])}. It’s ${direction === "up" ? "up" : "down"} ${whole(Math.abs(diff))} a month from before.`;
-  if (before.earned != null && lately.earned != null) {
+      ? `Your ${word} has held steady at about ${whole(lately.spent)} a month.`
+      : `Your ${word} started ${direction === "up" ? "climbing" : "falling"} in ${when(months[start])}. It’s ${direction === "up" ? "up" : "down"} ${whole(Math.abs(diff))} a month from before.`;
+  // What you keep depends on all of your spending, so it's said only when all of it is counted.
+  if (filter === "all" && before.earned != null && lately.earned != null) {
     const raise = lately.earned - before.earned;
     const kept = raise - diff;
     const keeping =
@@ -1149,7 +1197,7 @@ function CreepCard({ all }: { all: CreepMonth[] }) {
         "See when your spending started to climb, and how much more a month it is now.",
       )}
       {...lock.card}
-      note="Each bar is what you spent that month, not counting investing. Lately is your last three months. Counts each month once it’s over."
+      note={`Each bar is what you spent that month${filter === "recurring" ? " on Recurring categories" : filter === "variable" ? " on Spending categories, without Recurring bills" : ", not counting investing"}. Lately is your last three months. Counts each month once it’s over.`}
     >
       {options.length > 1 ? (
         <View pointerEvents={lock.locked ? "none" : "auto"}>
@@ -1353,11 +1401,9 @@ function WhereItWentCard({ year }: { year: number }) {
   const lock = useLock();
   const money = lock.money;
   const today = useToday();
-  const spend = useStore((s) => s.spend);
-  const spendCategories = useStore((s) => s.spendCategories);
+  const { data, filter } = useSpendData();
   const whole = (cents: number) => money(cents, { whole: true });
   const signed = (cents: number) => money(cents, { signed: true, whole: true });
-  const data = { spend, spendCategories };
   const sp = spendingYear(data, year, today)!;
   const spBefore = spendingYear(data, year - 1, today);
   const canCompare = !!spBefore && sp.months >= 2 && spBefore.months >= 2;
@@ -1369,7 +1415,7 @@ function WhereItWentCard({ year }: { year: number }) {
     <InsightCard
       label="Where It Went"
       sentence={lock.text(
-        `${top.category.name} took the biggest share of your spending this year, ${formatPercent(top.share)}.`,
+        `${top.category.name} took the biggest share of your ${spendWord(filter)} this year, ${formatPercent(top.share)}.`,
         "See every category a month on average, and how each compares with last year.",
       )}
       note={
@@ -1380,7 +1426,7 @@ function WhereItWentCard({ year }: { year: number }) {
       onPress={() =>
         router.push({
           pathname: "/insights/where-it-went",
-          params: { year: String(year) },
+          params: { year: String(year), filter },
         })
       }
       {...lock.card}
@@ -1458,6 +1504,9 @@ function Readout({
 const styles = StyleSheet.create({
   parts: {
     marginTop: 4,
+    marginBottom: 10,
+  },
+  filter: {
     marginBottom: 10,
   },
   horizon: {

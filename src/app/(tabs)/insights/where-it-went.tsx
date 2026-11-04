@@ -11,12 +11,12 @@ import { useToday } from '@/hooks/use-today';
 import { parseDateKey } from '@/lib/dates';
 import { monthsLabel, recentMonths, spendingMonths, spendingYear } from '@/lib/insights';
 import { formatPercent } from '@/lib/money';
-import { groupTitle } from '@/lib/spending';
+import { filterSpend, groupTitle, type SpendFilter } from '@/lib/spending';
 import type { SpendGroup } from '@/lib/types';
 import { useStore } from '@/store';
 import { layout, useColors } from '@/theme';
 
-const GROUPS: SpendGroup[] = ['recurring', 'variable'];
+const ALL_GROUPS: SpendGroup[] = ['recurring', 'variable'];
 
 /** Every spending category for a year (or the preview's two months), a month on average, by group. */
 export default function WhereItWentScreen() {
@@ -24,7 +24,7 @@ export default function WhereItWentScreen() {
   const money = useMoney();
   const today = useToday();
   const preview = useInsightsPreview();
-  const params = useLocalSearchParams<{ year?: string }>();
+  const params = useLocalSearchParams<{ year?: string; filter?: SpendFilter }>();
   const spend = useStore((s) => s.spend);
   const spendCategories = useStore((s) => s.spendCategories);
   const now = parseDateKey(today);
@@ -32,7 +32,10 @@ export default function WhereItWentScreen() {
   const whole = (cents: number) => money(cents, { whole: true });
   const signed = (cents: number) => money(cents, { signed: true, whole: true });
 
-  const data = { spend, spendCategories };
+  const savedFilter = useStore((s) => s.settings.spendFilter);
+  const filter = params.filter ?? savedFilter ?? 'all';
+  const GROUPS = filter === 'all' ? ALL_GROUPS : ALL_GROUPS.filter((g) => g === filter);
+  const data = filterSpend({ spend, spendCategories }, filter);
   const months = preview ? recentMonths(today) : null;
   const sp = months ? spendingMonths(data, months) : spendingYear(data, year, today);
   const spBefore = months ? null : spendingYear(data, year - 1, today);
