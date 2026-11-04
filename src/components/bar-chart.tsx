@@ -18,6 +18,8 @@ export interface Bar {
   total?: number;
   label: string;
   accessibilityLabel?: string;
+  /** Drawn light, to set the bar apart from the ones that matter. */
+  faded?: boolean;
 }
 
 interface Props {
@@ -37,21 +39,8 @@ interface Props {
    * labels, each centered under its bar, in place of one per bar.
    */
   axisLabels?: { index: number; text: string }[];
-  /**
-   * Dashed lines over a run of bars, each at its own height: an average for
-   * just those months, like "before" and "now" for lifestyle creep. The label
-   * sits above the line, at its start (or its end, for `end`).
-   */
-  levels?: Level[];
-}
-
-export interface Level {
-  from: number;
-  to: number;
-  value: number;
-  label: string;
-  color: string;
-  end?: boolean;
+  /** A dashed upright line just before this bar, labeled at the top, e.g. where spending started to climb. */
+  marker?: { index: number; label: string } | null;
 }
 
 /** Room on the right for the gridline labels. */
@@ -75,7 +64,7 @@ export function BarChart({
   average,
   color,
   axisLabels,
-  levels,
+  marker,
 }: Props) {
   const c = useColors();
   const fill = color ?? c.bar;
@@ -84,7 +73,7 @@ export function BarChart({
   const clipId = `bars${useId().replace(/[^a-zA-Z0-9]/g, '')}`;
 
   const tops = bars.map((b) => Math.max(0, b.value, b.total ?? 0));
-  const ticks = gridlines(Math.max(...tops, average ?? 0, ...(levels ?? []).map((l) => l.value), 0));
+  const ticks = gridlines(Math.max(...tops, average ?? 0, 0));
   const ceiling = ticks[ticks.length - 1];
   const plotW = Math.max(0, width - AXIS);
   const plotH = height - TOP;
@@ -131,7 +120,7 @@ export function BarChart({
               const total = Math.max(0, b.total ?? 0);
               // Each bar is clipped to its rounded outline, so the parts are plain rectangles.
               return (
-                <G key={i} clipPath={`url(#${clipId}-${i})`} opacity={selected != null && selected !== i ? 0.3 : 1}>
+                <G key={i} clipPath={`url(#${clipId}-${i})`} opacity={selected != null && selected !== i ? 0.3 : b.faded ? 0.35 : 1}>
                   {total === 0 ? (
                     <Rect x={x} y={0} width={slot} height={base} fill={fill} />
                   ) : (
@@ -146,41 +135,32 @@ export function BarChart({
                 </G>
               );
             })}
-            {levels?.map((l) => (
+            {marker ? (
               <Line
-                key={l.label}
-                x1={l.from * slot + 1}
-                x2={(l.to + 1) * slot - 1}
-                y1={y(l.value)}
-                y2={y(l.value)}
-                stroke={l.color}
-                strokeWidth={2}
-                strokeDasharray="5 3"
-                strokeLinecap="round"
+                x1={marker.index * slot}
+                x2={marker.index * slot}
+                y1={2}
+                y2={TOP + plotH}
+                stroke={c.secondary}
+                strokeWidth={1}
+                strokeDasharray="3 3"
               />
-            ))}
+            ) : null}
             {avgY != null ? (
               <Line x1={0} x2={plotW} y1={avgY} y2={avgY} stroke={c.secondary} strokeWidth={1} strokeDasharray="4 3" />
             ) : null}
           </Svg>
         ) : null}
-        {width > 0
-          ? levels?.map((l) => (
-              <Text
-                key={l.label}
-                variant="caption"
-                weight="700"
-                numberOfLines={1}
-                align={l.end ? 'right' : 'left'}
-                style={[
-                  styles.level,
-                  { top: y(l.value) - 18, color: l.color, backgroundColor: c.card },
-                  l.end ? { right: AXIS + plotW - (l.to + 1) * slot } : { left: l.from * slot },
-                ]}>
-                {l.label}
-              </Text>
-            ))
-          : null}
+        {marker && width > 0 ? (
+          <Text
+            variant="caption"
+            weight="600"
+            color="secondary"
+            numberOfLines={1}
+            style={[styles.marker, marker.index * slot > plotW * 0.6 ? { right: AXIS + plotW - marker.index * slot + 4 } : { left: marker.index * slot + 4 }]}>
+            {marker.label}
+          </Text>
+        ) : null}
         {avgY != null && width > 0 ? (
           <Text variant="caption" weight="600" color="secondary" style={[styles.tick, { top: avgY - 7, left: plotW + 6 }]}>
             avg
@@ -279,11 +259,9 @@ const styles = StyleSheet.create({
   hit: {
     flex: 1,
   },
-  level: {
+  marker: {
     position: 'absolute',
-    paddingHorizontal: 3,
-    borderRadius: 4,
-    overflow: 'hidden',
+    top: -4,
   },
   tick: {
     position: 'absolute',

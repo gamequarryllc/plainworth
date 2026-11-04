@@ -771,9 +771,9 @@ function monthSpan(from: Month, to: Month): string {
 
 /**
  * Lifestyle creep in plain dollars: every month's spending as a bar, with
- * what an average month cost back then next to what it costs now. A raise
- * that lifted spending from $1,800 to $3,200 a month reads at a glance, and
- * income, when it's entered, says whether you're keeping more or less.
+ * the steady months before the climb faded and the month it started marked,
+ * so "about $1,800 a month, then a raise, then up and up" reads at a glance.
+ * Income, when it's entered, says whether you're keeping more or less.
  */
 function CreepCard({ all }: { all: CreepMonth[] }) {
   const c = useColors();
@@ -781,10 +781,11 @@ function CreepCard({ all }: { all: CreepMonth[] }) {
   const money = lock.money;
   const whole = (cents: number) => money(cents, { whole: true });
   const hidden = useStore((s) => s.settings.hideAmounts);
+  const today = useToday();
   const [range, setRange] = useState<CreepRange | null>(null);
   const [at, setAt] = useState<number | null>(null);
 
-  // A range shows once there's more history than the one before it, and enough in it to compare.
+  // A range shows once there's more history than the one before it, and enough in it to tell.
   const options = CREEP_RANGES.filter((r, i) => {
     if (i > 0 && all.length <= Number(CREEP_RANGES[i - 1].value)) return false;
     if (r.value === 'all') return all.length > 60;
@@ -796,27 +797,27 @@ function CreepCard({ all }: { all: CreepMonth[] }) {
   const months = picked && picked.value !== 'all' ? all.slice(-Number(picked.value)) : all;
   const creep = lifestyleCreep(months);
   if (!creep) return null;
-  const { before, now } = creep;
-  const then = monthSpan(before.from, before.to);
-  const lately = monthSpan(now.from, now.to);
+  const { before, lately, direction, start } = creep;
+  const thisYear = parseDateKey(today).y;
+  const when = (m: Month) => (m.year === thisYear ? MONTHS[m.month - 1] : `${MONTHS[m.month - 1]} ${m.year}`);
 
-  const diff = now.spent - before.spent;
+  const diff = lately.spent - before.spent;
   let sentence =
-    Math.abs(diff) < before.spent * 0.05
-      ? `You spend about ${whole(now.spent)} a month now, about the same as the ${whole(before.spent)} you spent in ${then}.`
-      : `You spent about ${whole(before.spent)} a month in ${then}. Now it’s ${whole(now.spent)}, ${diff > 0 ? 'up' : 'down'} ${whole(Math.abs(diff))}.`;
-  if (before.earned != null && now.earned != null) {
-    const raise = now.earned - before.earned;
+    direction === 'steady' || start == null
+      ? `Your spending has held steady at about ${whole(lately.spent)} a month.`
+      : `Your spending started ${direction === 'up' ? 'climbing' : 'falling'} in ${when(months[start])}. It’s ${direction === 'up' ? 'up' : 'down'} ${whole(Math.abs(diff))} a month from before.`;
+  if (before.earned != null && lately.earned != null) {
+    const raise = lately.earned - before.earned;
     const kept = raise - diff;
     const keeping =
-      Math.abs(kept) < now.earned * 0.03
-        ? 'you’re keeping about the same each month'
-        : `you’re keeping ${whole(Math.abs(kept))} ${kept > 0 ? 'more' : 'less'}`;
-    sentence +=
-      Math.abs(raise) < before.earned * 0.03
-        ? ` Your income stayed about the same, so ${keeping}.`
-        : ` Your income ${raise > 0 ? 'rose' : 'fell'} ${whole(Math.abs(raise))} a month, so ${keeping}.`;
-    if (diff > 0 && kept < 0 && Math.abs(kept) >= now.earned * 0.03) sentence += ' That’s lifestyle creep.';
+      Math.abs(kept) < lately.earned * 0.03
+        ? 'you’re keeping about the same'
+        : `you’re keeping ${whole(Math.abs(kept))} ${kept > 0 ? 'more' : 'less'} a month`;
+    if (Math.abs(raise) >= before.earned * 0.03) {
+      sentence += ` Your income ${raise > 0 ? 'rose' : 'fell'} ${whole(Math.abs(raise))} a month, so ${keeping}.`;
+    } else if (direction !== 'steady') {
+      sentence += ` Your income stayed about the same, so ${keeping}.`;
+    }
   }
 
   const count = months.length;
@@ -825,18 +826,23 @@ function CreepCard({ all }: { all: CreepMonth[] }) {
     setRange(r);
     setAt(null);
   };
-  const bars = months.map((m) => ({
+  const bars = months.map((m, i) => ({
     value: m.spent ?? 0,
     label: MONTHS_SHORT[m.month - 1][0],
+    faded: start != null && i < start,
     accessibilityLabel: `${MONTHS[m.month - 1]} ${m.year}: ${m.spent == null ? 'nothing entered' : `spent ${money(m.spent, { whole: true })}`}`,
   }));
+  const stats = [
+    { label: `${start == null ? 'Earlier' : 'Before'} · ${monthSpan(before.from, before.to)}`, value: before.spent, color: undefined },
+    { label: `Lately · ${monthSpan(lately.from, lately.to)}`, value: lately.spent, color: c.bar },
+  ];
 
   return (
     <InsightCard
       label="Lifestyle Creep"
-      sentence={lock.text(sentence, 'See what an average month cost you back then next to what it costs now.')}
+      sentence={lock.text(sentence, 'See when your spending started to climb, and how much more a month it is now.')}
       {...lock.card}
-      note={`Each bar is what you spent that month, not counting investing. The dashed lines are an average month back then (${then}) and now (${lately}). Counts each month once it’s over.`}>
+      note="Each bar is what you spent that month, not counting investing. Lately is your last three months. Counts each month once it’s over.">
       {options.length > 1 ? (
         <View pointerEvents={lock.locked ? 'none' : 'auto'}>
           <Segmented options={options} value={picked.value} onChange={pick} style={styles.horizon} />
@@ -856,13 +862,10 @@ function CreepCard({ all }: { all: CreepMonth[] }) {
         />
       ) : (
         <View style={styles.creepStats}>
-          {[
-            { label: 'Before', span: then, value: before.spent, color: undefined },
-            { label: 'Now', span: lately, value: now.spent, color: c.warning },
-          ].map((x) => (
+          {stats.map((x) => (
             <View key={x.label} style={styles.creepStat}>
               <Text variant="footnote" color="secondary" numberOfLines={1}>
-                {`${x.label} · ${x.span}`}
+                {x.label}
               </Text>
               <Text variant="title3" weight="700" rounded tabular numberOfLines={1} style={x.color ? { color: x.color } : null}>
                 {whole(x.value)}
@@ -876,10 +879,7 @@ function CreepCard({ all }: { all: CreepMonth[] }) {
       )}
       <BarChart
         bars={bars}
-        levels={[
-          { from: before.start, to: before.end, value: before.spent, label: 'Before', color: c.secondary },
-          { from: now.start, to: now.end, value: now.spent, label: 'Now', color: c.warning, end: true },
-        ]}
+        marker={start != null ? { index: start, label: direction === 'up' ? 'Climb starts' : 'Drop starts' } : null}
         selected={at}
         onSelect={lock.locked ? undefined : setAt}
         formatTick={hidden || lock.locked ? undefined : (v) => money(v, { compact: true, whole: true })}

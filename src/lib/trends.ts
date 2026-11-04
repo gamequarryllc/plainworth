@@ -168,13 +168,11 @@ export interface CreepMonth extends Month {
   earned: Cents | null;
 }
 
-/** A run of entered months averaged together: where spending was, or is now. */
+/** A run of entered months averaged together: where spending was, or is lately. */
 export interface CreepWindow {
-  /** The first and last month in it, and where they sit in `Creep.months`. */
+  /** The first and last month in it. */
   from: Month;
   to: Month;
-  start: number;
-  end: number;
   /** Average spent a month. */
   spent: Cents;
   /** Average earned a month, or null when no income was entered in these months. */
@@ -184,12 +182,22 @@ export interface CreepWindow {
 export interface Creep {
   /** Every month in the range, oldest first, including empty ones so the chart keeps time. */
   months: CreepMonth[];
+  /**
+   * Where in `months` spending started to climb (or fall): the first month
+   * after the steady stretch. Null when spending has held about steady.
+   */
+  start: number | null;
+  direction: 'up' | 'down' | 'steady';
+  /** The steady stretch before the change, averaged. */
   before: CreepWindow;
-  now: CreepWindow;
+  /** The last three entered months, averaged. */
+  lately: CreepWindow;
 }
 
-/** How many entered months each side averages, at most. */
-const CREEP_WINDOW = 6;
+/** Entered months needed on each side of the change. */
+const CREEP_SIDE = 3;
+/** Less of a change than this (10%) counts as holding steady. */
+const CREEP_STEADY = 0.1;
 
 /**
  * Every month from the first one entered in Spending through the latest
@@ -208,29 +216,57 @@ export function creepMonths(data: SpendData, today: DateKey): CreepMonth[] {
   });
 }
 
+/** How far a straight line through these points misses them, squared and added up. */
+function lineMiss(points: [number, number][]): number {
+  const n = points.length;
+  const mx = points.reduce((s, p) => s + p[0], 0) / n;
+  const my = points.reduce((s, p) => s + p[1], 0) / n;
+  const sxx = points.reduce((s, p) => s + (p[0] - mx) ** 2, 0);
+  const slope = sxx ? points.reduce((s, p) => s + (p[0] - mx) * (p[1] - my), 0) / sxx : 0;
+  return points.reduce((s, p) => s + (p[1] - (my + slope * (p[0] - mx))) ** 2, 0);
+}
+
 /**
- * Lifestyle creep in dollars: what an average month cost at the start of
- * `months` against what it costs now. "Before" is the first six entered
- * months and "now" the last six (fewer when there are fewer than twelve, so
- * they never overlap). Null until there are four entered months.
+ * Lifestyle creep in dollars: finds where spending stopped holding steady
+ * and started to climb, like the months after a raise. It tries every place
+ * the change could start and keeps the one where "flat, then a straight
+ * line" fits the months best, so both a sudden jump and a steady climb are
+ * found where they begin. Null until there are six entered months.
  */
 export function lifestyleCreep(months: CreepMonth[]): Creep | null {
   const entered = months.flatMap((m, i) => (m.spent != null ? [i] : []));
-  const size = Math.min(CREEP_WINDOW, Math.floor(entered.length / 2));
-  if (size < 2) return null;
+  if (entered.length < CREEP_SIDE * 2) return null;
+  const value = (i: number) => months[i].spent ?? 0;
+
+  let split = CREEP_SIDE;
+  let best = Infinity;
+  for (let p = CREEP_SIDE; p <= entered.length - CREEP_SIDE; p++) {
+    const flat = entered.slice(0, p);
+    const mean = flat.reduce((s, i) => s + value(i), 0) / p;
+    const miss =
+      flat.reduce((s, i) => s + (value(i) - mean) ** 2, 0) +
+      lineMiss(entered.slice(p).map((i) => [i, value(i)] as [number, number]));
+    if (miss < best - 1e-6) {
+      best = miss;
+      split = p;
+    }
+  }
+
   const window = (indexes: number[]): CreepWindow => {
     const list = indexes.map((i) => months[i]);
     const earned = list.reduce((s, m) => s + (m.earned ?? 0), 0);
     return {
       from: { year: list[0].year, month: list[0].month },
       to: { year: list[list.length - 1].year, month: list[list.length - 1].month },
-      start: indexes[0],
-      end: indexes[indexes.length - 1],
       spent: Math.round(list.reduce((s, m) => s + (m.spent ?? 0), 0) / list.length),
       earned: earned > 0 ? Math.round(earned / list.length) : null,
     };
   };
-  return { months, before: window(entered.slice(0, size)), now: window(entered.slice(-size)) };
+  const before = window(entered.slice(0, split));
+  const lately = window(entered.slice(-CREEP_SIDE));
+  const change = before.spent > 0 ? lately.spent / before.spent - 1 : lately.spent > 0 ? 1 : 0;
+  const direction = Math.abs(change) < CREEP_STEADY ? 'steady' : change > 0 ? 'up' : 'down';
+  return { months, start: direction === 'steady' ? null : entered[split], direction, before, lately };
 }
 
 export type PeriodUnit = 'month' | 'quarter' | 'year';

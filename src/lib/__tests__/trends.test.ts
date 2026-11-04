@@ -110,33 +110,38 @@ test('trends: spending so far this year', () => {
 });
 
 
-test('trends: lifestyle creep compares an average month before and now, in dollars', () => {
+test('trends: lifestyle creep finds where spending started to climb', () => {
   const months = creepMonths(sp, '2026-04-15');
   // January 2025 through March 2026, empty months kept.
   assert.equal(months.length, 15);
   assert.deepEqual(months[0], { year: 2025, month: 1, spent: 1_200_00, earned: 2_000_00 });
   assert.equal(months[5].spent, null);
-
-  // Six entered months: the first three against the last three.
-  const c = lifestyleCreep(months)!;
-  assert.deepEqual(c.before, {
-    from: { year: 2025, month: 1 },
-    to: { year: 2025, month: 3 },
-    start: 0,
-    end: 2,
-    spent: 1_300_00,
-    earned: 2_000_00,
-  });
-  assert.equal(c.now.start, 12);
-  assert.equal(c.now.end, 14);
-  assert.equal(c.now.spent, 1_400_00);
-  assert.equal(c.now.earned, 2_200_00);
-
-  // A shorter range: only this year's months, too few to compare.
+  // Six entered months, spending about the same.
+  const flat = lifestyleCreep(months)!;
+  assert.equal(flat.direction, 'steady');
+  assert.equal(flat.start, null);
+  assert.equal(flat.before.spent, 1_300_00);
+  assert.equal(flat.lately.spent, 1_400_00);
+  assert.equal(flat.lately.earned, 2_200_00);
+  // Too few months.
   assert.equal(lifestyleCreep(months.slice(-3)), null);
-  // Too early: one month entered.
-  assert.equal(lifestyleCreep(creepMonths(sp, '2025-02-15')), null);
   assert.deepEqual(creepMonths({ spend: {}, spendCategories }, '2026-04-15'), []);
+
+  // Flat for six months, a raise, then a steady climb: found where the climb starts.
+  const at = (spent: number[]) => spent.map((v, i) => ({ year: 2026, month: i + 1, spent: v * 100, earned: (i < 6 ? 3_700 : 5_200) * 100 }));
+  const climb = lifestyleCreep(at([1820, 1910, 1780, 1850, 1800, 1870, 2150, 2380, 2560, 2790, 3010, 3240]))!;
+  assert.equal(climb.direction, 'up');
+  assert.equal(climb.start, 6);
+  assert.equal(climb.before.spent, 1_838_33);
+  assert.deepEqual(climb.lately.from, { year: 2026, month: 10 });
+  assert.equal(climb.lately.spent, 3_013_33);
+  assert.equal(climb.before.earned, 3_700_00);
+
+  // A sudden jump is found too.
+  const jump = lifestyleCreep(at([1800, 1800, 1800, 1800, 3000, 3000, 3000, 3000]))!;
+  assert.equal(jump.start, 4);
+  // And a fall.
+  assert.equal(lifestyleCreep(at([3000, 3000, 3000, 3000, 1800, 1800, 1800]))!.direction, 'down');
 });
 
 test('trends: what you own by category, period by period', () => {
