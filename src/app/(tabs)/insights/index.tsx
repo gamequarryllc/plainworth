@@ -10,8 +10,6 @@ import { InsightCard, RankRow } from '@/components/insight-card';
 import { PreviewFooter, useInsightsPreview } from '@/components/insights-preview';
 import { Row, Section } from '@/components/list';
 import { Screen } from '@/components/screen';
-import { MultiLineChart } from '@/components/multi-line-chart';
-import { RangePicker } from '@/components/range-picker';
 import { Segmented } from '@/components/segmented';
 import { StackedBars, useCategoryColors } from '@/components/stacked-bars';
 import { useTabButtons } from '@/components/tab-buttons';
@@ -19,10 +17,8 @@ import { Text } from '@/components/text';
 import { TrendChart, TrendKey, type TrendLabel } from '@/components/trend-chart';
 import { useMoney } from '@/hooks/use-money';
 import { useToday } from '@/hooks/use-today';
-import { bestLine, categoryLines, lineChange, lineValueAt } from '@/lib/category-lines';
 import { averageOf, categoryChange, chartableCategories, recentCategoryMonths } from '@/lib/category-trend';
-import { formatDate, keyFromDayNumber, MONTHS, MONTHS_SHORT, parseDateKey } from '@/lib/dates';
-import { rangeCaption } from '@/lib/networth';
+import { MONTHS, MONTHS_SHORT, parseDateKey } from '@/lib/dates';
 import { firstYear, spendingYear, type Month } from '@/lib/insights';
 import { formatPercent, MASK } from '@/lib/money';
 import { goalStatus, goalYear, makePlan, MAX_MONTHS, monthlyRate, monthsToReach, project, ratePercent } from '@/lib/outlook';
@@ -43,7 +39,7 @@ import {
   type PeriodUnit,
   type YearGoals,
 } from '@/lib/trends';
-import type { RangeKey, SpendCategory, SpendingGoal } from '@/lib/types';
+import type { SpendCategory, SpendingGoal } from '@/lib/types';
 import { useStore } from '@/store';
 import { openPaywall } from '@/store/pro';
 import { useColors } from '@/theme';
@@ -133,7 +129,6 @@ function NetWorth() {
     lastIndex(soFar) >= 0 && history.length >= 2 ? (
       <NetWorthYearCard key="year" year={year} soFar={soFar} lastYear={netWorthSoFar(history, year - 1)} />
     ) : null,
-    history.length >= 2 ? <NetWorthCategoriesCard key="category" /> : null,
     history.length >= 2 ? <DistributionCard key="mix" /> : null,
   ]);
 
@@ -155,144 +150,6 @@ function NetWorth() {
     );
   }
   return <>{cards}</>;
-}
-
-/** "over the past year", "this year", "since you started". */
-function rangePhrase(range: RangeKey): string {
-  if (range === 'YTD') return 'this year';
-  if (range === 'ALL') return 'since you started';
-  return `over the ${rangeCaption(range).toLowerCase()}`;
-}
-
-/**
- * Every category as its own line over the same stretch of time, like Stocks
- * comparing symbols, to see which is doing the work. Debts are drawn below
- * zero, so the lines add up to net worth and nothing is left out. Tap a
- * category to hide its line (a big mortgage can flatten the rest).
- */
-function NetWorthCategoriesCard() {
-  const lock = useLock();
-  const money = lock.money;
-  const colors = useCategoryColors();
-  const today = useToday();
-  const accounts = useStore((s) => s.accounts);
-  const snapshots = useStore((s) => s.snapshots);
-  const nwCategories = useStore((s) => s.nwCategories);
-  const hidden = useStore((s) => s.settings.hideAmounts);
-  const [range, setRange] = useState<RangeKey>('1Y');
-  const [off, setOff] = useState<Set<string>>(new Set());
-  const [at, setAt] = useState<number | null>(null);
-  const data = categoryLines({ accounts, snapshots, nwCategories }, range, today);
-  // Colors follow the order on the ALL range, so a category keeps its color when the range changes.
-  const order = categoryLines({ accounts, snapshots, nwCategories }, 'ALL', today);
-  if (!order || order.lines.length < 2) return null;
-  const colorOf = (id: string) => colors[Math.max(0, order.lines.findIndex((l) => l.category.id === id)) % colors.length];
-  const lines = data?.lines ?? [];
-  const shown = lines.filter((l) => !off.has(l.category.id));
-  const whole = (cents: number) => money(cents, { whole: true });
-
-  const since = data?.since != null ? formatDate(keyFromDayNumber(data.since)) : null;
-  const phrase = since ? `since ${since}` : rangePhrase(range);
-  const best = bestLine(lines);
-  let sentence = `None of your categories grew ${phrase}.`;
-  if (best) {
-    const ch = lineChange(best);
-    const pct = ch.ratio != null ? ` (${formatPercent(ch.ratio)})` : '';
-    sentence =
-      best.category.kind === 'liability'
-        ? `Paying down ${best.category.name} did the most for your net worth ${phrase}, ${whole(ch.delta)} less owed.`
-        : `${best.category.name} grew the most ${phrase}, up ${whole(ch.delta)}${pct}.`;
-  }
-  const toggle = (id: string) =>
-    setOff((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else if (lines.length - next.size > 1) next.add(id);
-      return next;
-    });
-  const hasDebt = lines.some((l) => l.category.kind === 'liability');
-
-  return (
-    <InsightCard
-      label="By Category"
-      sentence={lock.text(sentence, 'See how cash, investments and every other category have grown, side by side.')}
-      note={`${hasDebt ? 'Debts sit below zero, so the lines add up to your net worth. ' : ''}Changes include money you put in. Tap a category to hide its line.`}
-      {...lock.card}>
-      <RangePicker
-        value={range}
-        onChange={(r) => {
-          setRange(r);
-          setAt(null);
-        }}
-        style={styles.cardRanges}
-        locked={lock.locked}
-      />
-      {data && shown.length ? (
-        <MultiLineChart
-          lines={shown.map((l) => ({ key: l.category.id, points: l.points, color: colorOf(l.category.id) }))}
-          from={data.from}
-          to={data.to}
-          formatTick={hidden || lock.locked ? undefined : (v) => money(v, { compact: true, whole: true })}
-          onScrub={lock.locked ? undefined : setAt}
-        />
-      ) : null}
-      <View style={styles.mixList}>
-        <Text variant="footnote" weight="600" color="secondary">
-          {at != null
-            ? formatDate(keyFromDayNumber(at), { year: true })
-            : since
-              ? `Since ${since}`
-              : rangeCaption(range)}
-        </Text>
-        {lines.map((l) => {
-          const debt = l.category.kind === 'liability';
-          const isOff = off.has(l.category.id);
-          const ch = lineChange(l, at ?? undefined);
-          const value = at != null ? lineValueAt(l, at) : l.end;
-          const changeText = lock.locked
-            ? '••'
-            : ch.ratio == null
-              ? ch.delta === 0
-                ? '—'
-                : 'New'
-              : formatPercent(debt ? -ch.ratio : ch.ratio, { signed: true });
-          const Item = lock.locked ? View : Pressable;
-          return (
-            <Item
-              key={l.category.id}
-              {...(lock.locked
-                ? {}
-                : {
-                    onPress: () => toggle(l.category.id),
-                    accessibilityRole: 'button' as const,
-                    accessibilityState: { selected: !isOff },
-                    accessibilityHint: isOff ? 'Shows its line' : 'Hides its line',
-                  })}
-              style={[styles.mixRow, isOff && styles.off]}>
-              <View
-                style={[
-                  styles.mixDot,
-                  isOff ? { borderWidth: 1.5, borderColor: colorOf(l.category.id) } : { backgroundColor: colorOf(l.category.id) },
-                ]}
-              />
-              <Text numberOfLines={1} style={styles.mixName}>
-                {l.category.name}
-              </Text>
-              <Text
-                tabular
-                color={ch.ratio == null || ch.delta === 0 || lock.locked ? 'secondary' : ch.delta > 0 ? 'up' : 'down'}
-                style={styles.mixShare}>
-                {changeText}
-              </Text>
-              <Text tabular style={styles.mixValue}>
-                {whole(value)}
-              </Text>
-            </Item>
-          );
-        })}
-      </View>
-    </InsightCard>
-  );
 }
 
 const UNITS: { value: PeriodUnit; label: string }[] = [
@@ -1166,14 +1023,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 5,
     paddingVertical: 2,
-  },
-  cardRanges: {
-    marginHorizontal: 0,
-    marginTop: 0,
-    marginBottom: 12,
-  },
-  off: {
-    opacity: 0.45,
   },
   readout: {
     flexDirection: 'row',
