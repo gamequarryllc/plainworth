@@ -1,11 +1,12 @@
-import { useId, useState } from 'react';
-import { Pressable, StyleSheet, View, type LayoutChangeEvent } from 'react-native';
+import { useEffect, useId, useRef, useState } from 'react';
+import { StyleSheet, View, type GestureResponderEvent, type LayoutChangeEvent } from 'react-native';
 import Svg, { ClipPath, Defs, G, Line, Path, Rect } from 'react-native-svg';
 
 import { gridlines } from '@/lib/axis';
 import { haptics } from '@/lib/haptics';
 import { useColors } from '@/theme';
 
+import { useScrollLock } from './screen';
 import { Text } from './text';
 
 export interface Bar {
@@ -70,6 +71,7 @@ export function BarChart({
   const fill = color ?? c.bar;
   const [width, setWidth] = useState(0);
   const onLayout = (e: LayoutChangeEvent) => setWidth(e.nativeEvent.layout.width);
+  const touch = useBarScrub(bars.length, Math.max(0, width - AXIS), selected, onSelect);
   const clipId = `bars${useId().replace(/[^a-zA-Z0-9]/g, '')}`;
 
   const tops = bars.map((b) => Math.max(0, b.value, b.total ?? 0));
@@ -179,19 +181,18 @@ export function BarChart({
               </Text>
             ))
           : null}
-        <View style={[styles.hitRow, { width: plotW }]}>
+        <View style={[styles.hitRow, { width: plotW }]} {...(onSelect ? touch : null)}>
           {bars.map((b, i) =>
             onSelect ? (
-              <Pressable
+              <View
                 key={i}
                 style={styles.hit}
+                pointerEvents="none"
+                accessible
                 accessibilityRole="button"
                 accessibilityLabel={b.accessibilityLabel ?? b.label}
                 accessibilityState={{ selected: selected === i }}
-                onPress={() => {
-                  haptics.selection();
-                  onSelect(selected === i ? null : i);
-                }}
+                onAccessibilityTap={() => onSelect(selected === i ? null : i)}
               />
             ) : (
               <View key={i} style={styles.hit} accessible accessibilityLabel={b.accessibilityLabel ?? b.label} />
@@ -248,6 +249,105 @@ function barOpacity(i: number, selected: number | null, faded?: boolean): number
   if (selected === i) return 1;
   if (selected != null) return faded ? 0.15 : 0.3;
   return faded ? 0.35 : 1;
+}
+
+/** How far a finger moves sideways before the page stops scrolling, how long a hold does the same, and how far up or down cancels the hold. */
+const SIDEWAYS = 5;
+const HOLD_MS = 250;
+const UPDOWN = 8;
+
+/**
+ * Tap a bar to select it (tap it again to let go), or drag across the bars
+ * to move the selection, like the charts in Health. The last bar under the
+ * finger stays selected. Sideways drags keep the page still.
+ */
+function useBarScrub(
+  count: number,
+  plotW: number,
+  selected: number | null,
+  onSelect: ((index: number | null) => void) | undefined,
+) {
+  const lockScroll = useScrollLock();
+  const state = useRef({
+    x: 0,
+    y: 0,
+    locked: false,
+    moved: false,
+    current: null as number | null,
+    before: null as number | null,
+    timer: null as ReturnType<typeof setTimeout> | null,
+  });
+  const stopTimer = () => {
+    if (state.current.timer) clearTimeout(state.current.timer);
+    state.current.timer = null;
+  };
+  const lock = () => {
+    stopTimer();
+    if (state.current.locked) return;
+    state.current.locked = true;
+    lockScroll(true);
+  };
+  const unlock = () => {
+    stopTimer();
+    if (!state.current.locked) return;
+    state.current.locked = false;
+    lockScroll(false);
+  };
+  useEffect(() => unlock, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const at = (e: GestureResponderEvent) =>
+    Math.min(count - 1, Math.max(0, Math.floor((e.nativeEvent.locationX / Math.max(plotW, 1)) * count)));
+  const pick = (i: number) => {
+    if (i === state.current.current) return;
+    state.current.current = i;
+    haptics.selection();
+    onSelect?.(i);
+  };
+  return {
+    onStartShouldSetResponder: () => true,
+    onMoveShouldSetResponder: () => true,
+    onResponderTerminationRequest: () => !state.current.locked,
+    onResponderGrant: (e: GestureResponderEvent) => {
+      const s = state.current;
+      s.x = e.nativeEvent.pageX;
+      s.y = e.nativeEvent.pageY;
+      s.moved = false;
+      s.before = selected;
+      s.current = selected;
+      stopTimer();
+      s.timer = setTimeout(lock, HOLD_MS);
+      pick(at(e));
+    },
+    onResponderMove: (e: GestureResponderEvent) => {
+      const s = state.current;
+      if (!s.locked) {
+        const dx = Math.abs(e.nativeEvent.pageX - s.x);
+        const dy = Math.abs(e.nativeEvent.pageY - s.y);
+        if (dx > SIDEWAYS && dx >= dy) lock();
+        else if (dy > UPDOWN) stopTimer();
+      }
+      const i = at(e);
+      if (i !== s.current) s.moved = true;
+      pick(i);
+    },
+    onResponderRelease: () => {
+      const s = state.current;
+      unlock();
+      // A tap on the bar that was already selected lets it go.
+      if (!s.moved && s.current === s.before && s.current != null) {
+        haptics.selection();
+        onSelect?.(null);
+      }
+      s.current = null;
+    },
+    // The page took over to scroll: put back what was selected before the finger landed.
+    onResponderTerminate: () => {
+      const s = state.current;
+      unlock();
+      if (s.current !== s.before) onSelect?.(s.before);
+      s.current = null;
+    },
+  };
 }
 
 /** A bar standing on `base`, `h` tall, rounded at the top only. */

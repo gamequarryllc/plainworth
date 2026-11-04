@@ -1,27 +1,54 @@
-import { router } from 'expo-router';
-import { useState, type ReactElement } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { router } from "expo-router";
+import { useState, type ReactElement } from "react";
+import { Pressable, StyleSheet, View } from "react-native";
 
-import { BarChart } from '@/components/bar-chart';
-import { CategoryPills, categoryBars, categorySentence, useGroupColor, yearLabels } from '@/components/category-trend';
-import { EmptyState } from '@/components/empty-state';
-import { Icon } from '@/components/icon';
-import { InsightCard, RankRow } from '@/components/insight-card';
-import { PreviewFooter, useInsightsPreview } from '@/components/insights-preview';
-import { Row, Section } from '@/components/list';
-import { Screen } from '@/components/screen';
-import { Segmented } from '@/components/segmented';
-import { StackedBars, useCategoryColors } from '@/components/stacked-bars';
-import { useTabButtons } from '@/components/tab-buttons';
-import { Text } from '@/components/text';
-import { TrendChart, TrendKey, type TrendLabel } from '@/components/trend-chart';
-import { useMoney } from '@/hooks/use-money';
-import { useToday } from '@/hooks/use-today';
-import { averageOf, categoryChange, chartableCategories, recentCategoryMonths } from '@/lib/category-trend';
-import { MONTHS, MONTHS_SHORT, parseDateKey } from '@/lib/dates';
-import { firstYear, spendingYear, type Month } from '@/lib/insights';
-import { formatPercent, MASK } from '@/lib/money';
-import { goalStatus, goalYear, makePlan, MAX_MONTHS, monthlyRate, monthsToReach, project, ratePercent } from '@/lib/outlook';
+import { BarChart } from "@/components/bar-chart";
+import {
+  CategoryPills,
+  categoryBars,
+  categorySentence,
+  useGroupColor,
+  yearLabels,
+} from "@/components/category-trend";
+import { EmptyState } from "@/components/empty-state";
+import { Icon } from "@/components/icon";
+import { InsightCard, RankRow } from "@/components/insight-card";
+import {
+  PreviewFooter,
+  useInsightsPreview,
+} from "@/components/insights-preview";
+import { Row, Section } from "@/components/list";
+import { Screen } from "@/components/screen";
+import { Segmented } from "@/components/segmented";
+import { StackedBars, useCategoryColors } from "@/components/stacked-bars";
+import { useTabButtons } from "@/components/tab-buttons";
+import { Text } from "@/components/text";
+import {
+  TrendChart,
+  TrendKey,
+  type TrendLabel,
+} from "@/components/trend-chart";
+import { useMoney } from "@/hooks/use-money";
+import { useToday } from "@/hooks/use-today";
+import {
+  averageOf,
+  categoryChange,
+  chartableCategories,
+  recentCategoryMonths,
+} from "@/lib/category-trend";
+import { MONTHS, MONTHS_SHORT, parseDateKey } from "@/lib/dates";
+import { firstYear, spendingYear, type Month } from "@/lib/insights";
+import { formatPercent, MASK } from "@/lib/money";
+import {
+  goalStatus,
+  goalYear,
+  makePlan,
+  MAX_MONTHS,
+  monthlyRate,
+  monthsToReach,
+  project,
+  ratePercent,
+} from "@/lib/outlook";
 import {
   compareYears,
   creepMonths,
@@ -39,16 +66,16 @@ import {
   type NetWorthMonth,
   type PeriodUnit,
   type YearGoals,
-} from '@/lib/trends';
-import type { SpendCategory, SpendingGoal } from '@/lib/types';
-import { useStore } from '@/store';
-import { openPaywall } from '@/store/pro';
-import { useColors } from '@/theme';
+} from "@/lib/trends";
+import type { SpendCategory, SpendingGoal } from "@/lib/types";
+import { useStore } from "@/store";
+import { openPaywall } from "@/store/pro";
+import { useColors } from "@/theme";
 
-type Part = 'networth' | 'spending';
+type Part = "networth" | "spending";
 const PARTS: { value: Part; label: string }[] = [
-  { value: 'networth', label: 'Net Worth' },
-  { value: 'spending', label: 'Spending' },
+  { value: "networth", label: "Net Worth" },
+  { value: "spending", label: "Spending" },
 ];
 
 /**
@@ -62,7 +89,7 @@ export default function InsightsScreen() {
   const tabButtons = useTabButtons();
   const snapshots = useStore((s) => s.snapshots);
   const spend = useStore((s) => s.spend);
-  const [part, setPart] = useState<Part>('networth');
+  const [part, setPart] = useState<Part>("networth");
 
   if (firstYear({ snapshots, spend }) == null) {
     return (
@@ -79,8 +106,13 @@ export default function InsightsScreen() {
 
   return (
     <Screen title="Insights" large left={tabButtons}>
-      <Segmented options={PARTS} value={part} onChange={setPart} style={styles.parts} />
-      {part === 'networth' ? <NetWorth /> : <Spending />}
+      <Segmented
+        options={PARTS}
+        value={part}
+        onChange={setPart}
+        style={styles.parts}
+      />
+      {part === "networth" ? <NetWorth /> : <Spending />}
       <PreviewFooter />
     </Screen>
   );
@@ -101,14 +133,20 @@ function useLock() {
   return {
     locked,
     money: (locked ? () => MASK : money) as typeof money,
-    card: locked ? { locked: true, onPress: () => openPaywall('insights') } : {},
+    card: locked
+      ? { locked: true, onPress: () => openPaywall("insights") }
+      : {},
     text: (answer: string, teaser: string) => (locked ? teaser : answer),
   };
 }
 
 const shortMonth = (m: Month) => `${MONTHS_SHORT[m.month - 1]} ${m.year}`;
-const lastIndex = (values: (number | null)[]) => values.reduce<number>((last, v, i) => (v != null ? i : last), -1);
-const MONTH_LABELS: TrendLabel[] = MONTHS_SHORT.map((m, i) => ({ index: i, text: m[0] }));
+const lastIndex = (values: (number | null)[]) =>
+  values.reduce<number>((last, v, i) => (v != null ? i : last), -1);
+const MONTH_LABELS: TrendLabel[] = MONTHS_SHORT.map((m, i) => ({
+  index: i,
+  text: m[0],
+}));
 const wholePercent = (r: number) => `${Math.round(r * 100)}%`;
 
 function NetWorth() {
@@ -125,10 +163,20 @@ function NetWorth() {
   const soFar = netWorthSoFar(history, year);
   const cards = useCards([
     history.length && (pace || monthly != null) ? (
-      <HeadedCard key="headed" history={history} pace={pace?.perMonth ?? null} counted={pace?.months ?? 0} />
+      <HeadedCard
+        key="headed"
+        history={history}
+        pace={pace?.perMonth ?? null}
+        counted={pace?.months ?? 0}
+      />
     ) : null,
     lastIndex(soFar) >= 0 && history.length >= 2 ? (
-      <NetWorthYearCard key="year" year={year} soFar={soFar} lastYear={netWorthSoFar(history, year - 1)} />
+      <NetWorthYearCard
+        key="year"
+        year={year}
+        soFar={soFar}
+        lastYear={netWorthSoFar(history, year - 1)}
+      />
     ) : null,
     history.length >= 2 ? <DistributionCard key="mix" /> : null,
   ]);
@@ -137,7 +185,12 @@ function NetWorth() {
     return (
       <Section footer="No balances entered yet.">
         {accounts.length === 0 ? (
-          <Row title="Add an Account" titleColor="tint" chevron={false} onPress={() => router.push('/account-form')} />
+          <Row
+            title="Add an Account"
+            titleColor="tint"
+            chevron={false}
+            onPress={() => router.push("/account-form")}
+          />
         ) : null}
       </Section>
     );
@@ -154,19 +207,23 @@ function NetWorth() {
 }
 
 const UNITS: { value: PeriodUnit; label: string }[] = [
-  { value: 'month', label: 'Monthly' },
-  { value: 'quarter', label: 'Quarterly' },
-  { value: 'year', label: 'Yearly' },
+  { value: "month", label: "Monthly" },
+  { value: "quarter", label: "Quarterly" },
+  { value: "year", label: "Yearly" },
 ];
 
 const periodLabel = (p: Month & { unit: PeriodUnit }) =>
-  p.unit === 'month'
+  p.unit === "month"
     ? MONTHS_SHORT[p.month - 1]
-    : p.unit === 'quarter'
+    : p.unit === "quarter"
       ? `Q${p.month / 3} ’${String(p.year).slice(2)}`
       : String(p.year);
 const periodName = (p: Month & { unit: PeriodUnit }) =>
-  p.unit === 'month' ? `${MONTHS[p.month - 1]} ${p.year}` : p.unit === 'quarter' ? `Q${p.month / 3} ${p.year}` : String(p.year);
+  p.unit === "month"
+    ? `${MONTHS[p.month - 1]} ${p.year}`
+    : p.unit === "quarter"
+      ? `Q${p.month / 3} ${p.year}`
+      : String(p.year);
 
 /** What your assets are made of, period by period, as stacked columns. Tap one for its breakdown. */
 function DistributionCard() {
@@ -177,32 +234,37 @@ function DistributionCard() {
   const accounts = useStore((s) => s.accounts);
   const snapshots = useStore((s) => s.snapshots);
   const nwCategories = useStore((s) => s.nwCategories);
-  const [unit, setUnit] = useState<PeriodUnit>('month');
+  const [unit, setUnit] = useState<PeriodUnit>("month");
   const [picked, setPicked] = useState<number | null>(null);
   const d = distribution({ accounts, snapshots, nwCategories }, today, unit);
   if (d.periods.length === 0 || d.categories.length === 0) return null;
   const last = d.periods.length - 1;
   const at = picked != null && picked <= last ? picked : last;
   const totalAt = (i: number) => d.values[i].reduce((s, v) => s + v, 0);
-  const shareAt = (i: number, k: number) => (totalAt(i) > 0 ? d.values[i][k] / totalAt(i) : 0);
+  const shareAt = (i: number, k: number) =>
+    totalAt(i) > 0 ? d.values[i][k] / totalAt(i) : 0;
   const top = d.categories[0];
 
-  let sentence = `${top.name} ${d.categories.length > 1 ? `makes up ${formatPercent(shareAt(last, 0))} of` : 'is all of'} what you own.`;
+  let sentence = `${top.name} ${d.categories.length > 1 ? `makes up ${formatPercent(shareAt(last, 0))} of` : "is all of"} what you own.`;
   if (last > 0 && d.categories.length > 1) {
     const then = shareAt(0, 0);
     const now = shareAt(last, 0);
     const since = periodName(d.periods[0]);
     if (Math.abs(now - then) >= 0.02) {
-      sentence = `${top.name} makes up ${formatPercent(now)} of what you own, ${now > then ? 'up' : 'down'} from ${formatPercent(then)} in ${since}.`;
+      sentence = `${top.name} makes up ${formatPercent(now)} of what you own, ${now > then ? "up" : "down"} from ${formatPercent(then)} in ${since}.`;
     }
   }
 
   return (
     <InsightCard
       label="Distribution Over Time"
-      sentence={lock.text(sentence, 'See how what you own is split across cash, investments and more, and how that mix has shifted.')}
+      sentence={lock.text(
+        sentence,
+        "See how what you own is split across cash, investments and more, and how that mix has shifted.",
+      )}
       note="What you own, by category. Debts aren’t included."
-      {...lock.card}>
+      {...lock.card}
+    >
       <Segmented
         options={UNITS}
         value={unit}
@@ -221,17 +283,22 @@ function DistributionCard() {
       />
       <View style={styles.mixList}>
         <Text variant="footnote" weight="600" color="secondary">
-          {`${periodName(d.periods[at])}${at === last ? ' (so far)' : ''}`}
+          {`${periodName(d.periods[at])}${at === last ? " (so far)" : ""}`}
         </Text>
         {d.categories.map((cat, k) =>
           d.values[at][k] > 0 ? (
             <View key={cat.id} style={styles.mixRow}>
-              <View style={[styles.mixDot, { backgroundColor: colors[k % colors.length] }]} />
+              <View
+                style={[
+                  styles.mixDot,
+                  { backgroundColor: colors[k % colors.length] },
+                ]}
+              />
               <Text numberOfLines={1} style={styles.mixName}>
                 {cat.name}
               </Text>
               <Text tabular color="secondary" style={styles.mixShare}>
-                {lock.locked ? '••' : formatPercent(shareAt(at, k))}
+                {lock.locked ? "••" : formatPercent(shareAt(at, k))}
               </Text>
               <Text tabular style={styles.mixValue}>
                 {money(d.values[at][k], { whole: true })}
@@ -244,23 +311,27 @@ function DistributionCard() {
   );
 }
 
-type Horizon = '12' | '60' | '120' | '240' | '360' | 'goal';
+type Horizon = "12" | "60" | "120" | "240" | "360" | "goal";
 const HORIZONS: { value: Horizon; label: string }[] = [
-  { value: '12', label: '1Y' },
-  { value: '60', label: '5Y' },
-  { value: '120', label: '10Y' },
-  { value: '240', label: '20Y' },
-  { value: '360', label: '30Y' },
+  { value: "12", label: "1Y" },
+  { value: "60", label: "5Y" },
+  { value: "120", label: "10Y" },
+  { value: "240", label: "20Y" },
+  { value: "360", label: "30Y" },
 ];
 /** With a goal, the last choice shows the way to it. */
-const WITH_GOAL: { value: Horizon; label: string }[] = [...HORIZONS.slice(0, 4), { value: 'goal', label: 'Goal' }];
+const WITH_GOAL: { value: Horizon; label: string }[] = [
+  ...HORIZONS.slice(0, 4),
+  { value: "goal", label: "Goal" },
+];
 
-const inYears = (months: number) => (months <= 12 ? 'in a year' : `in ${Math.round(months / 12)} years`);
+const inYears = (months: number) =>
+  months <= 12 ? "in a year" : `in ${Math.round(months / 12)} years`;
 /** "in 8 months", "in about 21 years". */
 function fromNow(months: number): string {
-  if (months < 12) return `in ${months} ${months === 1 ? 'month' : 'months'}`;
+  if (months < 12) return `in ${months} ${months === 1 ? "month" : "months"}`;
   const years = Math.round(months / 12);
-  return `in about ${years} ${years === 1 ? 'year' : 'years'}`;
+  return `in about ${years} ${years === 1 ? "year" : "years"}`;
 }
 /** Nearest $10, for amounts that are estimates anyway. */
 const roughly = (cents: number) => Math.round(cents / 1000) * 1000;
@@ -270,31 +341,58 @@ const roughly = (cents: number) => Math.round(cents / 1000) * 1000;
  * money: what you add each month plus growth on what you have. With a goal,
  * its line runs to the goal's date and a bar shows how far along you are.
  */
-function HeadedCard({ history, pace, counted }: { history: NetWorthMonth[]; pace: number | null; counted: number }) {
+function HeadedCard({
+  history,
+  pace,
+  counted,
+}: {
+  history: NetWorthMonth[];
+  pace: number | null;
+  counted: number;
+}) {
   const c = useColors();
   const lock = useLock();
   const money = lock.money;
   const whole = (cents: number) => money(cents, { whole: true });
   /** "$1.7M" for goals of a million or more, "$250,000" below. */
-  const short = (cents: number) => money(cents, { whole: true, compact: Math.abs(cents) >= 1_000_000_00 });
+  const short = (cents: number) =>
+    money(cents, { whole: true, compact: Math.abs(cents) >= 1_000_000_00 });
   const outlook = useStore((s) => s.settings.outlook);
   const goal = useStore((s) => s.settings.goal);
   const birthYear = useStore((s) => s.settings.birthYear);
-  const [horizon, setHorizon] = useState<Horizon>(goal ? 'goal' : '60');
+  const [horizon, setHorizon] = useState<Horizon>(goal ? "goal" : "60");
   const [at, setAt] = useState<number | null>(null);
 
   const now = history[history.length - 1];
   const current = now.end;
   const plan = makePlan(current, pace, outlook);
   if (!plan) return null;
-  const status = goal ? goalStatus(goal, birthYear, current, plan, monthlyRate(outlook.growth), now.year, now.month) : null;
+  const status = goal
+    ? goalStatus(
+        goal,
+        birthYear,
+        current,
+        plan,
+        monthlyRate(outlook.growth),
+        now.year,
+        now.month,
+      )
+    : null;
   const dueYear = goal ? goalYear(goal, birthYear) : null;
   const late = dueYear != null && dueYear < now.year;
   const options = status ? WITH_GOAL : HORIZONS;
-  const picked = options.some((o) => o.value === horizon) ? horizon : status ? 'goal' : '60';
-  const reach = status?.reachIn != null && status.reachIn > 0 ? status.reachIn : null;
+  const picked = options.some((o) => o.value === horizon)
+    ? horizon
+    : status
+      ? "goal"
+      : "60";
+  const reach =
+    status?.reachIn != null && status.reachIn > 0 ? status.reachIn : null;
   const span = status ? Math.max(status.due ?? 0, reach ?? 0) || 360 : 0;
-  const ahead = picked === 'goal' ? Math.min(MAX_MONTHS, Math.max(12, Math.ceil((span + 6) / 12) * 12)) : Number(picked);
+  const ahead =
+    picked === "goal"
+      ? Math.min(MAX_MONTHS, Math.max(12, Math.ceil((span + 6) / 12) * 12))
+      : Number(picked);
 
   const path = project(current, plan, ahead);
   const projected = path[ahead];
@@ -307,18 +405,25 @@ function HeadedCard({ history, pace, counted }: { history: NetWorthMonth[]; pace
   const nowIndex = shown.length - 1;
   const count = nowIndex + ahead + 1;
   const actual = [...shown.map((m) => m.end), ...Array(ahead).fill(null)];
-  const forecast = Array.from({ length: count }, (_, i) => (i < nowIndex ? null : path[i - nowIndex]));
+  const forecast = Array.from({ length: count }, (_, i) =>
+    i < nowIndex ? null : path[i - nowIndex],
+  );
   // A goal far beyond the chart would squash it, so its line shows once it's in view.
-  const showGoal = !!status && !late && (picked === 'goal' || Math.max(...path) >= status.target * 0.6);
+  const showGoal =
+    !!status &&
+    !late &&
+    (picked === "goal" || Math.max(...path) >= status.target * 0.6);
   const goalLine = showGoal
     ? Array.from({ length: count }, (_, i) =>
-        i < nowIndex || (status.due != null && i - nowIndex > status.due) ? null : status.target,
+        i < nowIndex || (status.due != null && i - nowIndex > status.due)
+          ? null
+          : status.target,
       )
     : null;
   const end = shift(now, ahead);
   const labels: TrendLabel[] = [
     ...(nowIndex > 0 ? [{ index: 0, text: shortMonth(shown[0]) }] : []),
-    { index: nowIndex, text: 'Today' },
+    { index: nowIndex, text: "Today" },
     { index: count - 1, text: shortMonth(end) },
   ];
   // The goal's mark: where it's due, or for a goal without a date, where you'd get there.
@@ -331,15 +436,20 @@ function HeadedCard({ history, pace, counted }: { history: NetWorthMonth[]; pace
         : null;
 
   const byWhen =
-    goal?.age != null && birthYear != null ? `by age ${goal.age}` : status?.dueYear != null ? `by ${status.dueYear}` : '';
-  const ageThen = (year: number) => (birthYear != null ? `, at ${year - birthYear}` : '');
+    goal?.age != null && birthYear != null
+      ? `by age ${goal.age}`
+      : status?.dueYear != null
+        ? `by ${status.dueYear}`
+        : "";
+  const ageThen = (year: number) =>
+    birthYear != null ? `, at ${year - birthYear}` : "";
   const adds = plan.monthly > 0 ? whole(roughly(plan.monthly)) : null;
 
   let sentence: string;
   if (status) {
     const target = short(status.target);
     const reached = reach != null ? shift(now, reach).year : null;
-    const needed = status.needed != null ? whole(roughly(status.needed)) : '';
+    const needed = status.needed != null ? whole(roughly(status.needed)) : "";
     if (status.progress >= 1) {
       sentence = `You’ve reached your ${target} goal. Time to set a bigger one?`;
     } else if (late) {
@@ -349,7 +459,7 @@ function HeadedCard({ history, pace, counted }: { history: NetWorthMonth[]; pace
     } else if (status.due != null) {
       sentence =
         `${reached != null ? `At your pace you’d reach ${target} around ${reached}${ageThen(reached)}.` : `At your pace you wouldn’t reach ${target} within 50 years.`}` +
-        ` To make it ${byWhen}, you’d need to add about ${needed} a month${adds ? ` instead of ${adds}` : ''}.`;
+        ` To make it ${byWhen}, you’d need to add about ${needed} a month${adds ? ` instead of ${adds}` : ""}.`;
     } else {
       sentence =
         reached != null
@@ -359,16 +469,19 @@ function HeadedCard({ history, pace, counted }: { history: NetWorthMonth[]; pace
   } else {
     const lead =
       pace == null
-        ? ''
+        ? ""
         : pace > 0
           ? `Your net worth grows about ${whole(pace)} a month. `
           : pace < 0
             ? `Your net worth has fallen about ${whole(-pace)} a month lately. `
-            : 'Your net worth has held steady lately. ';
-    const keepsUp = plan.source === 'yours' ? `Adding ${whole(plan.monthly)} a month` : 'If that keeps up';
+            : "Your net worth has held steady lately. ";
+    const keepsUp =
+      plan.source === "yours"
+        ? `Adding ${whole(plan.monthly)} a month`
+        : "If that keeps up";
     if (away != null && away > 0 && away <= MAX_MONTHS) {
       const d = shift(now, away);
-      sentence = `${lead}${keepsUp}, you’d ${milestone === 0 ? 'be back above zero' : `pass ${whole(milestone)}`} around ${MONTHS[d.month - 1]} ${d.year}.`;
+      sentence = `${lead}${keepsUp}, you’d ${milestone === 0 ? "be back above zero" : `pass ${whole(milestone)}`} around ${MONTHS[d.month - 1]} ${d.year}.`;
     } else {
       sentence = `${lead}${keepsUp}, you’d have about ${whole(projected)} ${inYears(ahead)}, in today’s money.`;
     }
@@ -376,24 +489,32 @@ function HeadedCard({ history, pace, counted }: { history: NetWorthMonth[]; pace
 
   const growth = `${ratePercent(outlook.growth)} yearly growth on top of inflation`;
   const assumes =
-    plan.source === 'falling'
+    plan.source === "falling"
       ? `Assumes it keeps falling as it has over the last ${counted} months.`
-      : plan.source === 'yours'
+      : plan.source === "yours"
         ? `Assumes you add ${whole(plan.monthly)} a month, with ${growth}.`
         : adds
           ? `Assumes you keep adding about ${adds} a month (your pace less what your money earned), with ${growth}.`
           : `Assumes ${growth}.`;
-  const note = `In today’s money, with prices rising ${ratePercent(outlook.inflation)} a year. ${assumes}${pace != null ? ` Your pace is your average monthly change over the last ${counted} months.` : ''} A direction, not a promise.`;
+  const note = `In today’s money, with prices rising ${ratePercent(outlook.inflation)} a year. ${assumes}${pace != null ? ` Your pace is your average monthly change over the last ${counted} months.` : ""} A direction, not a promise.`;
 
-  const dueIndex = picked === 'goal' && status?.due != null && !late ? Math.min(status.due, ahead) : null;
-  const headline = at != null ? (actual[at] ?? forecast[at]!) : dueIndex != null ? path[dueIndex] : projected;
+  const dueIndex =
+    picked === "goal" && status?.due != null && !late
+      ? Math.min(status.due, ahead)
+      : null;
+  const headline =
+    at != null
+      ? (actual[at] ?? forecast[at]!)
+      : dueIndex != null
+        ? path[dueIndex]
+        : projected;
   const unit =
     at == null
       ? dueIndex != null
         ? `by the end of ${status!.dueYear}`
         : inYears(ahead)
       : at === nowIndex
-        ? 'today'
+        ? "today"
         : at < nowIndex
           ? `in ${shortMonth(shift(shown[0], at))}`
           : `by ${shortMonth(shift(shown[0], at))}`;
@@ -401,29 +522,58 @@ function HeadedCard({ history, pace, counted }: { history: NetWorthMonth[]; pace
   return (
     <InsightCard
       label="Where You’re Headed"
-      sentence={lock.text(sentence, 'See what your net worth could be in 1 to 30 years, in today’s money, and set a goal like $1M by 50.')}
+      sentence={lock.text(
+        sentence,
+        "See what your net worth could be in 1 to 30 years, in today’s money, and set a goal like $1M by 50.",
+      )}
       {...lock.card}
-      note={note}>
-      <Segmented options={options} value={picked} onChange={setHorizon} style={styles.horizon} />
+      note={note}
+    >
+      <Segmented
+        options={options}
+        value={picked}
+        onChange={setHorizon}
+        style={styles.horizon}
+      />
       <View style={styles.bigRow}>
         <Text variant="title2" weight="700" rounded tabular numberOfLines={1}>
           {whole(headline)}
         </Text>
-        <Text variant="subheadline" color="secondary" numberOfLines={1} style={styles.bigUnit}>
+        <Text
+          variant="subheadline"
+          color="secondary"
+          numberOfLines={1}
+          style={styles.bigUnit}
+        >
           {unit}
         </Text>
       </View>
-      <Text variant="footnote" color="secondary" style={[styles.todays, at != null && at <= nowIndex && styles.hidden]}>
+      <Text
+        variant="footnote"
+        color="secondary"
+        style={[styles.todays, at != null && at <= nowIndex && styles.hidden]}
+      >
         In today’s money
       </Text>
       <TrendKey
         items={[
-          { label: 'Your net worth', color: c.up },
-          { label: 'At your pace', color: c.up, dashed: true },
+          { label: "Your net worth", color: c.up },
+          { label: "At your pace", color: c.up, dashed: true },
           ...(showGoal
-            ? [{ label: lock.locked ? 'Goal' : `${short(status!.target)} goal`, color: c.warning, dashed: true }]
+            ? [
+                {
+                  label: lock.locked ? "Goal" : `${short(status!.target)} goal`,
+                  color: c.warning,
+                  dashed: true,
+                },
+              ]
             : !status && away != null && away <= ahead
-              ? [{ label: lock.locked ? 'Next milestone' : whole(milestone), color: c.warning }]
+              ? [
+                  {
+                    label: lock.locked ? "Next milestone" : whole(milestone),
+                    color: c.warning,
+                  },
+                ]
               : []),
         ]}
       />
@@ -431,7 +581,9 @@ function HeadedCard({ history, pace, counted }: { history: NetWorthMonth[]; pace
         count={count}
         height={130}
         series={[
-          ...(goalLine ? [{ values: goalLine, color: c.warning, dashed: true }] : []),
+          ...(goalLine
+            ? [{ values: goalLine, color: c.warning, dashed: true }]
+            : []),
           { values: actual, color: c.up, endDot: true },
           { values: forecast, color: c.up, dashed: true },
         ]}
@@ -443,19 +595,34 @@ function HeadedCard({ history, pace, counted }: { history: NetWorthMonth[]; pace
         <View style={styles.goal}>
           <View style={[styles.goalTrack, { backgroundColor: c.fill }]}>
             <View
-              style={[styles.goalFill, { width: `${Math.max(status.progress * 100, 1.5)}%`, backgroundColor: c.warning }]}
+              style={[
+                styles.goalFill,
+                {
+                  width: `${Math.max(status.progress * 100, 1.5)}%`,
+                  backgroundColor: c.warning,
+                },
+              ]}
             />
           </View>
           <View style={styles.goalRow}>
-            <Text variant="footnote" color="secondary" numberOfLines={1} style={styles.goalText}>
-              {`${lock.locked ? '••' : Math.floor(status.progress * 100)}% of the way to ${short(status.target)}${byWhen ? ` ${byWhen}` : ''}`}
+            <Text
+              variant="footnote"
+              color="secondary"
+              numberOfLines={1}
+              style={styles.goalText}
+            >
+              {`${lock.locked ? "••" : Math.floor(status.progress * 100)}% of the way to ${short(status.target)}${byWhen ? ` ${byWhen}` : ""}`}
             </Text>
-            <GoalLink title="Edit Goal" onPress={() => router.push('/goal')} />
+            <GoalLink title="Edit Goal" onPress={() => router.push("/goal")} />
           </View>
         </View>
       ) : (
         <View style={styles.goalRow}>
-          <GoalLink title={late ? 'Pick a New Date' : 'Set a Goal'} icon="flag" onPress={() => router.push('/goal')} />
+          <GoalLink
+            title={late ? "Pick a New Date" : "Set a Goal"}
+            icon="flag"
+            onPress={() => router.push("/goal")}
+          />
         </View>
       )}
     </InsightCard>
@@ -463,13 +630,23 @@ function HeadedCard({ history, pace, counted }: { history: NetWorthMonth[]; pace
 }
 
 /** A small text button inside a card. In the Pro preview it's only a label: the whole card opens Pro. */
-function GoalLink({ title, icon, onPress }: { title: string; icon?: 'flag'; onPress: () => void }) {
+function GoalLink({
+  title,
+  icon,
+  onPress,
+}: {
+  title: string;
+  icon?: "flag";
+  onPress: () => void;
+}) {
   const c = useColors();
   const locked = useInsightsPreview();
   if (locked) {
     return (
       <View style={styles.link}>
-        {icon ? <Icon name={icon} size={13} weight="semibold" color={c.tint} /> : null}
+        {icon ? (
+          <Icon name={icon} size={13} weight="semibold" color={c.tint} />
+        ) : null}
         <Text variant="subheadline" weight="600" color="tint">
           {title}
         </Text>
@@ -481,8 +658,11 @@ function GoalLink({ title, icon, onPress }: { title: string; icon?: 'flag'; onPr
       onPress={onPress}
       hitSlop={10}
       accessibilityRole="button"
-      style={({ pressed }) => [styles.link, pressed && { opacity: 0.5 }]}>
-      {icon ? <Icon name={icon} size={13} weight="semibold" color={c.tint} /> : null}
+      style={({ pressed }) => [styles.link, pressed && { opacity: 0.5 }]}
+    >
+      {icon ? (
+        <Icon name={icon} size={13} weight="semibold" color={c.tint} />
+      ) : null}
       <Text variant="subheadline" weight="600" color="tint">
         {title}
       </Text>
@@ -495,7 +675,15 @@ function GoalLink({ title, icon, onPress }: { title: string; icon?: 'flag'; onPr
  * who started partway through the year sees growth since their first
  * balances, against the same months last year.
  */
-function NetWorthYearCard({ year, soFar, lastYear }: { year: number; soFar: (number | null)[]; lastYear: (number | null)[] }) {
+function NetWorthYearCard({
+  year,
+  soFar,
+  lastYear,
+}: {
+  year: number;
+  soFar: (number | null)[];
+  lastYear: (number | null)[];
+}) {
   const c = useColors();
   const lock = useLock();
   const money = lock.money;
@@ -506,35 +694,54 @@ function NetWorthYearCard({ year, soFar, lastYear }: { year: number; soFar: (num
   const [at, setAt] = useState<number | null>(null);
   const signed = (cents: number) => money(cents, { signed: true, whole: true });
 
-  const since = from > 0 ? `since ${MONTHS[from]}` : 'this year';
-  let sentence = value >= 0 ? `Your net worth is up ${whole(value)} ${since}` : `Your net worth is down ${whole(-value)} ${since}`;
+  const since = from > 0 ? `since ${MONTHS[from]}` : "this year";
+  let sentence =
+    value >= 0
+      ? `Your net worth is up ${whole(value)} ${since}`
+      : `Your net worth is down ${whole(-value)} ${since}`;
   if (then != null) {
     const diff = value - then;
-    const ref = from > 0 ? 'over the same months last year' : 'at this point last year';
+    const ref =
+      from > 0 ? "over the same months last year" : "at this point last year";
     sentence +=
       Math.abs(diff) <= Math.max(Math.abs(then) * 0.03, 100)
         ? `, about the same as ${ref}.`
-        : `, ${whole(Math.abs(diff))} ${diff > 0 ? 'more' : 'less'} than ${ref}.`;
+        : `, ${whole(Math.abs(diff))} ${diff > 0 ? "more" : "less"} than ${ref}.`;
   } else {
-    sentence += '.';
+    sentence += ".";
   }
 
   return (
     <InsightCard
       label="This Year vs Last Year"
-      sentence={lock.text(sentence, `See whether your net worth is growing faster than it did in ${year - 1}.`)}
+      sentence={lock.text(
+        sentence,
+        `See whether your net worth is growing faster than it did in ${year - 1}.`,
+      )}
       note={
         from > 0
           ? `How much your net worth has grown since your first balances in ${MONTHS[from]}.`
-          : 'How much your net worth has grown since January 1.'
+          : "How much your net worth has grown since January 1."
       }
-      {...lock.card}>
+      {...lock.card}
+    >
       {at != null ? (
         <Readout
           title={MONTHS[at]}
           items={[
-            { label: String(year), value: soFar[at] != null ? signed(soFar[at]!) : '—', color: c.up },
-            ...(hasBefore ? [{ label: String(year - 1), value: before[at] != null ? signed(before[at]!) : '—' }] : []),
+            {
+              label: String(year),
+              value: soFar[at] != null ? signed(soFar[at]!) : "—",
+              color: c.up,
+            },
+            ...(hasBefore
+              ? [
+                  {
+                    label: String(year - 1),
+                    value: before[at] != null ? signed(before[at]!) : "—",
+                  },
+                ]
+              : []),
           ]}
         />
       ) : hasBefore ? (
@@ -573,17 +780,29 @@ function Spending() {
   const chartable = chartableCategories(data, today);
   const cards = useCards([
     lastIndex(soFar) >= 0 ? (
-      <SpentYearCard key="year" year={year} soFar={soFar} lastYear={spentSoFar(data, year - 1, today)} />
+      <SpentYearCard
+        key="year"
+        year={year}
+        soFar={soFar}
+        lastYear={spentSoFar(data, year - 1, today)}
+      />
     ) : null,
     lifestyleCreep(creepAll) ? <CreepCard key="creep" all={creepAll} /> : null,
-    chartable.length ? <CategoryCard key="category" categories={chartable} /> : null,
+    chartable.length ? (
+      <CategoryCard key="category" categories={chartable} />
+    ) : null,
     sp?.categories.length ? <WhereItWentCard key="where" year={year} /> : null,
   ]);
 
   if (!sp && !history.length) {
     return (
       <Section footer="Nothing entered in Spending yet.">
-        <Row title="Open Spending" titleColor="tint" chevron={false} onPress={() => router.navigate('/spending')} />
+        <Row
+          title="Open Spending"
+          titleColor="tint"
+          chevron={false}
+          onPress={() => router.navigate("/spending")}
+        />
       </Section>
     );
   }
@@ -603,12 +822,20 @@ function Spending() {
  * goals once you've set them: a spending limit adds up month by month on the
  * chart, and each goal gets a bar. Like Net Worth's goal, it's set from here.
  */
-function SpentYearCard({ year, soFar, lastYear }: { year: number; soFar: (number | null)[]; lastYear: (number | null)[] }) {
+function SpentYearCard({
+  year,
+  soFar,
+  lastYear,
+}: {
+  year: number;
+  soFar: (number | null)[];
+  lastYear: (number | null)[];
+}) {
   const c = useColors();
   const lock = useLock();
   const money = lock.money;
   const whole = (cents: number) => money(cents, { whole: true });
-  const pct = (r: number) => (lock.locked ? '••%' : wholePercent(r));
+  const pct = (r: number) => (lock.locked ? "••%" : wholePercent(r));
   const today = useToday();
   const spend = useStore((s) => s.spend);
   const spendCategories = useStore((s) => s.spendCategories);
@@ -618,7 +845,7 @@ function SpentYearCard({ year, soFar, lastYear }: { year: number; soFar: (number
   const value = soFar[last]!;
   const hasBefore = lastIndex(before) >= 0;
   const [at, setAt] = useState<number | null>(null);
-  const editGoals = () => router.push('/spending-goal');
+  const editGoals = () => router.push("/spending-goal");
 
   let sentence =
     from === 0
@@ -628,25 +855,38 @@ function SpentYearCard({ year, soFar, lastYear }: { year: number; soFar: (number
         : `You’ve spent ${whole(value)} from ${MONTHS[from]} through ${MONTHS[last]}`;
   if (then != null) {
     const diff = value - then;
-    const ref = from === 0 ? 'by then last year' : from === last ? `in ${MONTHS[last]} last year` : 'in the same months last year';
+    const ref =
+      from === 0
+        ? "by then last year"
+        : from === last
+          ? `in ${MONTHS[last]} last year`
+          : "in the same months last year";
     sentence +=
       Math.abs(diff) <= then * 0.03
         ? `, about the same as ${ref}.`
-        : `, ${whole(Math.abs(diff))} ${diff < 0 ? 'less' : 'more'} than ${ref}.`;
+        : `, ${whole(Math.abs(diff))} ${diff < 0 ? "less" : "more"} than ${ref}.`;
   } else {
-    sentence += '.';
+    sentence += ".";
   }
 
-  const g = goal ? yearGoals({ spend, spendCategories }, goal, year, today) : null;
+  const g = goal
+    ? yearGoals({ spend, spendCategories }, goal, year, today)
+    : null;
   const said = goal && g ? goalSentence(goal, g, whole) : null;
   if (said) sentence += ` ${said}`;
 
   const limit = goal?.limit;
-  const limitLine = limit != null ? Array.from({ length: 12 }, (_, i) => (i < from ? null : limit * (i - from + 1))) : null;
-  const bars: { key: string; progress: number; color: string; text: string }[] = [];
+  const limitLine =
+    limit != null
+      ? Array.from({ length: 12 }, (_, i) =>
+          i < from ? null : limit * (i - from + 1),
+        )
+      : null;
+  const bars: { key: string; progress: number; color: string; text: string }[] =
+    [];
   if (goal?.keep != null && g?.kept != null) {
     bars.push({
-      key: 'keep',
+      key: "keep",
       progress: g.kept / goal.keep,
       color: g.kept >= goal.keep ? c.up : c.warning,
       text: `Kept ${pct(g.kept)} of what you earned · ${pct(goal.keep)} goal`,
@@ -654,7 +894,7 @@ function SpentYearCard({ year, soFar, lastYear }: { year: number; soFar: (number
   }
   if (limit != null && g?.spent != null) {
     bars.push({
-      key: 'limit',
+      key: "limit",
       progress: g.spent / limit,
       color: g.spent > limit ? c.down : c.bar,
       text: `Average month: ${whole(g.spent)} of your ${whole(limit)} limit`,
@@ -663,23 +903,47 @@ function SpentYearCard({ year, soFar, lastYear }: { year: number; soFar: (number
 
   const keyItems = [
     { label: `${year}, added up`, color: c.bar },
-    ...(hasBefore ? [{ label: `${year - 1}, added up`, color: c.tertiary }] : []),
-    ...(limitLine ? [{ label: 'Limit', color: c.warning, dashed: true }] : []),
+    ...(hasBefore
+      ? [{ label: `${year - 1}, added up`, color: c.tertiary }]
+      : []),
+    ...(limitLine ? [{ label: "Limit", color: c.warning, dashed: true }] : []),
   ];
 
   return (
     <InsightCard
       label="This Year vs Last Year"
-      sentence={lock.text(sentence, `See whether you’re spending more or less than you did by this point in ${year - 1}.`)}
+      sentence={lock.text(
+        sentence,
+        `See whether you’re spending more or less than you did by this point in ${year - 1}.`,
+      )}
       note="Counts each month once it’s over."
-      {...lock.card}>
+      {...lock.card}
+    >
       {at != null ? (
         <Readout
           title={`By the end of ${MONTHS[at]}`}
           items={[
-            { label: String(year), value: soFar[at] != null ? whole(soFar[at]!) : '—', color: c.bar },
-            ...(hasBefore ? [{ label: String(year - 1), value: before[at] != null ? whole(before[at]!) : '—' }] : []),
-            ...(limitLine ? [{ label: 'Limit', value: limitLine[at] != null ? whole(limitLine[at]!) : '—' }] : []),
+            {
+              label: String(year),
+              value: soFar[at] != null ? whole(soFar[at]!) : "—",
+              color: c.bar,
+            },
+            ...(hasBefore
+              ? [
+                  {
+                    label: String(year - 1),
+                    value: before[at] != null ? whole(before[at]!) : "—",
+                  },
+                ]
+              : []),
+            ...(limitLine
+              ? [
+                  {
+                    label: "Limit",
+                    value: limitLine[at] != null ? whole(limitLine[at]!) : "—",
+                  },
+                ]
+              : []),
           ]}
         />
       ) : keyItems.length > 1 ? (
@@ -689,7 +953,9 @@ function SpentYearCard({ year, soFar, lastYear }: { year: number; soFar: (number
         count={12}
         series={[
           { values: before, color: c.tertiary },
-          ...(limitLine ? [{ values: limitLine, color: c.warning, dashed: true }] : []),
+          ...(limitLine
+            ? [{ values: limitLine, color: c.warning, dashed: true }]
+            : []),
           { values: soFar, color: c.bar, endDot: true },
         ]}
         labels={MONTH_LABELS}
@@ -703,15 +969,25 @@ function SpentYearCard({ year, soFar, lastYear }: { year: number; soFar: (number
                 <View
                   style={[
                     styles.goalFill,
-                    { width: `${Math.min(100, Math.max(b.progress * 100, 1.5))}%`, backgroundColor: b.color },
+                    {
+                      width: `${Math.min(100, Math.max(b.progress * 100, 1.5))}%`,
+                      backgroundColor: b.color,
+                    },
                   ]}
                 />
               </View>
               <View style={styles.goalRow}>
-                <Text variant="footnote" color="secondary" numberOfLines={1} style={styles.goalText}>
+                <Text
+                  variant="footnote"
+                  color="secondary"
+                  numberOfLines={1}
+                  style={styles.goalText}
+                >
                   {b.text}
                 </Text>
-                {i === bars.length - 1 ? <GoalLink title="Edit Goals" onPress={editGoals} /> : null}
+                {i === bars.length - 1 ? (
+                  <GoalLink title="Edit Goals" onPress={editGoals} />
+                ) : null}
               </View>
             </View>
           ))}
@@ -734,39 +1010,51 @@ function SpentYearCard({ year, soFar, lastYear }: { year: number; soFar: (number
  * A sentence on the year's goals, after This Year vs Last Year's own. The
  * savings goal comes first, unless it's on track and the spending limit isn't.
  */
-function goalSentence(goal: SpendingGoal, g: YearGoals, whole: (cents: number) => string): string | null {
+function goalSentence(
+  goal: SpendingGoal,
+  g: YearGoals,
+  whole: (cents: number) => string,
+): string | null {
   const keepOk = goal.keep != null && g.kept != null && g.kept >= goal.keep;
   const over = goal.limit != null && g.spent != null && g.spent > goal.limit;
   if (goal.keep != null && !(keepOk && over)) {
-    if (g.kept == null) return g.months ? 'Enter your income in Spending to see how much of it you keep.' : null;
-    if (keepOk) return `You’ve kept ${wholePercent(g.kept)} of what you earned, above your ${wholePercent(goal.keep)} goal.`;
+    if (g.kept == null)
+      return g.months
+        ? "Enter your income in Spending to see how much of it you keep."
+        : null;
+    if (keepOk)
+      return `You’ve kept ${wholePercent(g.kept)} of what you earned, above your ${wholePercent(goal.keep)} goal.`;
     if (g.keepFromHere != null && g.keepFromHere <= 0.9) {
       return `Keep ${wholePercent(g.keepFromHere)} of what you earn from here on to end the year at your ${wholePercent(goal.keep)} goal.`;
     }
     return `You’ve kept ${wholePercent(g.kept)} of what you earned, short of your ${wholePercent(goal.keep)} goal.`;
   }
   if (goal.limit == null || g.spent == null) return null;
-  if (!over) return `That’s ${whole(g.spent)} in an average month, under your ${whole(goal.limit)} limit.`;
+  if (!over)
+    return `That’s ${whole(g.spent)} in an average month, under your ${whole(goal.limit)} limit.`;
   if (g.spendFromHere != null && g.spendFromHere > 0) {
     return `Averaging ${whole(g.spendFromHere)} a month from here on gets you back under your ${whole(goal.limit)} limit.`;
   }
   return `That’s ${whole(g.spent)} in an average month, over your ${whole(goal.limit)} limit.`;
 }
 
-type CreepRange = '12' | '24' | '60' | 'all';
+type CreepRange = "12" | "24" | "60" | "all";
 const CREEP_RANGES: { value: CreepRange; label: string }[] = [
-  { value: '12', label: '1Y' },
-  { value: '24', label: '2Y' },
-  { value: '60', label: '5Y' },
-  { value: 'all', label: 'All' },
+  { value: "12", label: "1Y" },
+  { value: "24", label: "2Y" },
+  { value: "60", label: "5Y" },
+  { value: "all", label: "All" },
 ];
 
 /** "Jan–Jun 2025", or "Nov 2024–Apr 2025" across a new year. */
 function monthSpan(from: Month, to: Month): string {
   const a = MONTHS_SHORT[from.month - 1];
   const b = MONTHS_SHORT[to.month - 1];
-  if (from.year === to.year && from.month === to.month) return `${a} ${to.year}`;
-  return from.year === to.year ? `${a}–${b} ${to.year}` : `${a} ${from.year}–${b} ${to.year}`;
+  if (from.year === to.year && from.month === to.month)
+    return `${a} ${to.year}`;
+  return from.year === to.year
+    ? `${a}–${b} ${to.year}`
+    : `${a} ${from.year}–${b} ${to.year}`;
 }
 
 /**
@@ -788,34 +1076,42 @@ function CreepCard({ all }: { all: CreepMonth[] }) {
   // A range shows once there's more history than the one before it, and enough in it to tell.
   const options = CREEP_RANGES.filter((r, i) => {
     if (i > 0 && all.length <= Number(CREEP_RANGES[i - 1].value)) return false;
-    if (r.value === 'all') return all.length > 60;
+    if (r.value === "all") return all.length > 60;
     return lifestyleCreep(all.slice(-Number(r.value))) != null;
   });
   // Two years by default: long enough to reach back before a raise.
-  const fallback = [...options].reverse().find((r) => r.value !== 'all' && Number(r.value) <= 24) ?? options[options.length - 1];
+  const fallback =
+    [...options]
+      .reverse()
+      .find((r) => r.value !== "all" && Number(r.value) <= 24) ??
+    options[options.length - 1];
   const picked = options.find((r) => r.value === range) ?? fallback;
-  const months = picked && picked.value !== 'all' ? all.slice(-Number(picked.value)) : all;
+  const months =
+    picked && picked.value !== "all" ? all.slice(-Number(picked.value)) : all;
   const creep = lifestyleCreep(months);
   if (!creep) return null;
   const { before, lately, direction, start } = creep;
   const thisYear = parseDateKey(today).y;
-  const when = (m: Month) => (m.year === thisYear ? MONTHS[m.month - 1] : `${MONTHS[m.month - 1]} ${m.year}`);
+  const when = (m: Month) =>
+    m.year === thisYear
+      ? MONTHS[m.month - 1]
+      : `${MONTHS[m.month - 1]} ${m.year}`;
 
   const diff = lately.spent - before.spent;
   let sentence =
-    direction === 'steady' || start == null
+    direction === "steady" || start == null
       ? `Your spending has held steady at about ${whole(lately.spent)} a month.`
-      : `Your spending started ${direction === 'up' ? 'climbing' : 'falling'} in ${when(months[start])}. It’s ${direction === 'up' ? 'up' : 'down'} ${whole(Math.abs(diff))} a month from before.`;
+      : `Your spending started ${direction === "up" ? "climbing" : "falling"} in ${when(months[start])}. It’s ${direction === "up" ? "up" : "down"} ${whole(Math.abs(diff))} a month from before.`;
   if (before.earned != null && lately.earned != null) {
     const raise = lately.earned - before.earned;
     const kept = raise - diff;
     const keeping =
       Math.abs(kept) < lately.earned * 0.03
-        ? 'you’re keeping about the same'
-        : `you’re keeping ${whole(Math.abs(kept))} ${kept > 0 ? 'more' : 'less'} a month`;
+        ? "you’re keeping about the same"
+        : `you’re keeping ${whole(Math.abs(kept))} ${kept > 0 ? "more" : "less"} a month`;
     if (Math.abs(raise) >= before.earned * 0.03) {
-      sentence += ` Your income ${raise > 0 ? 'rose' : 'fell'} ${whole(Math.abs(raise))} a month, so ${keeping}.`;
-    } else if (direction !== 'steady') {
+      sentence += ` Your income ${raise > 0 ? "rose" : "fell"} ${whole(Math.abs(raise))} a month, so ${keeping}.`;
+    } else if (direction !== "steady") {
       sentence += ` Your income stayed about the same, so ${keeping}.`;
     }
   }
@@ -830,60 +1126,114 @@ function CreepCard({ all }: { all: CreepMonth[] }) {
     value: m.spent ?? 0,
     label: MONTHS_SHORT[m.month - 1][0],
     faded: start != null && i < start,
-    accessibilityLabel: `${MONTHS[m.month - 1]} ${m.year}: ${m.spent == null ? 'nothing entered' : `spent ${money(m.spent, { whole: true })}`}`,
+    accessibilityLabel: `${MONTHS[m.month - 1]} ${m.year}: ${m.spent == null ? "nothing entered" : `spent ${money(m.spent, { whole: true })}`}`,
   }));
   const stats = [
-    { label: `${start == null ? 'Earlier' : 'Before'} · ${monthSpan(before.from, before.to)}`, value: before.spent, color: undefined },
-    { label: `Lately · ${monthSpan(lately.from, lately.to)}`, value: lately.spent, color: c.bar },
+    {
+      label: `${start == null ? "Earlier" : "Before"} · ${monthSpan(before.from, before.to)}`,
+      value: before.spent,
+      color: undefined,
+    },
+    {
+      label: `Lately · ${monthSpan(lately.from, lately.to)}`,
+      value: lately.spent,
+      color: c.bar,
+    },
   ];
 
   return (
     <InsightCard
       label="Lifestyle Creep"
-      sentence={lock.text(sentence, 'See when your spending started to climb, and how much more a month it is now.')}
+      sentence={lock.text(
+        sentence,
+        "See when your spending started to climb, and how much more a month it is now.",
+      )}
       {...lock.card}
-      note="Each bar is what you spent that month, not counting investing. Lately is your last three months. Counts each month once it’s over.">
+      note="Each bar is what you spent that month, not counting investing. Lately is your last three months. Counts each month once it’s over."
+    >
       {options.length > 1 ? (
-        <View pointerEvents={lock.locked ? 'none' : 'auto'}>
-          <Segmented options={options} value={picked.value} onChange={pick} style={styles.horizon} />
+        <View pointerEvents={lock.locked ? "none" : "auto"}>
+          <Segmented
+            options={options}
+            value={picked.value}
+            onChange={pick}
+            style={styles.horizon}
+          />
         </View>
       ) : null}
-      {selected ? (
-        <Readout
-          title={`${MONTHS[selected.month - 1]} ${selected.year}`}
-          items={
-            selected.spent == null
-              ? [{ label: 'Nothing entered', value: '' }]
-              : [
-                  { label: 'Spent', value: whole(selected.spent), color: c.bar },
-                  ...(selected.earned ? [{ label: 'Earned', value: whole(selected.earned), color: c.up }] : []),
-                ]
-          }
-        />
-      ) : (
-        <View style={styles.creepStats}>
-          {stats.map((x) => (
-            <View key={x.label} style={styles.creepStat}>
-              <Text variant="footnote" color="secondary" numberOfLines={1}>
-                {x.label}
-              </Text>
-              <Text variant="title3" weight="700" rounded tabular numberOfLines={1} style={x.color ? { color: x.color } : null}>
-                {whole(x.value)}
-                <Text variant="footnote" weight="500" color="secondary">
-                  {' a month'}
+      {/* Same height either way, so the chart stays put under a dragging finger. */}
+      <View style={styles.creepTop}>
+        {selected ? (
+          <Readout
+            title={`${MONTHS[selected.month - 1]} ${selected.year}`}
+            items={
+              selected.spent == null
+                ? [{ label: "Nothing entered", value: "" }]
+                : [
+                    {
+                      label: "Spent",
+                      value: whole(selected.spent),
+                      color: c.bar,
+                    },
+                    ...(selected.earned
+                      ? [
+                          {
+                            label: "Earned",
+                            value: whole(selected.earned),
+                            color: c.up,
+                          },
+                        ]
+                      : []),
+                  ]
+            }
+          />
+        ) : (
+          <View style={styles.creepStats}>
+            {stats.map((x) => (
+              <View key={x.label} style={styles.creepStat}>
+                <Text variant="footnote" color="secondary" numberOfLines={1}>
+                  {x.label}
                 </Text>
-              </Text>
-            </View>
-          ))}
-        </View>
-      )}
+                <Text
+                  variant="title3"
+                  weight="700"
+                  rounded
+                  tabular
+                  numberOfLines={1}
+                  style={x.color ? { color: x.color } : null}
+                >
+                  {whole(x.value)}
+                  <Text variant="footnote" weight="500" color="secondary">
+                    {" a month"}
+                  </Text>
+                </Text>
+              </View>
+            ))}
+          </View>
+        )}
+      </View>
       <BarChart
         bars={bars}
-        marker={start != null ? { index: start, label: direction === 'up' ? 'Climb starts' : 'Drop starts' } : null}
+        marker={
+          start != null
+            ? {
+                index: start,
+                label: direction === "up" ? "Climb starts" : "Drop starts",
+              }
+            : null
+        }
         selected={at}
         onSelect={lock.locked ? undefined : setAt}
-        formatTick={hidden || lock.locked ? undefined : (v) => money(v, { compact: true, whole: true })}
-        axisLabels={count > 13 ? yearLabels(months.map((m) => ({ ...m, value: m.spent }))) : undefined}
+        formatTick={
+          hidden || lock.locked
+            ? undefined
+            : (v) => money(v, { compact: true, whole: true })
+        }
+        axisLabels={
+          count > 13
+            ? yearLabels(months.map((m) => ({ ...m, value: m.spent })))
+            : undefined
+        }
         height={150}
       />
     </InsightCard>
@@ -911,32 +1261,70 @@ function CategoryCard({ categories }: { categories: SpendCategory[] }) {
   const data = { spend, spendCategories };
   const months = recentCategoryMonths(data, category.id, today, 12);
   const average = averageOf(months);
-  const change = categoryChange(recentCategoryMonths(data, category.id, today, 24));
-  const sentence = categorySentence(category.name, months, change, average, whole);
+  const change = categoryChange(
+    recentCategoryMonths(data, category.id, today, 24),
+  );
+  const sentence = categorySentence(
+    category.name,
+    months,
+    change,
+    average,
+    whole,
+  );
   const pick = (id: string) => {
     setPicked(id);
     setAt(null);
   };
-  const open = () => router.push({ pathname: '/insights/category', params: { id: category.id } });
+  const open = () =>
+    router.push({
+      pathname: "/insights/category",
+      params: { id: category.id },
+    });
   const selected = at != null ? months[at] : null;
-  const verb = category.group === 'income' ? 'Earned' : category.group === 'invest' ? 'Invested' : 'Spent';
+  const verb =
+    category.group === "income"
+      ? "Earned"
+      : category.group === "invest"
+        ? "Invested"
+        : "Spent";
 
   return (
     <InsightCard
       label="By Category"
-      sentence={lock.text(sentence, 'See how each category, like eating out or rent, changes month to month.')}
+      sentence={lock.text(
+        sentence,
+        "See how each category, like eating out or rent, changes month to month.",
+      )}
       note="Lately means your last three months. Counts each month once it’s over."
-      {...lock.card}>
-      <CategoryPills categories={categories} value={category.id} onChange={pick} locked={lock.locked} />
+      {...lock.card}
+    >
+      <CategoryPills
+        categories={categories}
+        value={category.id}
+        onChange={pick}
+        locked={lock.locked}
+      />
       {selected ? (
         <Readout
           title={`${MONTHS[selected.month - 1]} ${selected.year}`}
-          items={[{ label: verb, value: selected.value == null ? 'Nothing entered' : whole(selected.value) }]}
+          items={[
+            {
+              label: verb,
+              value:
+                selected.value == null
+                  ? "Nothing entered"
+                  : whole(selected.value),
+            },
+          ]}
         />
       ) : (
         <Readout
           title="Last 12 Months"
-          items={average != null ? [{ label: 'Average', value: `${whole(average)}/mo` }] : []}
+          items={
+            average != null
+              ? [{ label: "Average", value: `${whole(average)}/mo` }]
+              : []
+          }
         />
       )}
       <BarChart
@@ -945,7 +1333,11 @@ function CategoryCard({ categories }: { categories: SpendCategory[] }) {
         average={average}
         selected={at}
         onSelect={lock.locked ? undefined : setAt}
-        formatTick={hidden || lock.locked ? undefined : (v) => money(v, { compact: true, whole: true })}
+        formatTick={
+          hidden || lock.locked
+            ? undefined
+            : (v) => money(v, { compact: true, whole: true })
+        }
         height={130}
       />
       <View style={[styles.goalRow, styles.more]}>
@@ -969,20 +1361,34 @@ function WhereItWentCard({ year }: { year: number }) {
   const sp = spendingYear(data, year, today)!;
   const spBefore = spendingYear(data, year - 1, today);
   const canCompare = !!spBefore && sp.months >= 2 && spBefore.months >= 2;
-  const lastYearMonthly = new Map(spBefore?.categories.map((x) => [x.category.id, x.monthly]) ?? []);
+  const lastYearMonthly = new Map(
+    spBefore?.categories.map((x) => [x.category.id, x.monthly]) ?? [],
+  );
   const top = sp.categories[0];
   return (
     <InsightCard
       label="Where It Went"
       sentence={lock.text(
         `${top.category.name} took the biggest share of your spending this year, ${formatPercent(top.share)}.`,
-        'See every category a month on average, and how each compares with last year.',
+        "See every category a month on average, and how each compares with last year.",
       )}
-      note={canCompare ? `Next to each bar is how much more or less you spent a month than in ${year - 1}.` : null}
-      onPress={() => router.push({ pathname: '/insights/where-it-went', params: { year: String(year) } })}
-      {...lock.card}>
+      note={
+        canCompare
+          ? `Next to each bar is how much more or less you spent a month than in ${year - 1}.`
+          : null
+      }
+      onPress={() =>
+        router.push({
+          pathname: "/insights/where-it-went",
+          params: { year: String(year) },
+        })
+      }
+      {...lock.card}
+    >
       {sp.categories.slice(0, 5).map((x) => {
-        const change = canCompare ? x.monthly - (lastYearMonthly.get(x.category.id) ?? 0) : null;
+        const change = canCompare
+          ? x.monthly - (lastYearMonthly.get(x.category.id) ?? 0)
+          : null;
         return (
           <RankRow
             key={x.category.id}
@@ -990,9 +1396,23 @@ function WhereItWentCard({ year }: { year: number }) {
             value={`${whole(x.monthly)}/mo`}
             share={x.share / top.share}
             color={c.bar}
-            note={lock.locked ? MASK : change == null ? formatPercent(x.share) : change === 0 ? 'Same' : signed(change)}
+            note={
+              lock.locked
+                ? MASK
+                : change == null
+                  ? formatPercent(x.share)
+                  : change === 0
+                    ? "Same"
+                    : signed(change)
+            }
             // Spending more is the bad direction.
-            noteColor={lock.locked || change == null || change === 0 ? 'secondary' : change > 0 ? 'down' : 'up'}
+            noteColor={
+              lock.locked || change == null || change === 0
+                ? "secondary"
+                : change > 0
+                  ? "down"
+                  : "up"
+            }
           />
         );
       })}
@@ -1001,16 +1421,32 @@ function WhereItWentCard({ year }: { year: number }) {
 }
 
 /** What's under the finger, in place of the chart's key while dragging. */
-function Readout({ title, items }: { title: string; items: { label: string; value: string; color?: string }[] }) {
+function Readout({
+  title,
+  items,
+}: {
+  title: string;
+  items: { label: string; value: string; color?: string }[];
+}) {
   return (
     <View style={styles.readout}>
       <Text variant="footnote" weight="600" numberOfLines={1}>
         {title}
       </Text>
       {items.map((it) => (
-        <Text key={it.label} variant="footnote" color="secondary" numberOfLines={1}>
+        <Text
+          key={it.label}
+          variant="footnote"
+          color="secondary"
+          numberOfLines={1}
+        >
           {`${it.label} `}
-          <Text variant="footnote" weight="600" tabular color={it.color ?? 'text'}>
+          <Text
+            variant="footnote"
+            weight="600"
+            tabular
+            color={it.color ?? "text"}
+          >
             {it.value}
           </Text>
         </Text>
@@ -1029,8 +1465,8 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   bigRow: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
+    flexDirection: "row",
+    alignItems: "baseline",
     marginBottom: 8,
   },
   mixList: {
@@ -1038,8 +1474,8 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   mixRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 8,
   },
   mixDot: {
@@ -1052,11 +1488,11 @@ const styles = StyleSheet.create({
   },
   mixShare: {
     minWidth: 52,
-    textAlign: 'right',
+    textAlign: "right",
   },
   mixValue: {
     minWidth: 92,
-    textAlign: 'right',
+    textAlign: "right",
   },
   bigUnit: {
     flexShrink: 1,
@@ -1079,15 +1515,15 @@ const styles = StyleSheet.create({
   goalTrack: {
     height: 6,
     borderRadius: 3,
-    overflow: 'hidden',
+    overflow: "hidden",
   },
   goalFill: {
     height: 6,
     borderRadius: 3,
   },
   goalRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 12,
     marginTop: 4,
   },
@@ -1098,13 +1534,16 @@ const styles = StyleSheet.create({
     marginTop: 12,
   },
   link: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 5,
     paddingVertical: 2,
   },
+  creepTop: {
+    minHeight: 58,
+  },
   creepStats: {
-    flexDirection: 'row',
+    flexDirection: "row",
     gap: 16,
     marginBottom: 12,
   },
@@ -1113,8 +1552,8 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   readout: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
+    flexDirection: "row",
+    flexWrap: "wrap",
     gap: 14,
     marginBottom: 10,
   },
