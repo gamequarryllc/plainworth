@@ -21,6 +21,8 @@ export interface TrendSeries {
 export interface TrendLabel {
   index: number;
   text: string;
+  /** Tints the label, e.g. to match a marker above it. */
+  color?: string;
 }
 
 const PAD_Y = 8;
@@ -166,7 +168,7 @@ export function TrendChart({
                   <Text
                     key={`${l.index}-${i}`}
                     variant="caption"
-                    color="secondary"
+                    color={l.color ?? 'secondary'}
                     align={align}
                     numberOfLines={1}
                     style={[styles.label, { left }]}>

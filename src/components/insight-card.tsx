@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
 import { layout, useColors } from '@/theme';
@@ -16,6 +16,7 @@ export function InsightCard({
   label,
   sentence,
   note,
+  folded,
   children,
   onPress,
   locked,
@@ -24,12 +25,15 @@ export function InsightCard({
   sentence: string;
   /** A line of small print under the chart. */
   note?: string | null;
+  /** Long small print stays behind a "How It's Figured" toggle until asked for. */
+  folded?: boolean;
   children?: ReactNode;
   onPress?: () => void;
   /** Part of Pro: a PRO badge by the label, and the chart can't be touched. */
   locked?: boolean;
 }) {
   const c = useColors();
+  const [open, setOpen] = useState(false);
   const frame = [styles.card, { backgroundColor: c.card, borderColor: c.separator }];
   const content = (
     <>
@@ -48,8 +52,21 @@ export function InsightCard({
           {children}
         </View>
       ) : null}
-      {note ? (
-        <Text variant="footnote" color="secondary" style={styles.note}>
+      {note && folded ? (
+        <Pressable
+          onPress={() => setOpen((o) => !o)}
+          accessibilityRole="button"
+          accessibilityState={{ expanded: open }}
+          hitSlop={8}
+          style={({ pressed }) => [styles.foldRow, pressed && { opacity: 0.5 }]}>
+          <Text variant="footnote" color="secondary">
+            How It’s Figured
+          </Text>
+          <Icon name={open ? 'chevron.up' : 'chevron.down'} size={11} weight="semibold" color={c.secondary} />
+        </Pressable>
+      ) : null}
+      {note && (!folded || open) ? (
+        <Text variant="footnote" color="secondary" style={folded ? styles.foldNote : styles.note}>
           {note}
         </Text>
       ) : null}
@@ -199,6 +216,16 @@ const styles = StyleSheet.create({
   },
   note: {
     marginTop: 12,
+  },
+  foldRow: {
+    marginTop: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    gap: 4,
+  },
+  foldNote: {
+    marginTop: 6,
   },
   compare: {
     gap: 10,

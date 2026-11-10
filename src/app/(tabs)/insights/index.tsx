@@ -439,6 +439,17 @@ function HeadedCard({
       : !status && away != null && away <= ahead
         ? { index: nowIndex + away, value: milestone, color: c.warning }
         : null;
+  // Say when the goal is due right under its mark, so the ring isn't a mystery.
+  if (marker && status && goalAt != null) {
+    labels.push({
+      index: marker.index,
+      text:
+        status.due != null && goal?.age != null && birthYear != null
+          ? `Age ${goal.age}`
+          : String(shift(now, goalAt).year),
+      color: c.warning,
+    });
+  }
 
   const byWhen =
     goal?.age != null && birthYear != null
@@ -446,8 +457,9 @@ function HeadedCard({
       : status?.dueYear != null
         ? `by ${status.dueYear}`
         : "";
-  const ageThen = (year: number) =>
-    birthYear != null ? `, at ${year - birthYear}` : "";
+  // "at 44" when we know their age, otherwise "around 2047".
+  const when = (year: number) =>
+    birthYear != null ? `at ${year - birthYear}` : `around ${year}`;
   const adds = plan.monthly > 0 ? whole(roughly(plan.monthly)) : null;
 
   let sentence: string;
@@ -456,20 +468,20 @@ function HeadedCard({
     const reached = reach != null ? shift(now, reach).year : null;
     const needed = status.needed != null ? whole(roughly(status.needed)) : "";
     if (status.progress >= 1) {
-      sentence = `You’ve reached your ${target} goal. Time to set a bigger one?`;
+      sentence = `You’ve reached your ${target} goal. Time for a bigger one?`;
     } else if (late) {
-      sentence = `The date for your ${target} goal has passed. Pick a new one to see where you stand.`;
+      sentence = `Your ${target} goal date has passed. Pick a new one.`;
     } else if (status.due != null && status.onTrack) {
-      sentence = `You’re on track for ${target} ${byWhen}. At your pace you’d get there around ${reached}${ageThen(reached!)}.`;
+      sentence = `You’re on track for ${target} ${byWhen}. At your pace you’d get there ${when(reached!)}.`;
     } else if (status.due != null) {
       sentence =
-        `${reached != null ? `At your pace you’d reach ${target} around ${reached}${ageThen(reached)}.` : `At your pace you wouldn’t reach ${target} within 50 years.`}` +
-        ` To make it ${byWhen}, you’d need to add about ${needed} a month${adds ? ` instead of ${adds}` : ""}.`;
+        `${reached != null ? `At your pace you’d hit ${target} ${when(reached)}.` : `At your pace you wouldn’t hit ${target} within 50 years.`}` +
+        ` To make it ${byWhen}, add about ${needed} a month.`;
     } else {
       sentence =
         reached != null
-          ? `At your pace you’d reach ${target} around ${reached}${ageThen(reached)}, ${fromNow(reach!)}.`
-          : `At your pace you wouldn’t reach ${target} within 50 years.`;
+          ? `At your pace you’d hit ${target} ${when(reached)}, ${fromNow(reach!)}.`
+          : `At your pace you wouldn’t hit ${target} within 50 years.`;
     }
   } else {
     const lead =
@@ -492,16 +504,16 @@ function HeadedCard({
     }
   }
 
-  const growth = `${ratePercent(outlook.growth)} yearly growth on top of inflation`;
+  const growth = `${ratePercent(outlook.growth)} growth a year after ${ratePercent(outlook.inflation)} inflation`;
   const assumes =
     plan.source === "falling"
-      ? `Assumes it keeps falling as it has over the last ${counted} months.`
+      ? `Assumes it keeps falling as it has the last ${counted} months.`
       : plan.source === "yours"
-        ? `Assumes you add ${whole(plan.monthly)} a month, with ${growth}.`
+        ? `Assumes you add ${whole(plan.monthly)} a month and ${growth}.`
         : adds
-          ? `Assumes you keep adding about ${adds} a month (your pace less what your money earned), with ${growth}.`
+          ? `Your pace: about ${adds} a month added (your last ${counted} months, less what your money earned), plus ${growth}.`
           : `Assumes ${growth}.`;
-  const note = `In today’s money, with prices rising ${ratePercent(outlook.inflation)} a year. ${assumes}${pace != null ? ` Your pace is your average monthly change over the last ${counted} months.` : ""} A direction, not a promise.`;
+  const note = `${assumes} In today’s money. A direction, not a promise.`;
 
   const dueIndex =
     picked === "goal" && status?.due != null && !late
@@ -516,7 +528,7 @@ function HeadedCard({
   const unit =
     at == null
       ? dueIndex != null
-        ? `by the end of ${status!.dueYear}`
+        ? `at your pace by ${status!.dueYear}`
         : inYears(ahead)
       : at === nowIndex
         ? "today"
@@ -533,6 +545,7 @@ function HeadedCard({
       )}
       {...lock.card}
       note={note}
+      folded
     >
       <Segmented
         options={options}
