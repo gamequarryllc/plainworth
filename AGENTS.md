@@ -29,10 +29,9 @@ Run lint and typecheck before declaring any task done.
 - Import `Link`, `router`, and `useLocalSearchParams` from `expo-router`.
 - Docs: https://docs.expo.dev/router/introduction.md
 
-## Building with EAS
+## Building for iPhone
 
-Use EAS to build, sign, and submit the app in the cloud (`eas build`, `eas submit`) and to ship over-the-air updates (`eas update`) — no local Xcode or Android Studio required. Run EAS CLI as `bunx eas-cli <command>` in Bun projects, or `npx eas-cli@latest <command>` otherwise; substitute that for bare `eas` in docs examples.
-Docs: https://docs.expo.dev/eas/index.md
+iPhone builds run in GitHub Actions on Mac runners (`.github/workflows/ios.yml`, `tools/ios_build.sh`): `expo prebuild` writes the Xcode project, `xcodebuild` builds it, and a TestFlight run signs and uploads with the App Store Connect API key in the organization secrets. Do not use EAS (`eas build`, `eas submit`, `eas update`); it is being retired. The app's version and build number come from `app.config.js` (`APP_VERSION`, `APP_BUILD_NUMBER`), which the build sets.
 
 ## Rules
 

@@ -32,7 +32,7 @@ You need a Linux, Windows or Mac computer on the same Wi-Fi as your phone, and a
 
 4. With the phone on the same Wi-Fi, Plainworth should appear in Expo Go under Development servers. Tap it.
 
-If it doesn't show up, scan the QR code in the terminal with the iPhone Camera. If the QR code looks garbled, open Safari on the iPhone and type the `exp://` address printed under it (for example `exp://192.168.1.240:8081`), then tap Open.
+If it doesn't show up, scan the QR code in the terminal with the iPhone Camera. If the QR code looks garbled, open Safari on the iPhone and type the `exp://` address printed under it (for example `exp://192.168.x.x:8081`), then tap Open.
 
 If the phone still can't reach the computer (guest Wi-Fi, VPN or a firewall), stop the server with `Ctrl+C` and run `npx expo start --tunnel` instead.
 
@@ -47,23 +47,15 @@ To get the latest version later, run `git pull`, then `npm install`, then `npx e
 - The round blue gear button floating over the app is Expo Go's developer menu. It isn't part of Plainworth.
 - If Expo Go says the project needs a different SDK version, update Expo Go from the App Store. This project uses Expo SDK 58.
 
-## Releasing to the App Store (later)
+## Releasing to the App Store
 
-Still no Mac needed: Expo's cloud service (EAS) builds and uploads the app.
+iPhone builds run on GitHub's Mac runners (`.github/workflows/ios.yml`), so no Mac is needed.
 
-1. Join the [Apple Developer Program](https://developer.apple.com/programs/) ($99 a year) and create a free account at [expo.dev](https://expo.dev).
-2. Add a bundle identifier to `app.json` under `ios`, for example `"bundleIdentifier": "com.yourname.plainworth"`.
-3. Build in the cloud and upload to TestFlight:
+- **Check build:** runs by itself on pull requests and pushes to `main` that change native settings (`app.json`, `app.config.js`, `package-lock.json`). It proves the app still compiles for iPhone and uploads nothing.
+- **TestFlight upload:** Actions → iOS build → Run workflow → mode `testflight`. It signs with the studio's App Store Connect API key (organization secrets `ASC_KEY_ID`, `ASC_ISSUER_ID`, `ASC_KEY_P8`, `APPLE_TEAM_ID`), picks the next free build number by itself, and uploads. Leave the version blank to use the one in `app.json`.
+- Sending a build to App Review stays a manual step in App Store Connect.
 
-   ```bash
-   npx eas-cli@latest login
-   npx eas-cli@latest build --platform ios
-   npx eas-cli@latest submit --platform ios
-   ```
-
-   The first build walks you through signing in to Apple and creating certificates.
-
-Android works the same way with `--platform android` and a Google Play developer account ($25 once).
+Android isn't set up yet.
 
 ## Development
 
