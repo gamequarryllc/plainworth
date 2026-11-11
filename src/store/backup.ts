@@ -55,13 +55,29 @@ export function readBackup(text: string): Backup {
   if (version > DATA_VERSION) {
     throw new BackupError('This backup was made by a newer version of Plainworth. Update the app, then try again.');
   }
-  if (!looksRight(file.data)) {
-    throw new BackupError('This backup is damaged or incomplete, so nothing was changed.');
-  }
-  return {
-    data: migrate({ ...file.data, version }),
-    date: typeof file.date === 'string' && DATE.test(file.date) ? file.date : null,
-  };
+  const data = checkedData(file.data, version);
+  if (!data) throw new BackupError('This backup is damaged or incomplete, so nothing was changed.');
+  return { data, date: typeof file.date === 'string' && DATE.test(file.date) ? file.date : null };
+}
+
+/**
+ * Data that came from outside the app (a backup file, or another device through
+ * iCloud), checked and brought up to date. Null if any part isn't the shape the
+ * app expects, or it's from a newer version than this one.
+ */
+export function checkedData(raw: unknown, version: number): Data | null {
+  if (!isRecord(raw) || version > DATA_VERSION || !looksRight(raw as Partial<Data>)) return null;
+  return migrate({ ...raw, version });
+}
+
+/** "12 accounts and 22 months of spending". */
+export function contents(data: Data): string {
+  const months = Object.values(data.spend).filter((m) => Object.values(m).some(Boolean)).length;
+  const parts = [
+    data.accounts.length ? `${data.accounts.length} ${data.accounts.length === 1 ? 'account' : 'accounts'}` : '',
+    months ? `${months} ${months === 1 ? 'month' : 'months'} of spending` : '',
+  ].filter(Boolean);
+  return parts.length ? parts.join(' and ') : 'nothing in it yet';
 }
 
 const isString = (v: unknown): v is string => typeof v === 'string';

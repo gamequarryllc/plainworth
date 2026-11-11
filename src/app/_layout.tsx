@@ -13,6 +13,7 @@ import { syncReminders, useReminderTaps } from '@/lib/notifications';
 import { flushSave, useStore } from '@/store';
 import { startPro } from '@/store/pro';
 import { useSpotPriceRefresh } from '@/store/spot';
+import { startSync } from '@/store/sync';
 import { useColors } from '@/theme';
 
 // The swipe rows' library (Gesture Handler's Swipeable) reads its own animated
@@ -28,6 +29,7 @@ export default function RootLayout() {
 
   useEffect(() => {
     startPro();
+    startSync();
   }, []);
 
   useEffect(() => {

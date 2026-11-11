@@ -10,6 +10,12 @@
     "ios": {
       "bundleIdentifier": "com.gamequarry.plainworth",
       "supportsTablet": false,
+      "entitlements": {
+        "com.apple.developer.icloud-container-identifiers": ["iCloud.com.gamequarry.plainworth"],
+        "com.apple.developer.ubiquity-container-identifiers": ["iCloud.com.gamequarry.plainworth"],
+        "com.apple.developer.icloud-services": ["CloudDocuments"],
+        "com.apple.developer.icloud-container-environment": "Production"
+      },
       "config": {
         "usesNonExemptEncryption": false
       }

@@ -4,7 +4,7 @@ import type { SFSymbol } from 'sf-symbols-typescript';
  * Plainworth Pro. Tracking net worth and spending is always free; Pro adds the
  * extras on top. Early buyers pay once and keep Pro for good.
  */
-export type ProFeature = 'insights' | 'chart-values' | 'export';
+export type ProFeature = 'insights' | 'chart-values' | 'export' | 'sync';
 
 export const PRO_FEATURES: { key: ProFeature; icon: SFSymbol; title: string; text: string }[] = [
   {
@@ -24,6 +24,12 @@ export const PRO_FEATURES: { key: ProFeature; icon: SFSymbol; title: string; tex
     icon: 'tablecells',
     title: 'Export to Excel',
     text: 'Every balance and every month of spending in one spreadsheet.',
+  },
+  {
+    key: 'sync',
+    icon: 'icloud',
+    title: 'Sync with iCloud',
+    text: 'The same data on all your devices, through your own private iCloud. Off unless you turn it on.',
   },
 ];
 

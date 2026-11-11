@@ -7,6 +7,7 @@ export default function SettingsLayout() {
   return (
     <Stack screenOptions={useStackOptions()}>
       <Stack.Screen name="index" options={{ title: 'Settings' }} />
+      <Stack.Screen name="sync" options={{ title: 'Sync with iCloud' }} />
     </Stack>
   );
 }

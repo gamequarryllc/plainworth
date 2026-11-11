@@ -115,6 +115,22 @@ export function currentData(): Data {
   return dataOf(useStore.getState());
 }
 
+/**
+ * True while everything is being replaced at once (a backup restored, all data
+ * erased, sample data loaded), which sync treats differently from an edit.
+ */
+let replacing = false;
+export const isReplacing = () => replacing;
+
+function replaceAll(run: () => void) {
+  replacing = true;
+  try {
+    run();
+  } finally {
+    replacing = false;
+  }
+}
+
 function dataOf(s: Store): Data {
   return {
     version: DATA_VERSION,
@@ -380,34 +396,38 @@ export const useStore = create<Store>()((set, get) => ({
 
   loadSampleData(months) {
     const settings = get().settings;
-    set({ ...(months === DECADE ? decadeSampleData() : sampleData(months)), settings });
+    replaceAll(() => set({ ...(months === DECADE ? decadeSampleData() : sampleData(months)), settings }));
   },
 
   eraseAll() {
     const settings = get().settings;
-    set({
-      ...emptyData(),
-      settings: {
-        ...settings,
-        requireUnlock: false,
-        hideAmounts: false,
-        reminder: { ...settings.reminder, on: false },
-        goal: undefined,
-        birthYear: undefined,
-        name: '',
-        outlook: { ...settings.outlook, monthly: undefined },
-        spendingGoal: undefined,
-      },
-    });
+    replaceAll(() =>
+      set({
+        ...emptyData(),
+        settings: {
+          ...settings,
+          requireUnlock: false,
+          hideAmounts: false,
+          reminder: { ...settings.reminder, on: false },
+          goal: undefined,
+          birthYear: undefined,
+          name: '',
+          outlook: { ...settings.outlook, monthly: undefined },
+          spendingGoal: undefined,
+        },
+      }),
+    );
   },
 
   restore(data, date) {
     // The lock, hidden amounts and reminder belong to this phone, not to the data.
     const { requireUnlock, hideAmounts, reminder } = get().settings;
-    set({
-      ...data,
-      settings: { ...data.settings, requireUnlock, hideAmounts, reminder, lastBackup: date ?? data.settings.lastBackup },
-    });
+    replaceAll(() =>
+      set({
+        ...data,
+        settings: { ...data.settings, requireUnlock, hideAmounts, reminder, lastBackup: date ?? data.settings.lastBackup },
+      }),
+    );
   },
 }));
 
@@ -427,7 +447,7 @@ function writeNow() {
   return writing;
 }
 
-const DATA_KEYS = Object.keys(emptyData()) as (keyof Data)[];
+export const DATA_KEYS = Object.keys(emptyData()) as (keyof Data)[];
 
 useStore.subscribe((state, prev) => {
   if (DATA_KEYS.every((k) => state[k] === prev[k])) return;

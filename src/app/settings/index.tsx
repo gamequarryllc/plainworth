@@ -20,11 +20,12 @@ import { askForReminders, reminderPermission, type ReminderPermission } from '@/
 import { pickTextFile } from '@/lib/pick-file';
 import { firstWeekday, formatReminder, MONTH_DAYS, monthDayName, reminderTimes, WEEKDAYS } from '@/lib/reminders';
 import { BACKUP, shareFile } from '@/lib/share-file';
-import type { Data, DateKey, Reminder, ReminderRepeat } from '@/lib/types';
+import type { DateKey, Reminder, ReminderRepeat } from '@/lib/types';
 import { currentData, flushSave, useStore } from '@/store';
-import { BackupError, backupFileName, makeBackup, readBackup, type Backup } from '@/store/backup';
+import { BackupError, backupFileName, contents, makeBackup, readBackup, type Backup } from '@/store/backup';
 import { openPaywall, restorePurchases, setTestPro, useProStore } from '@/store/pro';
 import { markReminderOffered, resetReminderOffer } from '@/store/reminder-offer';
+import { useSync } from '@/store/sync';
 import { layout, type, useColors } from '@/theme';
 
 const DEVICE = Platform.OS === 'android' ? 'phone' : 'iPhone';
@@ -41,6 +42,8 @@ export default function SettingsScreen() {
   const loadSampleData = useStore((s) => s.loadSampleData);
   const proSource = useProStore((s) => s.source);
   const pro = proSource != null;
+  const syncOn = useSync((s) => s.on);
+  const syncTrouble = useSync((s) => s.on && s.problem != null);
   const [lockLabel, setLockLabel] = useState('Face ID');
   // Newer iPhones lock apps from the Home Screen, so the switch is only for Android and older iOS.
   const ownLock = Platform.OS !== 'web' && !systemAppLock;
@@ -92,7 +95,7 @@ export default function SettingsScreen() {
     }
     const ok = await confirm({
       title: 'Restore this backup?',
-      message: `${backup.date ? `The backup from ${formatDate(backup.date, { year: true })}` : 'This backup'} has ${contents(backup.data)}.${hasData ? ' It replaces everything in Plainworth now.' : ''}`,
+      message: `${backup.date ? `The backup from ${formatDate(backup.date, { year: true })}` : 'This backup'} has ${contents(backup.data)}.${hasData ? ` It replaces everything in Plainworth now${syncOn ? ', on all your devices' : ''}.` : ''}`,
       confirmLabel: 'Restore',
       destructive: hasData,
     });
@@ -106,7 +109,7 @@ export default function SettingsScreen() {
   const onErase = async () => {
     const ok = await confirm({
       title: 'Erase all data?',
-      message: `Every account, balance and month you entered will be deleted from this ${DEVICE}. This can’t be undone.`,
+      message: `Every account, balance and month you entered will be deleted from this ${DEVICE}${syncOn ? ' and, because sync is on, from your other devices and iCloud' : ''}. This can’t be undone.`,
       confirmLabel: 'Erase Everything',
       destructive: true,
     });
@@ -139,7 +142,7 @@ export default function SettingsScreen() {
         <Row
           title="Plainworth Pro"
           subtitle={
-            proSource === 'test' ? 'On for testing' : pro ? 'Lifetime · Thank you!' : 'Insights, exact chart values, Excel export'
+            proSource === 'test' ? 'On for testing' : pro ? 'Lifetime · Thank you!' : 'Insights, exact chart values, Excel export, sync'
           }
           onPress={() => openPaywall()}
         />
@@ -185,6 +188,17 @@ export default function SettingsScreen() {
       </Section>
 
       <Reminders />
+
+      {Platform.OS === 'ios' ? (
+        <Section>
+          <Row
+            title="Sync with iCloud"
+            value={pro || syncOn ? (syncTrouble ? 'Not Syncing' : syncOn ? 'On' : 'Off') : undefined}
+            accessory={pro || syncOn ? undefined : <ProBadge />}
+            onPress={() => router.push('/settings/sync')}
+          />
+        </Section>
+      ) : null}
 
       <Section
         header="Backup"
@@ -352,19 +366,10 @@ function backupStatus(last: DateKey | undefined): string {
   return `Last backed up ${days} days ago.`;
 }
 
-/** "12 accounts and 22 months of spending". */
-function contents(data: Data): string {
-  const months = Object.values(data.spend).filter((m) => Object.values(m).some(Boolean)).length;
-  const parts = [
-    data.accounts.length ? `${data.accounts.length} ${data.accounts.length === 1 ? 'account' : 'accounts'}` : '',
-    months ? `${months} ${months === 1 ? 'month' : 'months'} of spending` : '',
-  ].filter(Boolean);
-  return parts.length ? parts.join(' and ') : 'nothing in it yet';
-}
-
 /** The closing note: why Plainworth is safe to trust with your numbers. */
 function PrivacyNote() {
   const c = useColors();
+  const syncOn = useSync((s) => s.on);
   return (
     <View style={styles.privacy}>
       <Icon name="lock.shield.fill" size={30} color={c.secondary} />
@@ -372,8 +377,11 @@ function PrivacyNote() {
         Private by Design
       </Text>
       <Text variant="footnote" color="secondary" align="center">
-        Your data stays on this {DEVICE}. Plainworth has no servers, no sign-in and no bank connections, and it only goes
-        online to fetch metal prices and to check a Pro purchase.{SOURCE_CODE_URL ? ' The source code is public, so anyone can check.' : ''}
+        {syncOn
+          ? `Your data stays on this ${DEVICE} and, because you turned on sync, in your own private iCloud.`
+          : `Your data stays on this ${DEVICE}.`}{' '}
+        Plainworth has no servers, no sign-in and no bank connections, and it only goes online to fetch metal prices and
+        to check a Pro purchase.{SOURCE_CODE_URL ? ' The source code is public, so anyone can check.' : ''}
       </Text>
       {SOURCE_CODE_URL ? (
         <Pressable
