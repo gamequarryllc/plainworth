@@ -10,7 +10,7 @@ import type { CustomerInfo, PurchasesPackage, PurchasesStoreProduct } from 'reac
  * only sees the purchase and a random ID it makes up; none of the user's
  * balances or spending ever leave the phone.
  *
- * Purchases only work in a real build (EAS development build, TestFlight or the
+ * Purchases only work in a real build (a development build, TestFlight or the
  * App Store). Expo Go and the web have no native purchases module, so there
  * `purchasesAvailable` is false and the Developer switch in Settings stands in.
  */

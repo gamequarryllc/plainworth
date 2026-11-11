@@ -68,11 +68,7 @@
         "asyncRoutes": {
           "web": true
         }
-      },
-      "eas": {
-        "projectId": "77d40204-4024-4e83-87d9-2d4f399fb4ee"
       }
-    },
-    "owner": "appkingmaker"
+    }
   }
 }

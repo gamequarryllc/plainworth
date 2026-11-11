@@ -31,10 +31,10 @@ Run lint and typecheck before declaring any task done.
 
 ## Building for iPhone
 
-iPhone builds run in GitHub Actions on Mac runners (`.github/workflows/ios.yml`, `tools/ios_build.sh`): `expo prebuild` writes the Xcode project, `xcodebuild` builds it, and a TestFlight run signs and uploads with the App Store Connect API key in the organization secrets. Do not use EAS (`eas build`, `eas submit`, `eas update`); it is being retired. The app's version and build number come from `app.config.js` (`APP_VERSION`, `APP_BUILD_NUMBER`), which the build sets.
+iPhone builds run in GitHub Actions on Mac runners (`.github/workflows/ios.yml`, `tools/ios_build.sh`): `expo prebuild` writes the Xcode project, `xcodebuild` builds it, and a TestFlight run signs and uploads with the App Store Connect API key in the organization secrets. Do not use EAS (`eas build`, `eas submit`, `eas update`); it has been retired. The app's version and build number come from `app.config.js` (`APP_VERSION`, `APP_BUILD_NUMBER`), which the build sets.
 
 ## Rules
 
 - If `ios/` and `android/` directories do not exist, they are generated (Continuous Native Generation). Never create or edit them by hand — configure native behavior in `app.json` and config plugins.
-- Expo Go only includes its bundled native modules. After adding a library with native code, the app needs a development build: `npx expo run:ios|android` locally, or `eas build --profile development`.
+- Expo Go only includes its bundled native modules. After adding a library with native code, the app needs a development build: `npx expo run:ios|android` locally, or a check build from the iOS build workflow.
 - Prefer recommended Expo modules over third-party libraries, and check your available skills before adding dependencies. Docs: https://docs.expo.dev/versions/latest/index.md
