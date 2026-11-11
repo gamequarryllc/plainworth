@@ -1,0 +1,125 @@
+name: iOS build
+
+# Plainworth's one pipeline for iPhone builds, on GitHub's Mac runners
+# (free for a public repo).
+#
+#   check       Unsigned build. Proves the app compiles and packages for iPhone.
+#               Runs on pull requests and pushes to main that change native
+#               settings, and on request.
+#   testflight  Signs with the App Store Connect API key and uploads to TestFlight.
+#               Only ever started by hand (Actions > iOS build > Run workflow).
+#
+# Nothing here submits the app for review; that stays a manual step in App Store Connect.
+# Organization secrets: ASC_KEY_ID, ASC_ISSUER_ID, ASC_KEY_P8, APPLE_TEAM_ID
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "check = unsigned test build; testflight = sign and upload"
+        required: true
+        type: choice
+        options: [check, testflight]
+        default: check
+      version:
+        description: "Version shown in TestFlight and on the App Store (blank = app.json's)"
+        required: false
+        type: string
+        default: ""
+  pull_request:
+    paths:
+      - ".github/workflows/ios.yml"
+      - "tools/ios_build.sh"
+      - "tools/next_build_number.mjs"
+      - "app.json"
+      - "app.config.js"
+      - "package-lock.json"
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/ios.yml"
+      - "tools/ios_build.sh"
+      - "tools/next_build_number.mjs"
+      - "app.json"
+      - "app.config.js"
+      - "package-lock.json"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  ASC_APP_ID: "6829494839"
+
+jobs:
+  privacy:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Privacy check (no personal information in a public repo)
+        run: python3 tools/privacy_check.py
+
+  build:
+    needs: privacy
+    # To build on your own Mac later, change this line to: runs-on: [self-hosted, macOS]
+    runs-on: macos-latest
+    timeout-minutes: 75
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Restore downloaded pods from cache
+        uses: actions/cache@v4
+        with:
+          path: ~/Library/Caches/CocoaPods
+          key: pods-${{ hashFiles('package-lock.json') }}-v1
+          restore-keys: |
+            pods-
+
+      - name: Use the newest released Xcode on the runner
+        run: |
+          set -euo pipefail
+          newest="$(ls -d /Applications/Xcode_*.app | grep -viE 'beta|candidate|_rc' | sort -V | tail -1)"
+          if [ -n "$newest" ]; then sudo xcode-select -s "$newest"; fi
+          xcodebuild -version
+
+      - name: Build (${{ inputs.mode || 'check' }})
+        env:
+          MODE: ${{ inputs.mode || 'check' }}
+          VERSION: ${{ inputs.version }}
+          WORK: ${{ runner.temp }}/ios
+          EXPO_NO_TELEMETRY: "1"
+          ASC_KEY_ID: ${{ inputs.mode == 'testflight' && secrets.ASC_KEY_ID || '' }}
+          ASC_ISSUER_ID: ${{ inputs.mode == 'testflight' && secrets.ASC_ISSUER_ID || '' }}
+          ASC_KEY_P8: ${{ inputs.mode == 'testflight' && secrets.ASC_KEY_P8 || '' }}
+          APPLE_TEAM_ID: ${{ inputs.mode == 'testflight' && secrets.APPLE_TEAM_ID || '' }}
+        run: |
+          set -euo pipefail
+          [ -n "$VERSION" ] || unset VERSION
+          bash tools/ios_build.sh "$MODE" 2>&1 | tee "$RUNNER_TEMP/ios_build.txt"
+          {
+            echo "### Plainworth ($MODE)"
+            echo '```'
+            grep -E '^(name on|bundle id|version:|architectures|minimum iOS|size|== OK)' "$RUNNER_TEMP/ios_build.txt" || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # Check builds only: a signing log can carry account details, and this repo is public.
+      - name: Keep the build logs when a check build fails
+        if: failure() && (inputs.mode || 'check') == 'check'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-build-logs
+          path: ${{ runner.temp }}/ios/logs
+          retention-days: 7
