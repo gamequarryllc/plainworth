@@ -4,7 +4,8 @@ import { StyleSheet, View } from 'react-native';
 
 import { BarChart } from '@/components/bar-chart';
 import { Hero } from '@/components/hero';
-import { Section } from '@/components/list';
+import { Icon } from '@/components/icon';
+import { Row, Section } from '@/components/list';
 import { MonthsTable, type TableCell, type TableRow } from '@/components/months-table';
 import { Screen } from '@/components/screen';
 import { ShareRow } from '@/components/share-row';
@@ -33,6 +34,7 @@ export default function SpendingScreen() {
   const lastYear = Math.max(now.year, ...Object.keys(spend).map((k) => parseMonthKey(k).year));
   const year = Math.min(pickedYear, lastYear);
   const [selected, setSelected] = useState<number | null>(null);
+  const [showSources, setShowSources] = useState(false);
 
   const data = { spend, spendCategories };
   const summary = yearSummary(data, year);
@@ -178,9 +180,28 @@ export default function SpendingScreen() {
 
       {incomeTotals.length > 0 ? (
         <Section header={`Income in ${year}`}>
-          {incomeTotals.map((t) => (
-            <ShareRow key={t.category.id} title={t.category.name} value={money(t.total)} share={t.share} color={c.up} />
-          ))}
+          {incomeTotals.length > 1 ? (
+            <Row
+              title="Total"
+              value={<Text tabular>{money(incomeTotals.reduce((sum, t) => sum + t.total, 0))}</Text>}
+              chevron={false}
+              accessory={
+                <Icon
+                  name={showSources ? 'chevron.up' : 'chevron.down'}
+                  size={13}
+                  weight="semibold"
+                  color={c.tertiary}
+                />
+              }
+              onPress={() => setShowSources(!showSources)}
+              accessibilityLabel={showSources ? 'Hide income sources' : 'Show income sources'}
+            />
+          ) : null}
+          {incomeTotals.length === 1 || showSources
+            ? incomeTotals.map((t) => (
+                <ShareRow key={t.category.id} title={t.category.name} value={money(t.total)} share={t.share} color={c.up} />
+              ))
+            : null}
         </Section>
       ) : null}
     </Screen>
