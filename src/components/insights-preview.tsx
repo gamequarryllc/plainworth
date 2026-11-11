@@ -19,6 +19,15 @@ export function InsightsPreview({ footer, children }: { footer: ReactNode; child
   );
 }
 
+/** Shows everything inside in full even where Insights is a preview. For pages drawn from sample data. */
+export function InsightsUnlocked({ children }: { children: ReactNode }) {
+  return (
+    <PreviewOn.Provider value={false}>
+      <FooterContext.Provider value={null}>{children}</FooterContext.Provider>
+    </PreviewOn.Provider>
+  );
+}
+
 /** True when Insights is showing the preview. */
 export function useInsightsPreview(): boolean {
   return useContext(PreviewOn);

@@ -27,6 +27,7 @@ import { currentData, flushSave, useStore } from '@/store';
 import { BackupError, backupFileName, contents, makeBackup, readBackup, type Backup } from '@/store/backup';
 import { openPaywall, restorePurchases, setTestPro, useProStore } from '@/store/pro';
 import { markReminderOffered, resetReminderOffer } from '@/store/reminder-offer';
+import { resetSample } from '@/store/sample-hidden';
 import { useSync } from '@/store/sync';
 import { layout, type, useColors } from '@/theme';
 
@@ -240,6 +241,16 @@ export default function SettingsScreen() {
             titleColor="tint"
             onPress={onSample}
             chevron={false}
+          />
+          <Row
+            title="Show Sample Previews Again"
+            subtitle="On pages with nothing entered yet"
+            titleColor="tint"
+            chevron={false}
+            onPress={() => {
+              resetSample();
+              notify('Sample previews are back', 'They show on any page with nothing entered.');
+            }}
           />
           <Row
             title="Offer Reminder Again"

@@ -1,5 +1,5 @@
 import { router } from "expo-router";
-import { useState, type ReactElement } from "react";
+import { Fragment, useState, type ReactElement } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
 
 import { BarChart } from "@/components/bar-chart";
@@ -14,10 +14,12 @@ import { EmptyState } from "@/components/empty-state";
 import { Icon } from "@/components/icon";
 import { InsightCard, RankRow } from "@/components/insight-card";
 import {
+  InsightsUnlocked,
   PreviewFooter,
   useInsightsPreview,
 } from "@/components/insights-preview";
 import { Row, Section } from "@/components/list";
+import { SampleBanner, SampleBody, SampleData } from "@/components/sample";
 import { Screen } from "@/components/screen";
 import { Segmented } from "@/components/segmented";
 import { StackedBars, useCategoryColors } from "@/components/stacked-bars";
@@ -74,6 +76,7 @@ import {
 } from "@/lib/spending";
 import type { SpendCategory, SpendingGoal } from "@/lib/types";
 import { useStore } from "@/store";
+import { useSampleOn } from "@/store/sample-hidden";
 import { openPaywall } from "@/store/pro";
 import { useColors } from "@/theme";
 
@@ -90,11 +93,29 @@ const PARTS: { value: Part; label: string }[] = [
  * tracker is filled in. As a preview, every card shows its chart's shape
  * with the numbers and answers hidden, and opens Pro when tapped.
  */
-export default function InsightsScreen() {
+export default function InsightsTab() {
+  const snapshots = useStore((s) => s.snapshots);
+  const spend = useStore((s) => s.spend);
+  const sample = useSampleOn() && firstYear({ snapshots, spend }) == null;
+  // With nothing entered yet, the page shows itself drawn from made-up
+  // sample data, numbers and all, whether or not Pro is unlocked.
+  return sample ? (
+    <SampleData>
+      <InsightsUnlocked>
+        <InsightsScreen sample />
+      </InsightsUnlocked>
+    </SampleData>
+  ) : (
+    <InsightsScreen />
+  );
+}
+
+function InsightsScreen({ sample }: { sample?: boolean }) {
   const tabButtons = useTabButtons();
   const snapshots = useStore((s) => s.snapshots);
   const spend = useStore((s) => s.spend);
   const [part, setPart] = useState<Part>("networth");
+  const Body = sample ? SampleBody : Fragment;
 
   if (firstYear({ snapshots, spend }) == null) {
     return (
@@ -111,13 +132,20 @@ export default function InsightsScreen() {
 
   return (
     <Screen title="Insights" large left={tabButtons}>
+      {sample ? (
+        <SampleBanner
+          action="Add an Account"
+          icon="plus"
+          onAction={() => router.push("/account-form")}
+        />
+      ) : null}
       <Segmented
         options={PARTS}
         value={part}
         onChange={setPart}
         style={styles.parts}
       />
-      {part === "networth" ? <NetWorth /> : <Spending />}
+      <Body>{part === "networth" ? <NetWorth /> : <Spending />}</Body>
       <PreviewFooter />
     </Screen>
   );

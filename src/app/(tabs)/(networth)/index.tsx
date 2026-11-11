@@ -1,4 +1,5 @@
 import { router } from "expo-router";
+import { Fragment } from "react";
 import { StyleSheet } from "react-native";
 
 import {
@@ -10,6 +11,7 @@ import { Button } from "@/components/button";
 import { EmptyState } from "@/components/empty-state";
 import type { HeaderItem, MenuItem } from "@/components/header-actions";
 import { Row, Section } from "@/components/list";
+import { SampleBanner, SampleBody, SampleData } from "@/components/sample";
 import { Screen } from "@/components/screen";
 import { SortButton } from "@/components/sort-button";
 import { useTabButtons } from "@/components/tab-buttons";
@@ -44,6 +46,7 @@ import {
 } from "@/lib/sort";
 import type { CategoryKind } from "@/lib/types";
 import { useStore } from "@/store";
+import { useSampleOn } from "@/store/sample-hidden";
 import { refreshSpotPrices } from "@/store/spot";
 
 const KINDS: { kind: CategoryKind; title: string }[] = [
@@ -51,7 +54,24 @@ const KINDS: { kind: CategoryKind; title: string }[] = [
   { kind: "liability", title: "Liabilities" },
 ];
 
-export default function NetWorthScreen() {
+/**
+ * Before the first account is added, the page shows itself filled in with
+ * made-up sample data, so it's clear what it becomes. The sample goes away
+ * with the first real account, or when it's hidden.
+ */
+export default function NetWorthTab() {
+  const empty = useStore((s) => s.accounts.length === 0);
+  const sample = useSampleOn() && empty;
+  return sample ? (
+    <SampleData>
+      <NetWorthScreen sample />
+    </SampleData>
+  ) : (
+    <NetWorthScreen />
+  );
+}
+
+function NetWorthScreen({ sample }: { sample?: boolean }) {
   const money = useMoney();
   const tabButtons = useTabButtons();
   const today = useToday();
@@ -191,6 +211,9 @@ export default function NetWorthScreen() {
     );
   }
 
+  // The sample can be scrolled but not tapped: its accounts aren't real.
+  const Body = sample ? SampleBody : Fragment;
+
   /** Under the debts: where extra money should go, and what interest costs each month. */
   const debtNotes: string[] = [];
   if (target)
@@ -311,12 +334,25 @@ export default function NetWorthScreen() {
       title={title}
       large
       left={tabButtons}
-      right={right}
-      onRefresh={hasLive ? () => refreshSpotPrices({ force: true }) : undefined}
+      right={sample ? [addButton] : right}
+      onRefresh={
+        hasLive && !sample
+          ? () => refreshSpotPrices({ force: true })
+          : undefined
+      }
     >
-      <TrendHeader current={totals.net} series={series} />
+      {sample ? (
+        <SampleBanner
+          action="Add an Account"
+          icon="plus"
+          onAction={() => router.push("/account-form")}
+        />
+      ) : null}
+      <Body>
+        <TrendHeader current={totals.net} series={series} />
 
-      {view === "categories" ? categorySections : accountSections}
+        {view === "categories" ? categorySections : accountSections}
+      </Body>
 
       {closedCount > 0 ? (
         <Section style={styles.listSection}>

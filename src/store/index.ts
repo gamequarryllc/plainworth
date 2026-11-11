@@ -1,4 +1,5 @@
-import { create } from 'zustand';
+import { createContext, useContext } from 'react';
+import { create, type StoreApi, type UseBoundStore } from 'zustand';
 
 import { shiftMonth } from '@/lib/dates';
 import { newId } from '@/lib/id';
@@ -178,7 +179,7 @@ function makeSnapshot(entry: NewSnapshot, createdAt: number): Snapshot {
   return snap;
 }
 
-export const useStore = create<Store>()((set, get) => ({
+const realStore = create<Store>()((set, get) => ({
   ...loadInitial(),
 
   addAccount({ name, categoryId, unit, metal, apr, initial }) {
@@ -430,6 +431,52 @@ export const useStore = create<Store>()((set, get) => ({
     );
   },
 }));
+
+/** True inside a first-open sample preview (see components/sample.tsx). */
+export const SampleContext = createContext(false);
+
+let sampleStore: UseBoundStore<StoreApi<Store>> | null = null;
+
+/**
+ * What a sample preview reads instead of the real data: made-up accounts and
+ * spending held only in memory. It is never saved, backed up, exported or
+ * synced, since all of those read the real store, and none of its actions do
+ * anything. Settings (currency, name, hidden amounts) follow the real ones.
+ */
+function getSampleStore(): UseBoundStore<StoreApi<Store>> {
+  if (sampleStore) return sampleStore;
+  const real = realStore.getState();
+  const inert = Object.fromEntries(
+    Object.entries(real)
+      .filter(([, value]) => typeof value === 'function')
+      .map(([key]) => [key, () => undefined]),
+  );
+  const store = create<Store>()(() => ({ ...real, ...sampleData(), settings: real.settings, ...inert }) as Store);
+  realStore.subscribe((state) => {
+    if (state.settings !== store.getState().settings) store.setState({ settings: state.settings });
+  });
+  sampleStore = store;
+  return store;
+}
+
+/**
+ * The app's data. Inside a sample preview the same call reads the made-up
+ * sample instead, so a screen draws either without knowing which. Everything
+ * outside React (saving, backup, export, sync) always gets the real data.
+ */
+function useData<T>(selector: (state: Store) => T): T {
+  const sample = useContext(SampleContext);
+  // A screen is either inside a preview or not for as long as it's mounted.
+  // Named as a hook so it's always called as one.
+  const useSource = sample ? getSampleStore() : realStore;
+  return useSource(selector);
+}
+
+export const useStore = Object.assign(useData, {
+  getState: realStore.getState,
+  setState: realStore.setState,
+  subscribe: realStore.subscribe,
+});
 
 // Persistence: write the whole document shortly after each change, one write at a time.
 let saveTimer: ReturnType<typeof setTimeout> | null = null;
