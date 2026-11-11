@@ -1,4 +1,5 @@
-import type { Data, DateKey } from '@/lib/types';
+import { isProfileId, MAIN } from '@/lib/profiles';
+import type { Data, DateKey, ID } from '@/lib/types';
 
 import { DATA_VERSION } from './defaults';
 import { migrate } from './migrate';
@@ -15,6 +16,18 @@ interface BackupFile {
   version: number;
   /** The day it was made. */
   date: DateKey;
+  /** The profile that was open. Versions before profiles read only this. */
+  data: Data;
+  /** Which profile `data` is. Missing in backups made before profiles. */
+  profile?: { id: ID; createdAt: number };
+  /** Every other profile. */
+  others?: BackupProfile[];
+}
+
+/** One profile's data inside a backup. */
+export interface BackupProfile {
+  id: ID;
+  createdAt: number;
   data: Data;
 }
 
@@ -22,8 +35,20 @@ export function backupFileName(today: DateKey): string {
   return `Plainworth Backup ${today}.plainworth`;
 }
 
-export function makeBackup(data: Data, today: DateKey): string {
-  const file: BackupFile = { app: 'Plainworth', version: DATA_VERSION, date: today, data: { ...data, version: DATA_VERSION } };
+/**
+ * `profiles` is every profile with the open one first. Left out (as in tests
+ * of a single set of data), the file is one profile's worth, like backups
+ * made before profiles.
+ */
+export function makeBackup(data: Data, today: DateKey, profiles?: BackupProfile[]): string {
+  const stamp = (d: Data): Data => ({ ...d, version: DATA_VERSION });
+  const file: BackupFile = { app: 'Plainworth', version: DATA_VERSION, date: today, data: stamp(data) };
+  if (profiles?.length) {
+    const [open, ...others] = profiles;
+    file.data = stamp(open.data);
+    file.profile = { id: open.id, createdAt: open.createdAt };
+    file.others = others.map((p) => ({ id: p.id, createdAt: p.createdAt, data: stamp(p.data) }));
+  }
   return JSON.stringify(file);
 }
 
@@ -31,9 +56,16 @@ export function makeBackup(data: Data, today: DateKey): string {
 export class BackupError extends Error {}
 
 export interface Backup {
+  /** The profile that was open when it was made. */
   data: Data;
   /** When it was made, if the file says. */
   date: DateKey | null;
+  /**
+   * Every profile, the open one first, when the file holds them all. Null for
+   * a backup made before profiles, which is one profile's data and restores
+   * into whichever profile is open.
+   */
+  profiles: BackupProfile[] | null;
 }
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
@@ -55,9 +87,24 @@ export function readBackup(text: string): Backup {
   if (version > DATA_VERSION) {
     throw new BackupError('This backup was made by a newer version of Plainworth. Update the app, then try again.');
   }
+  const damaged = () => new BackupError('This backup is damaged or incomplete, so nothing was changed.');
   const data = checkedData(file.data, version);
-  if (!data) throw new BackupError('This backup is damaged or incomplete, so nothing was changed.');
-  return { data, date: typeof file.date === 'string' && DATE.test(file.date) ? file.date : null };
+  if (!data) throw damaged();
+  let profiles: BackupProfile[] | null = null;
+  if (isRecord(file.profile)) {
+    const createdAt = (v: unknown) => (isNumber(v) ? v : 0);
+    profiles = [{ id: isProfileId(file.profile.id) ? file.profile.id : MAIN, createdAt: createdAt(file.profile.createdAt), data }];
+    const seen = new Set([profiles[0].id]);
+    for (const other of Array.isArray(file.others) ? (file.others as unknown[]) : []) {
+      // One unreadable profile spoils the file: restoring the rest would quietly lose it.
+      if (!isRecord(other) || !isProfileId(other.id) || seen.has(other.id)) throw damaged();
+      const otherData = checkedData(other.data, version);
+      if (!otherData) throw damaged();
+      seen.add(other.id);
+      profiles.push({ id: other.id, createdAt: createdAt(other.createdAt), data: otherData });
+    }
+  }
+  return { data, date: typeof file.date === 'string' && DATE.test(file.date) ? file.date : null, profiles };
 }
 
 /**
@@ -70,11 +117,15 @@ export function checkedData(raw: unknown, version: number): Data | null {
   return migrate({ ...raw, version });
 }
 
-/** "12 accounts and 22 months of spending". */
-export function contents(data: Data): string {
-  const months = Object.values(data.spend).filter((m) => Object.values(m).some(Boolean)).length;
+/** "12 accounts and 22 months of spending". Several profiles' worth are added up. */
+export function contents(...all: Data[]): string {
+  const accounts = all.reduce((n, data) => n + data.accounts.length, 0);
+  const months = all.reduce(
+    (n, data) => n + Object.values(data.spend).filter((m) => Object.values(m).some(Boolean)).length,
+    0,
+  );
   const parts = [
-    data.accounts.length ? `${data.accounts.length} ${data.accounts.length === 1 ? 'account' : 'accounts'}` : '',
+    accounts ? `${accounts} ${accounts === 1 ? 'account' : 'accounts'}` : '',
     months ? `${months} ${months === 1 ? 'month' : 'months'} of spending` : '',
   ].filter(Boolean);
   return parts.length ? parts.join(' and ') : 'nothing in it yet';

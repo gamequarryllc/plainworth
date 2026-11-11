@@ -18,8 +18,11 @@ export function exportWorkbook(data: Data, today: DateKey): Uint8Array {
   return buildWorkbook(exportSheets(data, today), moneyFormat(currencySymbol(currency), currencyDecimals(currency)));
 }
 
-export function exportFileName(today: DateKey): string {
-  return `Plainworth ${today}.xlsx`;
+/** `profile` is the open profile's name, given when there's more than one so the files can be told apart. */
+export function exportFileName(today: DateKey, profile?: string): string {
+  // Characters a file name can't have, on a phone or a computer.
+  const name = (profile ?? '').replace(/[\\/:*?"<>|]/g, '').trim();
+  return `Plainworth ${name ? `${name} ` : ''}${today}.xlsx`;
 }
 
 export function exportSheets(data: Data, today: DateKey): Sheet[] {

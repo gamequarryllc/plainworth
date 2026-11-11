@@ -7,10 +7,10 @@ import { Screen } from '@/components/screen';
 import { dateKey, formatDate, formatTime } from '@/lib/dates';
 import { choose, confirm, notify } from '@/lib/dialogs';
 import { haptics } from '@/lib/haptics';
-import { isEmpty } from '@/lib/sync/merge';
-import { currentData } from '@/store';
+import { profileLabel } from '@/lib/profiles';
 import { contents } from '@/store/backup';
 import { openPaywall, usePro } from '@/store/pro';
+import { useProfiles } from '@/store/profile-list';
 import {
   bringBackReplaced,
   cloudSupported,
@@ -38,6 +38,7 @@ function ago(at: number, now: number): string {
 export default function SyncScreen() {
   const pro = usePro();
   const { on, busy, lastSynced, problem, stoppedElsewhere, replaced } = useSync();
+  const profiles = useProfiles((s) => s.list);
   const [working, setWorking] = useState(false);
   const [now, setNow] = useState(() => Date.now());
 
@@ -76,19 +77,21 @@ export default function SyncScreen() {
         );
         return;
       }
-      let keep: 'device' | 'icloud' = 'device';
-      const mine = currentData();
-      if (seen.cloud) {
-        if (isEmpty(mine)) keep = 'icloud';
-        else {
-          const i = await choose({
-            title: 'Which data do you want to keep?',
-            message: `iCloud has ${contents(seen.cloud.data)}, last changed ${formatDate(dateKey(new Date(seen.cloud.changedAt)))}. This iPhone has ${contents(mine)}.\n\nThe other one is replaced on all your devices. A copy of it stays on this iPhone in case you change your mind.`,
-            options: [{ label: 'Keep iCloud’s Data' }, { label: 'Keep This iPhone’s Data' }],
-          });
-          if (i == null) return;
-          keep = i === 0 ? 'icloud' : 'device';
-        }
+      // Only profiles with data both here and in iCloud need a choice. The rest are simply kept.
+      let keep: 'device' | 'icloud' = 'icloud';
+      if (seen.both.length) {
+        const changedAt = Math.max(...seen.both.map((b) => b.cloud.changedAt));
+        const where =
+          profiles.length > 1
+            ? ` in ${seen.both.map((b) => `“${profileLabel(profiles.find((p) => p.id === b.id)!, profiles)}”`).join(' and ')}`
+            : '';
+        const i = await choose({
+          title: 'Which data do you want to keep?',
+          message: `iCloud has ${contents(...seen.both.map((b) => b.cloud.data))}${where}, last changed ${formatDate(dateKey(new Date(changedAt)))}. This iPhone has ${contents(...seen.both.map((b) => b.local))}.\n\nThe other one is replaced on all your devices. A copy of it stays on this iPhone in case you change your mind.`,
+          options: [{ label: 'Keep iCloud’s Data' }, { label: 'Keep This iPhone’s Data' }],
+        });
+        if (i == null) return;
+        keep = i === 0 ? 'icloud' : 'device';
       }
       await turnOnSync(keep);
       haptics.success();
@@ -208,6 +211,7 @@ export default function SyncScreen() {
         <Row title="Accounts and balances" chevron={false} />
         <Row title="Spending, income and notes" chevron={false} />
         <Row title="Categories, goals, name and currency" chevron={false} />
+        {profiles.length > 1 ? <Row title="Every profile" chevron={false} /> : null}
       </Section>
     </Screen>
   );

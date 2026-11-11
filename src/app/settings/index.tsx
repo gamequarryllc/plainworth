@@ -2,7 +2,7 @@ import Constants, { ExecutionEnvironment } from 'expo-constants';
 import * as Device from 'expo-device';
 import { router } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { AppState, Linking, Platform, Pressable, StyleSheet, Switch, TextInput, View } from 'react-native';
 
 import { Icon } from '@/components/icon';
@@ -18,6 +18,7 @@ import { FEEDBACK_EMAIL, feedbackMailto } from '@/lib/feedback';
 import { haptics } from '@/lib/haptics';
 import { CURRENCIES } from '@/lib/money';
 import { cleanName, NAME_MAX, netWorthTitle, possessive } from '@/lib/name';
+import { profileLabel } from '@/lib/profiles';
 import { askForReminders, reminderPermission, type ReminderPermission } from '@/lib/notifications';
 import { pickTextFile } from '@/lib/pick-file';
 import { firstWeekday, formatReminder, MONTH_DAYS, monthDayName, reminderTimes, WEEKDAYS } from '@/lib/reminders';
@@ -25,6 +26,8 @@ import { BACKUP, shareFile } from '@/lib/share-file';
 import type { DateKey, Reminder, ReminderRepeat } from '@/lib/types';
 import { currentData, flushSave, useStore } from '@/store';
 import { BackupError, backupFileName, contents, makeBackup, readBackup, type Backup } from '@/store/backup';
+import { useProfiles } from '@/store/profile-list';
+import { allProfiles, eraseEverything, restoreBackup } from '@/store/profiles';
 import { openPaywall, restorePurchases, setTestPro, useProStore } from '@/store/pro';
 import { markReminderOffered, resetReminderOffer } from '@/store/reminder-offer';
 import { resetSample } from '@/store/sample-hidden';
@@ -40,8 +43,9 @@ export default function SettingsScreen() {
   const hasData = useStore((s) => s.accounts.length > 0 || Object.keys(s.spend).length > 0);
   const [busy, setBusy] = useState(false);
   const updateSettings = useStore((s) => s.updateSettings);
-  const eraseAll = useStore((s) => s.eraseAll);
-  const restore = useStore((s) => s.restore);
+  const profiles = useProfiles((s) => s.list);
+  const several = profiles.length > 1;
+  const openProfile = useProfiles((s) => s.list.find((p) => p.id === s.active))!;
   const loadSampleData = useStore((s) => s.loadSampleData);
   const proSource = useProStore((s) => s.source);
   const pro = proSource != null;
@@ -75,7 +79,8 @@ export default function SettingsScreen() {
     setBusy(true);
     try {
       const today = todayKey();
-      await shareFile(backupFileName(today), makeBackup(currentData(), today), BACKUP, 'Back Up');
+      // Every profile goes in the one file.
+      await shareFile(backupFileName(today), makeBackup(currentData(), today, allProfiles()), BACKUP, 'Back Up');
       updateSettings({ lastBackup: today });
     } catch (e) {
       console.warn('Backup failed', e);
@@ -96,14 +101,27 @@ export default function SettingsScreen() {
       notify('Can’t restore this file', e instanceof BackupError ? e.message : 'It couldn’t be read. Please try again.');
       return;
     }
+    // A backup made before profiles is one profile's worth, and goes into the open one.
+    const whole = backup.profiles;
+    const has = whole
+      ? `${whole.length > 1 ? `${whole.length} profiles with ` : ''}${contents(...whole.map((p) => p.data))}`
+      : contents(backup.data);
+    const replaces = whole
+      ? several
+        ? 'every profile in Plainworth'
+        : 'everything in Plainworth'
+      : several
+        ? `everything in “${profileLabel(openProfile, profiles)}”`
+        : 'everything in Plainworth';
+    const destructive = hasData || (several && !!whole);
     const ok = await confirm({
       title: 'Restore this backup?',
-      message: `${backup.date ? `The backup from ${formatDate(backup.date, { year: true })}` : 'This backup'} has ${contents(backup.data)}.${hasData ? ` It replaces everything in Plainworth now${syncOn ? ', on all your devices' : ''}.` : ''}`,
+      message: `${backup.date ? `The backup from ${formatDate(backup.date, { year: true })}` : 'This backup'} has ${has}.${destructive ? ` It replaces ${replaces} now${syncOn ? ', on all your devices' : ''}.` : ''}`,
       confirmLabel: 'Restore',
-      destructive: hasData,
+      destructive,
     });
     if (!ok) return;
-    restore(backup.data, backup.date);
+    restoreBackup(backup);
     await flushSave();
     haptics.success();
     notify('Backup restored', 'Everything from the backup is back in Plainworth.');
@@ -112,12 +130,12 @@ export default function SettingsScreen() {
   const onErase = async () => {
     const ok = await confirm({
       title: 'Erase all data?',
-      message: `Every account, balance and month you entered will be deleted from this ${DEVICE}${syncOn ? ' and, because sync is on, from your other devices and iCloud' : ''}. This can’t be undone.`,
+      message: `Every ${several ? 'profile, ' : ''}account, balance and month you entered will be deleted from this ${DEVICE}${syncOn ? ' and, because sync is on, from your other devices and iCloud' : ''}. This can’t be undone.`,
       confirmLabel: 'Erase Everything',
       destructive: true,
     });
     if (ok) {
-      eraseAll();
+      eraseEverything();
       haptics.warning();
     }
   };
@@ -167,7 +185,16 @@ export default function SettingsScreen() {
         ) : null}
       </Section>
 
-      <YourName />
+      <YourName
+        profiles={
+          <Row
+            title="Profiles"
+            value={several ? profileLabel(openProfile, profiles) : undefined}
+            accessory={pro || several ? undefined : <ProBadge />}
+            onPress={() => router.push('/settings/profiles')}
+          />
+        }
+      />
 
       <Section
         header="General"
@@ -206,7 +233,7 @@ export default function SettingsScreen() {
       <Section
         header="Backup"
         footer={`${backupStatus(settings.lastBackup)} Save the backup somewhere safe, like iCloud Drive or Google Drive. If you ever lose your ${DEVICE}, install Plainworth again and restore it.`}>
-        <Row title="Back Up Now" titleColor="tint" chevron={false} disabled={!hasData || busy} onPress={onBackup} />
+        <Row title="Back Up Now" titleColor="tint" chevron={false} disabled={(!hasData && !several) || busy} onPress={onBackup} />
         <Row title="Restore from Backup" titleColor="tint" chevron={false} disabled={busy} onPress={onRestore} />
       </Section>
 
@@ -433,8 +460,8 @@ function PrivacyNote() {
   );
 }
 
-/** An optional name that makes the Net Worth title "Alex’s Net Worth". */
-function YourName() {
+/** An optional name that makes the Net Worth title "Alex’s Net Worth", with the profiles it's one of. */
+function YourName({ profiles }: { profiles: ReactNode }) {
   const c = useColors();
   const name = useStore((s) => s.settings.name) ?? '';
   const updateSettings = useStore((s) => s.updateSettings);
@@ -461,6 +488,7 @@ function YourName() {
           />
         }
       />
+      {profiles}
     </Section>
   );
 }

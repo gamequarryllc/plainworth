@@ -115,6 +115,8 @@ export interface SyncDeps {
   onStatus(status: SyncStatus): void;
   now(): number;
   newId(): string;
+  /** This device's id, when something outside decides it (each profile's sync on one device shares one). */
+  deviceId?(): string;
 }
 
 interface OtherFile {
@@ -134,6 +136,7 @@ export function createSync(deps: SyncDeps) {
   const seen = new Map<string, OtherFile>();
 
   const fileName = (deviceId: string) => `${deviceId}.json`;
+  const myId = (): string | null => state?.deviceId ?? deps.deviceId?.() ?? null;
 
   function status(): SyncStatus {
     return {
@@ -377,7 +380,8 @@ export function createSync(deps: SyncDeps) {
     if (!(await deps.cloud.available())) return { available: false, cloud: null };
     const names = await deps.cloud.list();
     // This device's own file from an earlier time sync was on doesn't count as data in iCloud.
-    const others = await readOthers(names, state ? fileName(state.deviceId) : null);
+    const mine = myId();
+    const others = await readOthers(names, mine ? fileName(mine) : null);
     const latest = newest(others.map((o) => o.file).filter((f): f is CloudFile => f != null));
     if (!latest || isEmpty(latest.data)) return { available: true, cloud: null };
     return { available: true, cloud: { data: latest.data, changedAt: latestStamp(latest.meta) } };
@@ -391,7 +395,7 @@ export function createSync(deps: SyncDeps) {
   async function enable(keep: 'device' | 'icloud'): Promise<void> {
     await running;
     const names = await deps.cloud.list();
-    const deviceId = state?.deviceId ?? deps.newId();
+    const deviceId = myId() ?? deps.newId();
     const others = await readOthers(names, fileName(deviceId));
     const latest = newest(others.map((o) => o.file).filter((f): f is CloudFile => f != null));
     // After any earlier "delete from iCloud", even if that device's clock runs ahead of this one's.
@@ -414,13 +418,38 @@ export function createSync(deps: SyncDeps) {
     } else {
       if (latest && !isEmpty(latest.data)) deps.keepReplaced(adopt(local, latest.data), 'icloud');
       // A new line of history that's newer than anything in iCloud, so other devices take it.
-      const at = Math.max(now, (latest ? latestStamp(latest.meta) : 0) + 1, (state?.clock ?? 0) + 1);
-      state = { on: true, deviceId, joinedAt: now, ...newMeta({ id: deps.newId(), at }), clock: at, dirty: true };
+      // Unless there's nothing here: an empty device must never replace anyone's data, even
+      // when iCloud hasn't delivered another device's file yet and so looks empty too. Its
+      // line of history is the oldest there can be, and it takes the first real one it sees.
+      const at = isEmpty(local) ? 0 : Math.max(now, (latest ? latestStamp(latest.meta) : 0) + 1, (state?.clock ?? 0) + 1);
+      state = {
+        on: true,
+        deviceId,
+        joinedAt: now,
+        ...newMeta({ id: deps.newId(), at }),
+        clock: Math.max(at, state?.clock ?? 0),
+        dirty: true,
+      };
     }
     problem = undefined;
     save();
     publish();
     await sync();
+  }
+
+  /**
+   * Turn sync on only by taking what's already in iCloud. False, with nothing
+   * changed, if no other device's copy is there yet. For data that began on
+   * another device: this one must wait for it, not start its own.
+   */
+  async function join(): Promise<boolean> {
+    await running;
+    const names = await deps.cloud.list();
+    const mine = myId();
+    const others = await readOthers(names, mine ? fileName(mine) : null);
+    if (!others.some((o) => o.file != null)) return false;
+    await enable('icloud');
+    return true;
   }
 
   /**
@@ -430,7 +459,7 @@ export function createSync(deps: SyncDeps) {
    */
   async function disable(deleteCloud: boolean): Promise<void> {
     await running;
-    const deviceId = state?.deviceId ?? deps.newId();
+    const deviceId = myId() ?? deps.newId();
     const epoch = state?.epoch ?? { id: deps.newId(), at: deps.now() };
     const clock = state?.clock ?? deps.now();
     state = { on: false, deviceId, joinedAt: 0, epoch, stamps: {}, tombs: {}, clock, dirty: false };
@@ -476,7 +505,10 @@ export function createSync(deps: SyncDeps) {
     publish();
   }
 
-  return { status, sync, look, enable, disable, localChange, localReplace, dismissStopped };
+  /** The latest change time this device has made or seen. */
+  const clock = () => state?.clock ?? 0;
+
+  return { status, sync, look, enable, join, disable, localChange, localReplace, dismissStopped, clock };
 }
 
 export type Sync = ReturnType<typeof createSync>;

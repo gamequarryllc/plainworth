@@ -12,7 +12,9 @@ import { notify } from '@/lib/dialogs';
 import { exportContents, exportFileName, exportSheets, exportWorkbook } from '@/lib/export';
 import { LIFETIME_PRICE } from '@/lib/pro';
 import { EXCEL, shareFile } from '@/lib/share-file';
+import { profileLabel } from '@/lib/profiles';
 import { currentData, useStore } from '@/store';
+import { useProfiles } from '@/store/profile-list';
 import { openPaywall, useProStore } from '@/store/pro';
 import { sampleData } from '@/store/sample';
 import { layout, useColors } from '@/theme';
@@ -36,6 +38,10 @@ export default function ExportScreen() {
   const snapshots = useStore((s) => s.snapshots);
   const spend = useStore((s) => s.spend);
   const [busy, setBusy] = useState(false);
+  // The export is the open profile's. With several, its name goes in the file name.
+  const profiles = useProfiles((s) => s.list);
+  const open = useProfiles((s) => s.list.find((p) => p.id === s.active));
+  const fileName = exportFileName(today, open && profiles.length > 1 ? profileLabel(open, profiles) : undefined);
 
   const data = useMemo(
     () => (hasData ? currentData() : sampleData(4)),
@@ -51,7 +57,7 @@ export default function ExportScreen() {
   const onExport = async () => {
     setBusy(true);
     try {
-      await shareFile(exportFileName(today), exportWorkbook(currentData(), today), EXCEL, 'Export to Excel');
+      await shareFile(fileName, exportWorkbook(currentData(), today), EXCEL, 'Export to Excel');
     } catch (e) {
       console.warn('Export failed', e);
       notify('Couldn’t export', 'Something went wrong making the spreadsheet. Please try again.');
@@ -63,7 +69,7 @@ export default function ExportScreen() {
   return (
     <Screen title="Export to Excel" left={[{ label: 'Close', icon: 'xmark', onPress: () => router.back() }]}>
       <Text variant="footnote" color="secondary" style={styles.caption}>
-        {hasData ? exportFileName(today).toUpperCase() : 'EXAMPLE SPREADSHEET'}
+        {hasData ? fileName.toUpperCase() : 'EXAMPLE SPREADSHEET'}
       </Text>
       <View style={[styles.preview, { borderColor: c.separator }]}>
         <SheetPreview sheet={sheet} currency={currency} masked={masked && hasData} faded={!pro} />

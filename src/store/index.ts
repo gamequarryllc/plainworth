@@ -23,10 +23,9 @@ import type {
 
 import { DATA_VERSION, emptyData } from './defaults';
 import { migrate } from './migrate';
+import { activeProfile, dataKey } from './profile-list';
 import { sampleData } from './sample';
 import { DECADE, decadeSampleData } from './sample-decade';
-
-const STORAGE_KEY = 'tally.data';
 
 export interface NewSnapshot {
   accountId: ID;
@@ -93,10 +92,11 @@ interface Actions {
 
 export type Store = Data & Actions;
 
-function loadInitial(): Data {
+/** A profile's saved data, read from storage. The store holds the open profile's; `profiles.ts` reads the others. */
+export function loadData(key: string): Data {
   let raw: string | null = null;
   try {
-    raw = storage.read(STORAGE_KEY);
+    raw = storage.read(key);
   } catch (e) {
     console.warn('Could not read saved data', e);
   }
@@ -106,7 +106,7 @@ function loadInitial(): Data {
   } catch (e) {
     // Never silently throw away someone's data: keep the unreadable copy aside.
     console.warn('Saved data was unreadable; keeping a copy and starting fresh', e);
-    storage.write(`${STORAGE_KEY}.unreadable.${Date.now()}`, raw).catch(() => {});
+    storage.write(`${key}.unreadable.${Date.now()}`, raw).catch(() => {});
     return emptyData();
   }
 }
@@ -129,6 +129,20 @@ function replaceAll(run: () => void) {
     run();
   } finally {
     replacing = false;
+  }
+}
+
+/** True while another profile's data is being put on screen, which isn't a change to anyone's data. */
+let switching = false;
+export const isSwitching = () => switching;
+
+/** Show another profile's data in place of the one that was open. */
+export function showProfileData(data: Data) {
+  switching = true;
+  try {
+    useStore.setState(data);
+  } finally {
+    switching = false;
   }
 }
 
@@ -180,7 +194,7 @@ function makeSnapshot(entry: NewSnapshot, createdAt: number): Snapshot {
 }
 
 const realStore = create<Store>()((set, get) => ({
-  ...loadInitial(),
+  ...loadData(dataKey(activeProfile())),
 
   addAccount({ name, categoryId, unit, metal, apr, initial }) {
     const id = newId();
@@ -487,9 +501,11 @@ function writeNow() {
     clearTimeout(saveTimer);
     saveTimer = null;
   }
+  // Both read now, so a save that's waiting when profiles are switched still goes to the right one.
+  const key = dataKey(activeProfile());
   const json = JSON.stringify(dataOf(useStore.getState()));
   writing = writing
-    .then(() => storage.write(STORAGE_KEY, json))
+    .then(() => storage.write(key, json))
     .catch((e) => console.warn('Could not save data', e));
   return writing;
 }
