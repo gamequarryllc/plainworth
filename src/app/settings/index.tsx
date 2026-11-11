@@ -1,4 +1,5 @@
-import Constants from 'expo-constants';
+import Constants, { ExecutionEnvironment } from 'expo-constants';
+import * as Device from 'expo-device';
 import { router } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import { useEffect, useState } from 'react';
@@ -13,6 +14,7 @@ import { TimeField } from '@/components/time-field';
 import { authenticate, biometricLabel, canAuthenticate, systemAppLock } from '@/lib/auth';
 import { dayNumber, formatDate, todayKey } from '@/lib/dates';
 import { choose, confirm, notify } from '@/lib/dialogs';
+import { FEEDBACK_EMAIL, feedbackMailto } from '@/lib/feedback';
 import { haptics } from '@/lib/haptics';
 import { CURRENCIES } from '@/lib/money';
 import { cleanName, NAME_MAX, netWorthTitle, possessive } from '@/lib/name';
@@ -217,6 +219,10 @@ export default function SettingsScreen() {
         />
       </Section>
 
+      <Section footer="Want a feature, or don’t like something? Tell us. We read every email, though we can’t promise every request.">
+        <Row title="Send Feedback" titleColor="tint" chevron={false} onPress={sendFeedback} />
+      </Section>
+
       <Section>
         <Row title="Erase All Data" titleColor="down" onPress={onErase} chevron={false} />
       </Section>
@@ -355,6 +361,20 @@ function Reminders() {
       ) : null}
     </Section>
   );
+}
+
+/** Opens Mail with the address, subject and app version filled in. Nothing is sent until the person sends it. */
+function sendFeedback() {
+  // In Expo Go the native build number is Expo Go's own, not Plainworth's.
+  const build = Constants.executionEnvironment === ExecutionEnvironment.StoreClient ? null : Constants.nativeBuildVersion;
+  const url = feedbackMailto({
+    version: Constants.expoConfig?.version,
+    build,
+    device: Device.modelName,
+    system: Device.osName && Device.osVersion ? `${Device.osName} ${Device.osVersion}` : null,
+  });
+  // No mail app set up, e.g. Mail was removed.
+  Linking.openURL(url).catch(() => notify('Email us', `Send your feedback to ${FEEDBACK_EMAIL}.`));
 }
 
 /** "Last backed up 3 days ago." No reminders: just the fact, where backups live. */
