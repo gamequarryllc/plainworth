@@ -349,7 +349,7 @@ function NetWorthScreen({ sample }: { sample?: boolean }) {
         />
       ) : null}
       <Body>
-        <TrendHeader current={totals.net} series={series} />
+        <TrendHeader current={totals.net} series={series} hideChange />
 
         {view === "categories" ? categorySections : accountSections}
       </Body>

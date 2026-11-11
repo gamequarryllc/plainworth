@@ -28,12 +28,18 @@ export function TrendHeader({
   current,
   series,
   invert,
+  hideChange,
 }: {
   label?: string;
   current: number;
   series: SeriesPoint[];
   /** For debts: a falling balance is shown in green. */
   invert?: boolean;
+  /**
+   * Leaves out the "+$X (Y%) Past Month" line under the value. While dragging
+   * the chart, only the date of the point is shown.
+   */
+  hideChange?: boolean;
 }) {
   const c = useColors();
   const money = useMoney();
@@ -88,6 +94,12 @@ export function TrendHeader({
               </Text>
               <Icon name="chevron.right" size={11} weight="semibold" color={c.tertiary} />
             </Pressable>
+          ) : hideChange ? (
+            scrubbed ? (
+              <Text variant="subheadline" color="secondary" numberOfLines={1}>
+                {caption}
+              </Text>
+            ) : null
           ) : points.length > 0 ? (
             <Change
               delta={shown.delta}
