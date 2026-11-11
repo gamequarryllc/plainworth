@@ -43,8 +43,6 @@ const styles = StyleSheet.create({
   row: {
     flexDirection: 'row',
     marginTop: 14,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderBottomWidth: StyleSheet.hairlineWidth,
   },
   tile: {
     flex: 1,

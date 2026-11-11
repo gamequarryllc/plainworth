@@ -40,7 +40,7 @@ export function KeyboardBar({ chain, count }: { chain: ReturnType<typeof useFiel
   return (
     <InputAccessoryView nativeID={KEYBOARD_BAR_ID}>
       <View style={styles.bar}>
-        <View style={[styles.group, { backgroundColor: c.card }]}>
+        <View style={[styles.group, { backgroundColor: c.elevated }]}>
           <Pressable onPress={() => chain.go(-1)} disabled={!canPrev} hitSlop={8} style={styles.arrow} accessibilityLabel="Previous field">
             <Icon name="chevron.up" size={18} weight="semibold" color={canPrev ? c.text : c.tertiary} />
           </Pressable>
@@ -49,7 +49,7 @@ export function KeyboardBar({ chain, count }: { chain: ReturnType<typeof useFiel
           </Pressable>
         </View>
         <Pressable onPress={() => Keyboard.dismiss()} style={[styles.done, { backgroundColor: c.tint }]} accessibilityRole="button">
-          <Text variant="headline" color="#FFFFFF">
+          <Text variant="headline" color={c.onTint}>
             Done
           </Text>
         </Pressable>

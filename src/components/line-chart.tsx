@@ -192,7 +192,7 @@ export function LineChart({ points, color, height = 160, baseline, onScrub, axis
           <Svg width={width} height={height} style={StyleSheet.absoluteFill} pointerEvents="none">
             <Defs>
               <LinearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
-                <Stop offset="0" stopColor={color} stopOpacity={0.22} />
+                <Stop offset="0" stopColor={color} stopOpacity={0.12} />
                 <Stop offset="1" stopColor={color} stopOpacity={0} />
               </LinearGradient>
             </Defs>
@@ -205,7 +205,6 @@ export function LineChart({ points, color, height = 160, baseline, onScrub, axis
                 y2={y(t)}
                 stroke={c.chartGrid}
                 strokeWidth={1}
-                strokeDasharray="3,4"
               />
             ))}
             {baseY != null ? (
@@ -224,7 +223,7 @@ export function LineChart({ points, color, height = 160, baseline, onScrub, axis
             <Path
               d={line}
               stroke={color}
-              strokeWidth={2.2}
+              strokeWidth={1.8}
               fill="none"
               strokeLinejoin="round"
               strokeLinecap="round"

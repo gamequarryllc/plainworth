@@ -31,12 +31,12 @@ export default function AppTabs() {
 
 function Bar(props: TabListProps) {
   const c = useColors();
-  return <View {...props} style={[styles.bar, { backgroundColor: c.card, borderTopColor: c.separator }]} />;
+  return <View {...props} style={[styles.bar, { backgroundColor: c.background, borderTopColor: c.separator }]} />;
 }
 
 function TabButton({ children, isFocused, icon, ...props }: TabTriggerSlotProps & { icon: SFSymbol }) {
   const c = useColors();
-  const color = isFocused ? c.tint : c.secondary;
+  const color = isFocused ? c.text : c.tertiary;
   return (
     <Pressable {...(props as PressableProps)} style={styles.button}>
       <View style={styles.inner}>

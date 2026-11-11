@@ -24,7 +24,7 @@ export function SampleBanner({ action, icon, onAction }: { action: string; icon?
     <View style={[styles.banner, { borderColor: c.separator }]}>
       <View style={styles.line}>
         <View style={[styles.badge, { backgroundColor: c.tint }]}>
-          <Text variant="caption" weight="700" color="#FFFFFF" style={styles.badgeText}>
+          <Text variant="caption" weight="700" color={c.onTint} style={styles.badgeText}>
             SAMPLE
           </Text>
         </View>

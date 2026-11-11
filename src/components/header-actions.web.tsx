@@ -40,7 +40,7 @@ export function InlineHeaderButtons({ items }: { items: HeaderItem[] }) {
       ))}
       <Modal visible={!!menu} transparent animationType="fade" onRequestClose={() => setMenu(null)}>
         <Pressable style={styles.backdrop} onPress={() => setMenu(null)}>
-          <View style={[styles.menu, { backgroundColor: c.card }]}>
+          <View style={[styles.menu, { backgroundColor: c.elevated }]}>
             {menu ? <MenuList items={menu} close={() => setMenu(null)} /> : null}
           </View>
         </Pressable>

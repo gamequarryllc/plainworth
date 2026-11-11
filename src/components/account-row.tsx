@@ -98,11 +98,11 @@ export function TrendRow({
         </Text>
       }
       value={
-        <Text variant="body" weight="600" tabular numberOfLines={1}>
+        <Text variant="body" weight="500" tabular numberOfLines={1}>
           {value}
         </Text>
       }
-      detail={change ? <Change delta={change} ratio={changeRatio} invert={invert} variant="footnote" weight="500" /> : undefined}
+      detail={change ? <Change delta={change} ratio={changeRatio} invert={invert} variant="footnote" weight="400" /> : undefined}
       chevron={false}
       onPress={onPress}
     />

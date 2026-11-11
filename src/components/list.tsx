@@ -51,10 +51,11 @@ export function Section({
           <Text
             variant="footnote"
             color="secondary"
+            weight="500"
             numberOfLines={1}
             style={styles.headerText}
           >
-            {header.toUpperCase()}
+            {header}
           </Text>
           {headerValue ? (
             <Text
@@ -274,7 +275,7 @@ export function SectionTitle({
 
 const styles = StyleSheet.create({
   section: {
-    marginTop: 20,
+    marginTop: 28,
   },
   header: {
     flexDirection: "row",
@@ -291,8 +292,6 @@ const styles = StyleSheet.create({
     marginTop: 6,
   },
   card: {
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderBottomWidth: StyleSheet.hairlineWidth,
     overflow: "hidden",
   },
   separator: {

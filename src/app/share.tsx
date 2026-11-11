@@ -184,7 +184,7 @@ export default function ShareScreen() {
               const good = debt ? ch.delta < 0 : ch.delta > 0;
               const tone = ch.delta === 0 ? 'secondary' : good ? 'up' : 'down';
               return (
-                <View key={s.account.id} style={[styles.row, { backgroundColor: c.card }]}>
+                <View key={s.account.id} style={[styles.row, { backgroundColor: c.elevated }]}>
                   <Sparkline
                     points={own}
                     from={leadStart(perAccount.get(s.account.id) ?? [], range, today)}

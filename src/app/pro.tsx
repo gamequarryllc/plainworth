@@ -77,7 +77,7 @@ export default function ProScreen() {
       right={[{ label: 'Done', icon: 'checkmark', variant: 'done', onPress: () => router.back() }]}>
       <View style={styles.top}>
         <View style={[styles.appIcon, { backgroundColor: c.tint }]}>
-          <Icon name="chart.line.uptrend.xyaxis" size={30} weight="semibold" color="#FFFFFF" />
+          <Icon name="chart.line.uptrend.xyaxis" size={30} weight="semibold" color={c.onTint} />
         </View>
         <Text variant="subheadline" color="secondary" align="center">
           Tracking your net worth and spending is always free. Pro adds the extras.

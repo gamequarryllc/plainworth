@@ -38,13 +38,13 @@ export function InsightCard({
   const content = (
     <>
       <View style={styles.labelRow}>
-        <Text variant="footnote" weight="600" color="secondary" style={styles.label}>
+        <Text variant="footnote" weight="500" color="secondary" style={styles.label}>
           {label}
         </Text>
         {locked ? <ProBadge /> : null}
         {onPress ? <Icon name="chevron.right" size={12} weight="semibold" color={c.tertiary} /> : null}
       </View>
-      <Text variant="headline" style={styles.sentence}>
+      <Text variant="callout" weight="500" style={styles.sentence}>
         {sentence}
       </Text>
       {children ? (
@@ -124,7 +124,7 @@ export function CompareBars({ bars }: { bars: CompareBar[] }) {
                   backgroundColor: b.value === 0 ? c.fill : (b.color ?? c.fillStrong),
                 },
               ]}>
-              <Text variant="footnote" weight="600" color={filled ? '#FFFFFF' : 'text'} numberOfLines={1}>
+              <Text variant="footnote" weight="600" color={filled ? c.onTint : 'text'} numberOfLines={1}>
                 {b.label}
               </Text>
             </View>
@@ -194,11 +194,10 @@ export function RankRow({
 
 const styles = StyleSheet.create({
   card: {
-    marginTop: 12,
-    paddingHorizontal: layout.margin,
-    paddingVertical: 16,
+    marginHorizontal: layout.margin,
+    paddingTop: 24,
+    paddingBottom: 20,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderBottomWidth: StyleSheet.hairlineWidth,
   },
   labelRow: {
     flexDirection: 'row',

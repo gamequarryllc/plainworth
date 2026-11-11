@@ -56,7 +56,7 @@ export function MonthsTable({
     <View style={styles.section}>
       <View style={styles.header} accessibilityRole="header">
         <Text variant="footnote" color="secondary" numberOfLines={1} style={styles.name}>
-          {title.toUpperCase()}
+          {title}
         </Text>
         {columns.map((col) => (
           <Text
@@ -67,7 +67,7 @@ export function MonthsTable({
             adjustsFontSizeToFit
             minimumFontScale={0.8}
             style={[styles.column, column]}>
-            {col.toUpperCase()}
+            {col}
           </Text>
         ))}
         <View style={{ width: CHEVRON }} />
@@ -143,8 +143,6 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   card: {
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderBottomWidth: StyleSheet.hairlineWidth,
     overflow: 'hidden',
   },
   separator: {

@@ -19,7 +19,7 @@ interface Props {
 export function Button({ title, onPress, icon, kind = 'filled', disabled, style }: Props) {
   const c = useColors();
   const filled = kind === 'filled';
-  const fg = filled ? '#FFFFFF' : c.tint;
+  const fg = filled ? c.onTint : c.tint;
   return (
     <Pressable
       onPress={onPress}

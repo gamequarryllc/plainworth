@@ -39,8 +39,8 @@ export function Sparkline({ points, color, from }: { points: SeriesPoint[]; colo
           <Stop offset="1" stopColor={color} stopOpacity={0} />
         </LinearGradient>
       </Defs>
-      {spanY > 0 ? <Path d={area} fill={`url(#${gradientId})`} /> : null}
-      <Path d={line} stroke={color} strokeWidth={1.6} fill="none" strokeLinejoin="round" strokeLinecap="round" />
+      {spanY > 0 ? <Path d={area} fill={`url(#${gradientId})`} opacity={0.5} /> : null}
+      <Path d={line} stroke={color} strokeWidth={1.4} fill="none" strokeLinejoin="round" strokeLinecap="round" />
     </Svg>
   );
 }
