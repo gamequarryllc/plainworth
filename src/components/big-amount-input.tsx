@@ -1,4 +1,4 @@
-import { useRef } from 'react';
+import { useRef, useState } from 'react';
 import { Pressable, StyleSheet, TextInput, View, useWindowDimensions, type TextInputInstance } from 'react-native';
 
 import { currencySymbol, formatTyping } from '@/lib/money';
@@ -33,7 +33,17 @@ function ems(text: string, symbol: string): number {
   return width;
 }
 
-/** The large centered number for entering a new balance. Long amounts shrink to fit, like in Calculator. */
+/** Space between the symbol and the first digit. */
+const GAP = 2;
+
+/**
+ * The large centered number for entering a new balance. Long amounts shrink to fit, like in Calculator.
+ *
+ * The field spans the whole row with its text centered, instead of growing with
+ * the number: an iOS text field that resizes as you type scrolls its text to
+ * keep the caret in view, and when a comma appears it can stay scrolled and cut
+ * off the first digit. The symbol sits just left of the measured number.
+ */
 export function BigAmountInput({ text, onChangeText, placeholder, autoFocus, readOnly }: Props) {
   const c = useColors();
   const currency = useStore((s) => s.settings.currency);
@@ -41,18 +51,32 @@ export function BigAmountInput({ text, onChangeText, placeholder, autoFocus, rea
   const input = useRef<TextInputInstance>(null);
   const empty = text === '';
   const symbol = currencySymbol(currency);
-  const size = Math.max(MIN_SIZE, Math.min(SIZE, Math.floor((width * 0.84) / ems(text || placeholder, symbol))));
+  const shown = text || placeholder;
+  const size = Math.max(MIN_SIZE, Math.min(SIZE, Math.floor((width * 0.84) / ems(shown, symbol))));
   const symbolSize = Math.round(size * SYMBOL_SCALE);
+  const rowWidth = Math.round(width * 0.92);
+
+  // Measured widths; until a layout arrives, fall back to the estimate.
+  const [measured, setMeasured] = useState<{ key: string; width: number } | null>(null);
+  const [symbolWidth, setSymbolWidth] = useState<number | null>(null);
+  const key = `${shown}|${size}`;
+  const numberWidth = measured?.key === key ? measured.width : (ems(shown, '') - 0.1) * size;
+  const symW = symbolWidth ?? symbol.length * 0.62 * symbolSize;
+  // The field's left padding makes room for the symbol, so symbol + number is centered as a whole.
+  const pad = symW + GAP;
+  const numberLeft = pad + (rowWidth - pad - numberWidth) / 2;
+
+  const numberStyle = [styles.input, { fontSize: size, lineHeight: Math.ceil(size * 1.2) }];
   return (
     <Pressable onPress={() => input.current?.focus()} style={styles.wrap} accessible={false}>
-      <View style={styles.row}>
-        {/* Its own line height: Text's default (body) one would clip the top of a glyph this big on iOS. */}
+      <View style={[styles.row, { width: rowWidth }]}>
+        {/* Off screen copy of the number, only to measure how wide it draws. */}
         <Text
-          style={[
-            styles.symbol,
-            { fontSize: symbolSize, lineHeight: Math.ceil(symbolSize * 1.25), color: empty ? c.tertiary : c.text },
-          ]}>
-          {symbol}
+          numberOfLines={1}
+          style={[numberStyle, styles.measure]}
+          onLayout={(e) => setMeasured({ key, width: e.nativeEvent.layout.width })}
+          accessible={false}>
+          {shown}
         </Text>
         <TextInput
           ref={input}
@@ -63,9 +87,20 @@ export function BigAmountInput({ text, onChangeText, placeholder, autoFocus, rea
           keyboardType="decimal-pad"
           autoFocus={autoFocus}
           editable={!readOnly}
-          style={[styles.input, { fontSize: size, color: c.text }]}
+          style={[styles.input, styles.field, { fontSize: size, paddingLeft: pad, color: c.text }]}
           accessibilityLabel="Amount"
         />
+        <View pointerEvents="none" style={[styles.symbolBox, { left: Math.max(0, numberLeft - GAP - symW) }]}>
+          {/* Its own line height: Text's default (body) one would clip the top of a glyph this big on iOS. */}
+          <Text
+            onLayout={(e) => setSymbolWidth(e.nativeEvent.layout.width)}
+            style={[
+              styles.symbol,
+              { fontSize: symbolSize, lineHeight: Math.ceil(symbolSize * 1.25), color: empty ? c.tertiary : c.text },
+            ]}>
+            {symbol}
+          </Text>
+        </View>
       </View>
     </Pressable>
   );
@@ -77,22 +112,34 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    maxWidth: '92%',
+    justifyContent: 'center',
     // Stays the same height as long amounts shrink, so nothing below moves.
     minHeight: Math.ceil(SIZE * 1.2),
+  },
+  symbolBox: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    justifyContent: 'center',
   },
   symbol: {
     fontWeight: '600',
     fontFamily: fonts.rounded,
-    marginRight: 2,
+  },
+  measure: {
+    position: 'absolute',
+    top: -1000,
+    left: 0,
+    opacity: 0,
+  },
+  field: {
+    width: '100%',
+    textAlign: 'center',
   },
   input: {
     fontWeight: '700',
     fontFamily: fonts.rounded,
     fontVariant: ['tabular-nums'],
-    minWidth: 60,
     padding: 0,
   },
 });
