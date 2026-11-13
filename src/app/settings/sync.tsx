@@ -8,6 +8,7 @@ import { dateKey, formatDate, formatTime } from '@/lib/dates';
 import { choose, confirm, notify } from '@/lib/dialogs';
 import { haptics } from '@/lib/haptics';
 import { profileLabel } from '@/lib/profiles';
+import { CloudNotSetUp, describeError } from '@/lib/sync/engine';
 import { contents } from '@/store/backup';
 import { openPaywall, usePro } from '@/store/pro';
 import { useProfiles } from '@/store/profile-list';
@@ -37,7 +38,7 @@ function ago(at: number, now: number): string {
  */
 export default function SyncScreen() {
   const pro = usePro();
-  const { on, busy, lastSynced, problem, stoppedElsewhere, replaced } = useSync();
+  const { on, busy, lastSynced, problem, detail, stoppedElsewhere, replaced } = useSync();
   const profiles = useProfiles((s) => s.list);
   const [working, setWorking] = useState(false);
   const [now, setNow] = useState(() => Date.now());
@@ -97,7 +98,17 @@ export default function SyncScreen() {
       haptics.success();
     } catch (e) {
       console.warn('Could not turn on sync', e);
-      notify('Couldn’t turn on sync', 'iCloud couldn’t be reached. Check your connection and try again.');
+      if (e instanceof CloudNotSetUp) {
+        notify(
+          'Sync isn’t ready in this version',
+          'This version of Plainworth wasn’t set up for iCloud. Nothing was changed.',
+        );
+      } else {
+        notify(
+          'Couldn’t turn on sync',
+          `iCloud couldn’t be reached. Check your connection and try again.\n\n${describeError(e)}`,
+        );
+      }
     } finally {
       setWorking(false);
     }
@@ -148,13 +159,15 @@ export default function SyncScreen() {
       ? 'Not syncing. Sign in to iCloud and turn on iCloud Drive in the Settings app.'
       : problem === 'update-needed'
         ? 'Not syncing. Another device has a newer Plainworth. Update the app on this iPhone to carry on.'
-        : problem === 'error'
-          ? 'Couldn’t reach iCloud just now. Plainworth will keep trying.'
-          : busy && !lastSynced
-            ? 'Syncing…'
-            : lastSynced
-              ? `Synced ${ago(lastSynced, now)}${now - lastSynced < 60_000 ? '' : ` (${formatTime(lastSynced)})`}. Changes are saved on this iPhone first, then sent to your private iCloud.`
-              : 'On.';
+        : problem === 'not-set-up'
+          ? 'Not syncing. This version of Plainworth wasn’t set up for iCloud. Your data is safe on this iPhone.'
+          : problem === 'error'
+            ? `Couldn’t reach iCloud just now. Plainworth will keep trying.${detail ? ` (${detail})` : ''}`
+            : busy && !lastSynced
+              ? 'Syncing…'
+              : lastSynced
+                ? `Synced ${ago(lastSynced, now)}${now - lastSynced < 60_000 ? '' : ` (${formatTime(lastSynced)})`}. Changes are saved on this iPhone first, then sent to your private iCloud.`
+                : 'On.';
 
   return (
     <Screen title="Sync with iCloud">

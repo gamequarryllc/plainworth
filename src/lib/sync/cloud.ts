@@ -6,7 +6,7 @@ import {
   CloudStorageScope,
 } from 'react-native-cloud-storage';
 
-import type { CloudFolder } from './engine';
+import { CloudNotSetUp, type CloudFolder } from './engine';
 
 /**
  * The folder in the person's own iCloud where their devices leave their copies.
@@ -28,11 +28,27 @@ function icloud(): CloudStorage {
   return storage;
 }
 
+const codeOf = (e: unknown) => (!!e && typeof e === 'object' && 'code' in e ? e.code : undefined);
+
 const missing = (e: unknown) =>
-  !!e &&
-  typeof e === 'object' &&
-  'code' in e &&
-  (e.code === CloudStorageErrorCode.FILE_NOT_FOUND || e.code === CloudStorageErrorCode.DIRECTORY_NOT_FOUND);
+  codeOf(e) === CloudStorageErrorCode.FILE_NOT_FOUND || codeOf(e) === CloudStorageErrorCode.DIRECTORY_NOT_FOUND;
+
+/**
+ * Is the app's iCloud container there at all? Without it nothing can be read
+ * or stored, however well iCloud itself is working. That happens when a build
+ * is signed without the app's iCloud permission, and it must never be taken
+ * for "nothing in iCloud yet".
+ */
+async function containerOpens(): Promise<boolean> {
+  try {
+    // Fails with "directory not found" only when the container itself can't be opened.
+    await icloud().exists(FOLDER);
+    return true;
+  } catch (e) {
+    if (codeOf(e) === CloudStorageErrorCode.DIRECTORY_NOT_FOUND) return false;
+    throw e;
+  }
+}
 
 let folderMade = false;
 
@@ -47,6 +63,7 @@ export const cloudFolder: CloudFolder = {
     try {
       names = await icloud().readdir(FOLDER);
     } catch (e) {
+      if (!(await containerOpens())) throw new CloudNotSetUp();
       // Nothing has been synced yet, so there's no folder.
       if (missing(e) || !(await icloud().exists(FOLDER))) return [];
       throw e;
@@ -85,7 +102,12 @@ export const cloudFolder: CloudFolder = {
         .catch(() => {});
       folderMade = true;
     }
-    await icloud().writeFile(path(name), text);
+    try {
+      await icloud().writeFile(path(name), text);
+    } catch (e) {
+      if (!(await containerOpens().catch(() => true))) throw new CloudNotSetUp();
+      throw e;
+    }
   },
 
   async remove(name) {

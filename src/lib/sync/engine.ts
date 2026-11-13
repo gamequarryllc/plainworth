@@ -63,13 +63,37 @@ export type SyncProblem =
   | 'no-icloud'
   /** Another device runs a newer Plainworth whose data this version can't read. */
   | 'update-needed'
+  /** This build of the app wasn't given its iCloud container, so nothing can be stored there. */
+  | 'not-set-up'
   | 'error';
+
+/**
+ * iCloud is signed in, but the app's own container can't be opened: the build
+ * was signed without its iCloud permission. Nothing the person can fix.
+ */
+export class CloudNotSetUp extends Error {
+  constructor() {
+    super('The app has no iCloud container');
+    this.name = 'CloudNotSetUp';
+  }
+}
+
+/** A short description of what went wrong, to show under the status and pass on to support. */
+export function describeError(e: unknown): string {
+  if (!e || typeof e !== 'object') return String(e).slice(0, 160);
+  const code =
+    'code' in e && typeof e.code === 'string' ? e.code : 'name' in e && typeof e.name === 'string' ? e.name : '';
+  const message = 'message' in e && typeof e.message === 'string' ? e.message : '';
+  return [code, message].filter(Boolean).join(': ').slice(0, 160);
+}
 
 export interface SyncStatus {
   on: boolean;
   busy: boolean;
   lastSynced?: number;
   problem?: SyncProblem;
+  /** What the last failure was, for `problem: 'error'`. */
+  detail?: string;
   stoppedElsewhere?: boolean;
 }
 
@@ -130,6 +154,7 @@ export function createSync(deps: SyncDeps) {
   let state: SyncState | null = deps.loadState();
   let busy = false;
   let problem: SyncProblem | undefined;
+  let detail: string | undefined;
   /** True while the engine itself is changing the app's data, so that isn't taken for a change made here. */
   let applying = false;
   let running: Promise<void> = Promise.resolve();
@@ -144,6 +169,7 @@ export function createSync(deps: SyncDeps) {
       busy,
       lastSynced: state?.lastSynced,
       problem: state?.on ? problem : undefined,
+      detail: state?.on && problem === 'error' ? detail : undefined,
       stoppedElsewhere: state?.stoppedElsewhere,
     };
   }
@@ -366,7 +392,8 @@ export function createSync(deps: SyncDeps) {
         await cycle();
       } catch (e) {
         console.warn('Sync failed', e);
-        problem = 'error';
+        problem = e instanceof CloudNotSetUp ? 'not-set-up' : 'error';
+        detail = describeError(e);
       } finally {
         busy = false;
         publish();

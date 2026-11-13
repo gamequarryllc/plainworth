@@ -3,7 +3,14 @@ import { test } from 'node:test';
 
 import { readBackup, makeBackup } from '../../store/backup';
 import { DATA_VERSION, emptyData } from '../../store/defaults';
-import { createSync, STOP_FILE, type CloudFolder, type SyncState, type SyncStatus } from '../sync/engine';
+import {
+  CloudNotSetUp,
+  createSync,
+  STOP_FILE,
+  type CloudFolder,
+  type SyncState,
+  type SyncStatus,
+} from '../sync/engine';
 import { canon, merge, newMeta, stampChanges, syncedPart, type Replica } from '../sync/merge';
 import type { Data } from '../types';
 
@@ -14,11 +21,14 @@ import type { Data } from '../types';
 class Folder implements CloudFolder {
   files = new Map<string, { text: string; rev: number }>();
   online = true;
+  /** False for a build signed without its iCloud permission: signed in, but no container to open. */
+  container = true;
   private rev = 0;
   async available() {
     return this.online;
   }
   async list() {
+    if (!this.container) throw new CloudNotSetUp();
     return [...this.files.keys()];
   }
   async signature(name: string) {
@@ -485,6 +495,28 @@ test('sync: a phone on an older Plainworth waits for the update instead of mangl
   await old.sync.sync();
   assert.equal(old.sync.status().problem, 'update-needed');
   assert.equal(folder.files.size, 1);
+});
+
+test('sync: a build with no iCloud container says so instead of turning on and failing', async () => {
+  const folder = new Folder();
+  folder.container = false;
+  const a = device(folder, 'a');
+  a.change(addAccount('checking', 'Checking', 100_00));
+  await assert.rejects(a.sync.look(), CloudNotSetUp);
+  await assert.rejects(a.sync.enable('device'), CloudNotSetUp);
+  assert.equal(a.sync.status().on, false);
+  assert.equal(folder.files.size, 0);
+  // A device that had sync on before reports it plainly, and picks up once the container is there.
+  folder.container = true;
+  await a.sync.enable('device');
+  folder.container = false;
+  a.change(addAccount('one', 'One', 1));
+  await a.sync.sync();
+  assert.equal(a.sync.status().problem, 'not-set-up');
+  folder.container = true;
+  await a.sync.sync();
+  assert.equal(a.sync.status().problem, undefined);
+  assert.ok([...folder.files.values()][0].text.includes('"One"'));
 });
 
 test('sync: a damaged file from another device is skipped, not merged', async () => {

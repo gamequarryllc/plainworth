@@ -120,6 +120,42 @@ check_app() {
   echo "size: $(du -sh "$built" | cut -f1) (unsigned, uncompressed)"
 }
 
+# ---- entitlements --------------------------------------------------------------------
+# Entitlements are what the app is allowed to ask iOS for: its iCloud container (for
+# Sync with iCloud) and notifications. expo prebuild writes them to a file from
+# app.json, but they only count once they are inside the app's signature.
+entitlements="$app/ios/$name/$name.entitlements"
+wanted="$WORK/entitlements_wanted.json"
+if [ -f "$entitlements" ]; then plutil -convert json -o "$wanted" "$entitlements"; else echo '{}' > "$wanted"; fi
+
+# Signs the app "ad hoc" (no certificate, no account) with the entitlements in it.
+# An unsigned build carries none, and the App Store signing step keeps only the
+# ones already in the app: without this, the uploaded app has no iCloud container
+# and Sync with iCloud can't store anything.
+embed_entitlements() {
+  local built="$1" resolved="$WORK/embed.entitlements"
+  [ -f "$entitlements" ] || return 0
+  cp "$entitlements" "$resolved"
+  if [ -n "${APPLE_TEAM_ID:-}" ]; then
+    /usr/libexec/PlistBuddy -c "Add :application-identifier string ${APPLE_TEAM_ID}.${bundle}" "$resolved" > /dev/null
+    /usr/libexec/PlistBuddy -c "Add :com.apple.developer.team-identifier string ${APPLE_TEAM_ID}" "$resolved" > /dev/null
+  fi
+  quiet "$logs/adhoc_nested.log" codesign --force --deep --sign - "$built"
+  quiet "$logs/adhoc.log" codesign --force --sign - --entitlements "$resolved" "$built"
+}
+
+# Reads the entitlements out of a built app's signature and checks that everything
+# the project asks for is there. Prints what is missing and fails if anything is.
+check_entitlements() {
+  local built="$1" got="$WORK/entitlements_got"
+  if codesign -d --xml --entitlements - "$built" > "$got.plist" 2>/dev/null && [ -s "$got.plist" ]; then
+    plutil -convert json -o "$got.json" "$got.plist"
+  else
+    echo '{}' > "$got.json"
+  fi
+  node "$app/tools/check_entitlements.mjs" "$wanted" "$got.json"
+}
+
 common=(-workspace "$workspace" -scheme "$name" -configuration Release -sdk iphoneos -destination "generic/platform=iOS")
 unsigned=(CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY=)
 
@@ -127,6 +163,9 @@ if [ "$mode" = "check" ]; then
   say "Unsigned build"
   xcb "$logs/build.log" "${common[@]}" -derivedDataPath "$WORK/dd" build "${unsigned[@]}"
   check_app "$WORK/dd/Build/Products/Release-iphoneos/$name.app"
+  say "Entitlements (iCloud, notifications)"
+  embed_entitlements "$WORK/dd/Build/Products/Release-iphoneos/$name.app"
+  check_entitlements "$WORK/dd/Build/Products/Release-iphoneos/$name.app"
   say "OK: Plainworth builds for iPhone (unsigned check, nothing uploaded)"
   exit 0
 fi
@@ -144,13 +183,15 @@ esac
 grep -q "BEGIN PRIVATE KEY" "$key" || { echo "ASC_KEY_P8 does not look like an App Store Connect .p8 key" >&2; exit 3; }
 auth=(-allowProvisioningUpdates -authenticationKeyPath "$key" -authenticationKeyID "$ASC_KEY_ID" -authenticationKeyIssuerID "$ASC_ISSUER_ID")
 
-cat > "$WORK/ExportOptions.plist" <<PLIST
+# $1 = "export" (write the signed app to disk) or "upload" (send it to TestFlight).
+export_options() {
+  cat > "$WORK/ExportOptions.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
   <key>method</key><string>app-store-connect</string>
-  <key>destination</key><string>upload</string>
+  <key>destination</key><string>$1</string>
   <key>teamID</key><string>${APPLE_TEAM_ID}</string>
   <key>signingStyle</key><string>automatic</string>
   <key>manageAppVersionAndBuildNumber</key><false/>
@@ -158,29 +199,66 @@ cat > "$WORK/ExportOptions.plist" <<PLIST
 </dict>
 </plist>
 PLIST
+}
 
 archive="$WORK/$name.xcarchive"
+
+# Signs the archive for the App Store onto disk and checks the signed app still has
+# every entitlement, so a build that can't use iCloud never reaches TestFlight.
+sign_and_check() {
+  local log="$1" ipa
+  rm -rf "$WORK/signed" "$WORK/ipa"
+  export_options export
+  xcb "$log" -exportArchive -archivePath "$archive" -exportOptionsPlist "$WORK/ExportOptions.plist" -exportPath "$WORK/signed" "${auth[@]}" || return 1
+  ipa="$(ls "$WORK/signed"/*.ipa 2>/dev/null | head -1)"
+  [ -f "$ipa" ] || { echo "Signing made no .ipa" >&2; return 1; }
+  mkdir -p "$WORK/ipa"
+  unzip -q "$ipa" -d "$WORK/ipa"
+  check_entitlements "$WORK/ipa/Payload/$name.app"
+}
+
 upload() {
+  export_options upload
   xcb "$1" -exportArchive -archivePath "$archive" -exportOptionsPlist "$WORK/ExportOptions.plist" -exportPath "$WORK/export" "${auth[@]}"
 }
 
-# First try: archive without signing, then let Xcode sign for the App Store with
-# a cloud-managed certificate while it uploads. This needs no certificate or
-# device on the build machine.
+icloud_help() {
+  cat >&2 <<HELP
+
+The App Store signature doesn't include everything the app asks for (see above).
+Most likely the app's identifier isn't set up for iCloud yet. On developer.apple.com,
+under Certificates, IDs & Profiles > Identifiers:
+  1. Switch the list (top right) from App IDs to iCloud Containers, press +, and
+     register the container named in app.json (iCloud.$bundle).
+  2. Switch back to App IDs, open $bundle, tick iCloud, press Configure (or Edit),
+     tick that container, then Continue and Save.
+Then run this build again. Nothing was uploaded.
+HELP
+}
+
+# First try: archive without signing, put the entitlements in with an ad hoc
+# signature, then let Xcode sign for the App Store with a cloud-managed
+# certificate. This needs no certificate or device on the build machine.
 say "Archive (unsigned)"
 xcb "$logs/archive.log" "${common[@]}" -archivePath "$archive" archive "${unsigned[@]}"
 check_app "$archive/Products/Applications/$name.app"
-say "Sign and upload to TestFlight"
-if upload "$logs/upload.log"; then
+embed_entitlements "$archive/Products/Applications/$name.app"
+say "Sign for the App Store and check the signed app"
+if sign_and_check "$logs/sign.log"; then
+  say "Upload to TestFlight"
+  upload "$logs/upload.log"
   say "OK: Plainworth $VERSION ($BUILD_NUMBER) uploaded. It shows in TestFlight after Apple finishes processing."
   exit 0
 fi
 
-# Second try: archive with Xcode's automatic signing, then upload.
+# Second try: archive with Xcode's automatic signing, which can also switch on
+# what the app's identifier is missing, then sign for the App Store and check again.
 say "Retry: archive with automatic signing"
 rm -rf "$archive" "$WORK/export"
-xcb "$logs/archive_signed.log" "${common[@]}" -archivePath "$archive" archive "${auth[@]}" DEVELOPMENT_TEAM="$APPLE_TEAM_ID" CODE_SIGN_STYLE=Automatic
+xcb "$logs/archive_signed.log" "${common[@]}" -archivePath "$archive" archive "${auth[@]}" DEVELOPMENT_TEAM="$APPLE_TEAM_ID" CODE_SIGN_STYLE=Automatic || { icloud_help; exit 1; }
 check_app "$archive/Products/Applications/$name.app"
-say "Sign and upload to TestFlight"
+say "Sign for the App Store and check the signed app"
+sign_and_check "$logs/sign_signed.log" || { icloud_help; exit 1; }
+say "Upload to TestFlight"
 upload "$logs/upload_signed.log"
 say "OK: Plainworth $VERSION ($BUILD_NUMBER) uploaded. It shows in TestFlight after Apple finishes processing."

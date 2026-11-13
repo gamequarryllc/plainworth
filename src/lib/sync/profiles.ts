@@ -2,7 +2,9 @@ import { isProfileId, MAIN } from '@/lib/profiles';
 import type { Data } from '@/lib/types';
 
 import {
+  CloudNotSetUp,
   createSync,
+  describeError,
   STOP_FILE,
   type CloudCopy,
   type CloudFolder,
@@ -94,6 +96,7 @@ export function createProfilesSync(deps: ProfilesSyncDeps) {
   let g: ProfilesState | null = readState(deps.loadState('all'));
   let busy = false;
   let problem: SyncProblem | undefined;
+  let detail: string | undefined;
   let running: Promise<void> = Promise.resolve();
   /** The folder's file names while a sync is running, so each profile doesn't list the folder again. */
   let snapshot: string[] | null = null;
@@ -115,6 +118,7 @@ export function createProfilesSync(deps: ProfilesSyncDeps) {
       busy,
       lastSynced: g?.lastSynced,
       problem: g?.on ? problem : undefined,
+      detail: g?.on && problem === 'error' ? detail : undefined,
       stoppedElsewhere: g?.stoppedElsewhere,
     };
   }
@@ -277,6 +281,7 @@ export function createProfilesSync(deps: ProfilesSyncDeps) {
 
     snapshot = [...names];
     let worst: SyncProblem | undefined;
+    let worstDetail: string | undefined;
     try {
       await applyLists(await readLists(names));
       for (const p of deps.profiles().list) {
@@ -286,7 +291,10 @@ export function createProfilesSync(deps: ProfilesSyncDeps) {
         else if (!g.awaiting.includes(p.id)) await e.enable('device');
         else if (await e.join()) g.awaiting = g.awaiting.filter((x) => x !== p.id);
         const trouble = e.status().problem;
-        if (trouble && worst !== 'update-needed') worst = trouble;
+        if (trouble && worst !== 'update-needed') {
+          worst = trouble;
+          worstDetail = e.status().detail;
+        }
       }
       if (!g?.on) return;
       // After the profiles' own files, so a device that reads the list finds the data it names.
@@ -313,6 +321,7 @@ export function createProfilesSync(deps: ProfilesSyncDeps) {
       if (stale) save();
     }
     problem = worst;
+    detail = worstDetail;
   }
 
   /** Sync once. Calls made while one is running wait their turn. */
@@ -325,7 +334,8 @@ export function createProfilesSync(deps: ProfilesSyncDeps) {
         await cycle();
       } catch (e) {
         console.warn('Sync failed', e);
-        problem = 'error';
+        problem = e instanceof CloudNotSetUp ? 'not-set-up' : 'error';
+        detail = describeError(e);
       } finally {
         busy = false;
         publish();
