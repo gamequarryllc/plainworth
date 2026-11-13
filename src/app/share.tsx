@@ -17,7 +17,6 @@ import { notify } from '@/lib/dialogs';
 import { formatMoney, formatPercent } from '@/lib/money';
 import {
   buildSeries,
-  leadStart,
   rangeCaption,
   seriesChange,
   sliceSeries,
@@ -166,7 +165,6 @@ export default function ShareScreen() {
               points={points}
               color={up ? c.up : c.down}
               baseline={points[0].value}
-              from={leadStart(series, range, today)}
               height={130}
               axis
             />
@@ -187,7 +185,6 @@ export default function ShareScreen() {
                 <View key={s.account.id} style={[styles.row, { backgroundColor: c.card }]}>
                   <Sparkline
                     points={own}
-                    from={leadStart(perAccount.get(s.account.id) ?? [], range, today)}
                     color={ch.delta === 0 ? c.tertiary : good ? c.up : c.down} />
                   <View style={styles.rowText}>
                     <Text numberOfLines={1}>{s.account.name}</Text>

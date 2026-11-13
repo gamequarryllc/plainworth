@@ -4,7 +4,7 @@ import { test } from 'node:test';
 import { valueTicks } from '../axis';
 import { addMonths, dayNumber, keyFromDayNumber, shiftMonth } from '../dates';
 import { formatMoney, formatTyping, parseAmount } from '../money';
-import { buildSeries, leadStart, seriesByAccount, sliceSeries, seriesChange, summarizeAccounts, totalsOf, updatesByAccount } from '../networth';
+import { buildSeries, seriesByAccount, sliceSeries, seriesChange, summarizeAccounts, totalsOf, updatesByAccount } from '../networth';
 import { DATA_VERSION, emptyData } from '../../store/defaults';
 import { migrate } from '../../store/migrate';
 import { categoriesForMonth, categoryTotals, earnedTotals, yearSummary } from '../spending';
@@ -300,16 +300,14 @@ test('account sparklines show each update, Insights keeps one point a day', () =
   );
 });
 
-test('a range longer than the history starts at zero on the range start', () => {
+test('a range longer than the history starts at the first entry', () => {
   const series = [
-    { day: dayNumber('2026-10-14'), value: 30_000_00 },
-    { day: dayNumber('2026-11-02'), value: 170_000_00 },
+    { day: dayNumber('2026-11-08'), value: 170_000_00 },
+    { day: dayNumber('2026-11-12'), value: 174_000_00 },
   ];
-  assert.equal(leadStart(series, '1Y', '2026-11-03'), dayNumber('2025-11-03'));
-  assert.equal(leadStart(series, '8Y', '2026-11-03'), dayNumber('2018-11-03'));
-  // History reaches back far enough, or All: the chart starts at the data.
-  assert.equal(leadStart(series, '1M', '2026-11-20'), undefined);
-  assert.equal(leadStart(series, 'ALL', '2026-11-03'), undefined);
+  const sliced = sliceSeries(series, '1M', '2026-11-13');
+  assert.equal(sliced[0].day, dayNumber('2026-11-08'));
+  assert.equal(sliced[sliced.length - 1].day, dayNumber('2026-11-13'));
 });
 
 test('gridlines on round values that cover the line', () => {

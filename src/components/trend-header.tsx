@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet } from 'react-native';
 
 import { dayNumber, formatDate, formatTime, keyFromDayNumber, parseDateKey } from '@/lib/dates';
-import { leadStart, rangeCaption, rangeStart, seriesChange, sliceSeries, type SeriesPoint } from '@/lib/networth';
+import { rangeCaption, rangeStart, seriesChange, sliceSeries, type SeriesPoint } from '@/lib/networth';
 import type { DateKey, RangeKey } from '@/lib/types';
 import { useAnimatedNumber } from '@/hooks/use-animated-number';
 import { useMoney } from '@/hooks/use-money';
@@ -114,7 +114,6 @@ export function TrendHeader({
         <LineChart
           points={points}
           color={good ? c.up : c.down}
-          from={leadStart(series, range, today)}
           grid
           formatTick={hidden ? undefined : (v) => money(v, { compact: true, whole: true })}
           onScrub={onScrub}

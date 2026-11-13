@@ -259,17 +259,6 @@ export function sliceSeries(points: SeriesPoint[], range: RangeKey, today: DateK
   return out;
 }
 
-/**
- * Where the chart's time axis starts when tracking began after the start of
- * the range: the chart still covers the whole range and sits at zero until the
- * first entry. Undefined when the series already reaches back that far (or on All).
- */
-export function leadStart(points: SeriesPoint[], range: RangeKey, today: DateKey): number | undefined {
-  const start = rangeStart(range, today);
-  if (start == null || points.length === 0 || points[0].day <= start) return undefined;
-  return start;
-}
-
 export function seriesChange(points: SeriesPoint[], upTo?: number): { delta: Cents; ratio: number } {
   if (points.length === 0) return { delta: 0, ratio: 0 };
   const first = points[0].value;
