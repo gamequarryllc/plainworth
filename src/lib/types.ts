@@ -133,8 +133,6 @@ export interface Settings {
   birthYear?: number;
   outlook: Outlook;
   spendingGoal?: SpendingGoal;
-  /** No longer used: Insights › Spending once had an All / Recurring / Spending filter. Older saves may carry it. */
-  spendFilter?: 'all' | 'recurring' | 'variable';
 }
 
 export interface Data {

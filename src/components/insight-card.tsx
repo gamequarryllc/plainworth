@@ -98,58 +98,6 @@ export function InsightCard({
   );
 }
 
-export interface CompareBar {
-  /** Inside the bar, e.g. the year. */
-  label: string;
-  value: number;
-  /** Above the bar, e.g. "$2,980". */
-  text: string;
-  /** Small, after the text, e.g. "a month". */
-  unit?: string;
-  /** The highlighted bar (this period) gets the color; the others are gray. */
-  color?: string;
-}
-
-/** This period against the last, as two bars, like Health's comparison highlights. */
-export function CompareBars({ bars }: { bars: CompareBar[] }) {
-  const c = useColors();
-  const max = Math.max(...bars.map((b) => Math.abs(b.value)), 1);
-  return (
-    <View style={styles.compare}>
-      {bars.map((b) => {
-        // Nothing at all (a paid-off debt) shows as an empty bar, not a colored stub.
-        const filled = !!b.color && b.value !== 0;
-        return (
-          <View key={b.label} accessible accessibilityLabel={`${b.label}: ${b.text}${b.unit ? ` ${b.unit}` : ''}`}>
-            <Text numberOfLines={1}>
-              <Text variant="title3" weight="700" rounded tabular>
-                {b.text}
-              </Text>
-              {b.unit ? (
-                <Text variant="subheadline" color="secondary">
-                  {` ${b.unit}`}
-                </Text>
-              ) : null}
-            </Text>
-            <View
-              style={[
-                styles.compareBar,
-                {
-                  width: `${(Math.abs(b.value) / max) * 100}%`,
-                  backgroundColor: b.value === 0 ? c.fill : (b.color ?? c.fillStrong),
-                },
-              ]}>
-              <Text variant="footnote" weight="600" color={filled ? '#FFFFFF' : 'text'} numberOfLines={1}>
-                {b.label}
-              </Text>
-            </View>
-          </View>
-        );
-      })}
-    </View>
-  );
-}
-
 /** A ranked line: name and amount, with a thin bar for its size and a short note beside it. */
 export function RankRow({
   title,
@@ -266,18 +214,6 @@ const styles = StyleSheet.create({
   },
   foldNote: {
     marginTop: 6,
-  },
-  compare: {
-    gap: 10,
-  },
-  compareBar: {
-    minWidth: 64,
-    height: 26,
-    marginTop: 3,
-    borderRadius: 7,
-    borderCurve: 'continuous',
-    justifyContent: 'center',
-    paddingHorizontal: 9,
   },
   rank: {
     paddingVertical: 7,

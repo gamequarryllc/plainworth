@@ -7,7 +7,7 @@ import { useColors } from '@/theme';
 import { Icon } from './icon';
 import { Text } from './text';
 
-export const KEYBOARD_BAR_ID = 'tally-keyboard-bar';
+export const KEYBOARD_BAR_ID = 'plainworth-keyboard-bar';
 
 /** Keeps refs to a list of fields so the keyboard bar can jump between them. */
 export function useFieldChain() {

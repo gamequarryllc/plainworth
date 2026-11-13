@@ -11,6 +11,8 @@ import type { ID } from '@/lib/types';
  * `profiles.ts`.
  */
 
+// Storage keys still start with "tally." (the app's first name). They stay that
+// way on purpose: renaming them would lose everyone's saved data.
 const LIST_KEY = 'tally.profiles';
 
 function load(): ProfileList {

@@ -6,7 +6,7 @@ import type { Fragment } from './types';
 
 /**
  * Picking a statement and reading its text, all on the phone. PDFs are read
- * with PDFKit and pictures with Apple's text recognition (the StatementReader
+ * with PDFKit, and scanned pages with Apple's text recognition (the StatementReader
  * module in /modules). Nothing here uses the network.
  */
 

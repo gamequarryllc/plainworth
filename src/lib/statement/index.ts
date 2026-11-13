@@ -26,7 +26,7 @@ export function decodeText(bytes: Uint8Array): string {
   return utf8.includes('\uFFFD') ? strFromU8(bytes, true) : utf8;
 }
 
-/** The text of a PDF or photo, by the rules alone. */
+/** The text of a PDF, by the rules alone. */
 export function readText(fragments: Fragment[], target: Target): Txn[] {
   return readLines(toLines(fragments), target);
 }

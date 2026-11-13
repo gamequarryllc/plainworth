@@ -1,6 +1,6 @@
 import { dayNumber, formatDate, keyFromDayNumber, MONTHS_SHORT, parseDateKey } from './dates';
 import { holdingsOn, netWorthMonths, netWorthYear, valueAt, type Month } from './insights';
-import { currencyDecimals, currencySymbol, formatMoney } from './money';
+import { currencyDecimals, currencySymbol } from './money';
 import { compareSnapshots, kindOf, seriesByAccount } from './networth';
 import { GROUPS, yearSummary, yearsWithData } from './spending';
 import type { Account, Cents, Data, DateKey } from './types';

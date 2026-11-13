@@ -5,7 +5,6 @@ import {
   distribution,
   creepMonths,
   lifestyleCreep,
-  monthsUntil,
   netWorthHistory,
   netWorthPace,
   compareYears,
@@ -73,9 +72,6 @@ test('trends: pace, milestones and when you get there', () => {
   assert.equal(nextMilestone(100_000_00), 150_000_00);
   assert.equal(nextMilestone(500_00), 1_000_00);
   assert.equal(nextMilestone(-3_000_00), 0);
-
-  assert.equal(monthsUntil(84_000_00, 100_000_00, 1_000_00), 16);
-  assert.equal(monthsUntil(84_000_00, 100_000_00, -1_000_00), null);
 });
 
 test('trends: growth so far this year, month by month', () => {

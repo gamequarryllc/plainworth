@@ -2,8 +2,8 @@ import { cleanText, DATE_AT_START, MONEY, parseDay, parseMoney } from './parse';
 import type { Fragment, Target, Txn } from './types';
 
 /**
- * Puts pieces of text back into the lines they were printed on. A PDF or a
- * photo often gives the date, the description and the amount of one line as
+ * Puts pieces of text back into the lines they were printed on. A PDF (or a
+ * scanned page) often gives the date, the description and the amount of one line as
  * three separate pieces; pieces at the same height belong together.
  */
 export function toLines(fragments: Fragment[]): string[] {

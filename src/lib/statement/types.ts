@@ -11,7 +11,7 @@ export interface Txn {
   transfer?: boolean;
 }
 
-/** A piece of text and where it sits on a page (0 to 1, from the top left), from a PDF or a photo. */
+/** A piece of text and where it sits on a page (0 to 1, from the top left), from a PDF. */
 export interface Fragment {
   page: number;
   text: string;

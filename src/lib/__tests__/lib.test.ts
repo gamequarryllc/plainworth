@@ -7,7 +7,7 @@ import { formatMoney, formatTyping, parseAmount } from '../money';
 import { buildSeries, leadStart, seriesByAccount, sliceSeries, seriesChange, summarizeAccounts, totalsOf, updatesByAccount } from '../networth';
 import { DATA_VERSION, emptyData } from '../../store/defaults';
 import { migrate } from '../../store/migrate';
-import { categoriesForMonth, categoryTotals, earnedTotals, monthTotals, yearSummary } from '../spending';
+import { categoriesForMonth, categoryTotals, earnedTotals, yearSummary } from '../spending';
 import type { Account, NWCategory, Snapshot, SpendCategory } from '../types';
 
 test('dates', () => {

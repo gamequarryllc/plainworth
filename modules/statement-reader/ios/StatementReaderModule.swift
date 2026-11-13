@@ -13,9 +13,10 @@ internal final class StatementReadException: GenericException<String> {
   }
 }
 
-/// Reads the text of a statement on the device: a PDF's own text, or the text
-/// in a picture. Each piece of text comes back with where it sits on the page
-/// (0 to 1 from the top left), so the lines can be put back together.
+/// Reads the text of a statement on the device: a PDF's own text, or, for a
+/// scanned page, the text in its picture. Each piece of text comes back with
+/// where it sits on the page (0 to 1 from the top left), so the lines can be
+/// put back together.
 /// Nothing here uses the network.
 public class StatementReaderModule: Module {
   private static let maxPages = 60
@@ -42,7 +43,7 @@ public class StatementReaderModule: Module {
           pieces.append(contentsOf: fromText)
           continue
         }
-        // A scanned page is only a picture: read it the way a photo is read.
+        // A scanned page is only a picture: read it with text recognition.
         let box = page.bounds(for: .mediaBox)
         let scale: CGFloat = 2.5
         let size = CGSize(width: max(box.width, 1) * scale, height: max(box.height, 1) * scale)
@@ -51,19 +52,6 @@ public class StatementReaderModule: Module {
           pieces.append(contentsOf: try StatementReaderModule.recognize(cgImage, orientation: .up, page: index))
         }
       }
-      return try StatementReaderModule.json(pieces)
-    }
-
-    // JSON: [{ page, text, x, y, w, h }]
-    AsyncFunction("readImage") { (uri: String, page: Int) -> String in
-      guard let url = URL(string: uri), let image = UIImage(contentsOfFile: url.path), let cgImage = image.cgImage else {
-        throw StatementReadException("open")
-      }
-      let pieces = try StatementReaderModule.recognize(
-        cgImage,
-        orientation: StatementReaderModule.orientation(of: image),
-        page: page
-      )
       return try StatementReaderModule.json(pieces)
     }
 
@@ -160,19 +148,5 @@ public class StatementReaderModule: Module {
       pieces.append(piece(page: page, text: best.string, x: box.minX, y: 1 - box.maxY, w: box.width, h: box.height))
     }
     return pieces
-  }
-
-  private static func orientation(of image: UIImage) -> CGImagePropertyOrientation {
-    switch image.imageOrientation {
-    case .up: return .up
-    case .down: return .down
-    case .left: return .left
-    case .right: return .right
-    case .upMirrored: return .upMirrored
-    case .downMirrored: return .downMirrored
-    case .leftMirrored: return .leftMirrored
-    case .rightMirrored: return .rightMirrored
-    @unknown default: return .up
-    }
   }
 }

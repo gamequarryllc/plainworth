@@ -2,12 +2,8 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
 import {
-  average,
-  categoryChanges,
   categoryChangesBetween,
   debtBetween,
-  debtYear,
-  finishedMonths,
   firstYear,
   holdingsOn,
   monthsLabel,
@@ -18,6 +14,7 @@ import {
   spendingMonths,
   spendingYear,
   valueAt,
+  yearSpan,
 } from '../insights';
 import { dayNumber } from '../dates';
 import type { Account, NWCategory, Snapshot, SpendCategory } from '../types';
@@ -113,37 +110,24 @@ const spend = {
 };
 const spendData = { spend, spendCategories };
 
-test('insights: settled months, and what each category added', () => {
-  const year = netWorthYear(nw, 2026, '2026-05-10')!;
-  // May is still going, so it's left out.
-  assert.deepEqual(
-    finishedMonths(year, 2026, '2026-05-10').map((m) => [m.month, m.change]),
-    [
-      [0, 200_00],
-      [1, 100_00],
-      [2, 500_00],
-      [3, -300_00],
-    ],
-  );
-  assert.equal(average([200_00, 100_00, 500_00, -300_00]), 125_00);
-  assert.equal(average([]), null);
+test('insights: what each category added over a year', () => {
   // The brokerage grew 500 from its first balance, paying the loan down added 100, savings lost 100.
   assert.deepEqual(
-    categoryChanges(nw, 2026, '2026-05-10').map((x) => [x.category.id, x.change]),
+    categoryChangesBetween(nw, yearSpan(2026, '2026-05-10')!).map((x) => [x.category.id, x.change]),
     [
       ['stocks', 500_00],
       ['loan', 100_00],
       ['cash', -100_00],
     ],
   );
-  assert.deepEqual(categoryChanges(nw, 2027, '2026-05-10'), []);
+  assert.equal(yearSpan(2027, '2026-05-10'), null);
 });
 
 test('insights: debt at the start of the year and now', () => {
-  assert.deepEqual(debtYear(nw, 2026, '2026-05-10'), { start: 500_00, end: 400_00 });
+  assert.deepEqual(debtBetween(nw, yearSpan(2026, '2026-05-10')!), { start: 500_00, end: 400_00 });
   // The loan was first entered in late 2025: it counts from there.
-  assert.deepEqual(debtYear(nw, 2025, '2026-05-10'), { start: 500_00, end: 500_00 });
-  assert.equal(debtYear({ ...nw, accounts: accounts.slice(0, 2) }, 2026, '2026-05-10'), null);
+  assert.deepEqual(debtBetween(nw, yearSpan(2025, '2026-05-10')!), { start: 500_00, end: 500_00 });
+  assert.equal(debtBetween({ ...nw, accounts: accounts.slice(0, 2) }, yearSpan(2026, '2026-05-10')!), null);
 });
 
 test('insights: a year of spending, from Spending alone', () => {

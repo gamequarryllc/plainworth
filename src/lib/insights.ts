@@ -173,31 +173,10 @@ export function holdingsOn(
   return { assets: assets.list, debts: debts.list, assetTotal: assets.sum, debtTotal: debts.sum };
 }
 
-/** Months whose change is settled: all of a past year's, and this year's before the current one. */
-export function finishedMonths(nw: NetWorthYear, year: number, today: DateKey): { month: number; change: Cents }[] {
-  const t = parseDateKey(today);
-  return nw.months.flatMap((m, i) => (m && !(year === t.y && i + 1 >= t.m) ? [{ month: i, change: m.change }] : []));
-}
-
-/** Whole-cent average, or null for an empty list. */
-export function average(values: number[]): Cents | null {
-  return values.length ? Math.round(values.reduce((a, b) => a + b, 0) / values.length) : null;
-}
-
 export interface CategoryChange {
   category: NWCategory;
   /** What the category added to net worth over the period: for a debt, paying it down counts as adding. */
   change: Cents;
-}
-
-/** How much each category moved net worth over a year (up to today), biggest gain first. Balances only. */
-export function categoryChanges(
-  data: Pick<Data, 'accounts' | 'snapshots' | 'nwCategories'>,
-  year: number,
-  today: DateKey,
-): CategoryChange[] {
-  const span = yearSpan(year, today);
-  return span ? categoryChangesBetween(data, span) : [];
 }
 
 /** How much each category moved net worth over a span, biggest gain first. */
@@ -218,16 +197,6 @@ export function categoryChangesBetween(
     .filter((category) => byCategory.get(category.id))
     .map((category) => ({ category, change: byCategory.get(category.id)! }))
     .sort((a, b) => b.change - a.change);
-}
-
-/** What was owed at the start of a year (or when a debt was first entered) and at its end or today. */
-export function debtYear(
-  data: Pick<Data, 'accounts' | 'snapshots' | 'nwCategories'>,
-  year: number,
-  today: DateKey,
-): { start: Cents; end: Cents } | null {
-  const span = yearSpan(year, today);
-  return span ? debtBetween(data, span) : null;
 }
 
 /** What was owed at the start of a span (or when a debt was first entered) and at its end. */

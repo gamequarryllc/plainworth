@@ -76,12 +76,6 @@ export function nextMilestone(current: Cents): Cents {
   return (Math.floor(current / step) + 1) * step;
 }
 
-/** How many months until `target` at `perMonth`, or null when the pace doesn't head there. */
-export function monthsUntil(current: Cents, target: Cents, perMonth: Cents): number | null {
-  if (perMonth <= 0 || target <= current) return null;
-  return Math.ceil((target - current) / perMonth);
-}
-
 /**
  * How much net worth has grown since the year began, at the end of each month:
  * twelve entries, null before the first balance and for months still to come.

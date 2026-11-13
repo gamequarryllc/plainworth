@@ -4,7 +4,6 @@ import { StyleSheet, View } from 'react-native';
 
 import { BarChart } from '@/components/bar-chart';
 import { Hero } from '@/components/hero';
-import { Row, Section } from '@/components/list';
 import { SampleBanner, SampleBody, SampleData } from '@/components/sample';
 import { MonthsTable, type TableCell, type TableRow } from '@/components/months-table';
 import { Screen } from '@/components/screen';
