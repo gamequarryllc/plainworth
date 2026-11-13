@@ -104,6 +104,9 @@ export function addProfile(input: { name?: string; id?: ID; createdAt?: number; 
   const profile: Profile = { id, name, createdAt: input.createdAt ?? Date.now() };
   saveProfileList({ list: sortProfiles([...list, profile]) });
   saveResting(id, data);
+  // A profile started empty on this phone gets the sample previews, like a fresh install.
+  // Loaded when needed, so the previews' own first read still happens when a screen first asks.
+  if (!input.data && !input.elsewhere) void import('./sample-hidden').then((m) => m.resetSample());
   if (!input.elsewhere) listener?.added(id);
   return id;
 }

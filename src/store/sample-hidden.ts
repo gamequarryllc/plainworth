@@ -39,7 +39,7 @@ export function hideSample() {
   storage.write(KEY, 'off').catch(() => {});
 }
 
-/** For seeing the previews again in development. */
+/** Brings the previews back: for a new, empty profile, and for seeing them again in development. */
 export function resetSample() {
   useHidden.setState({ hidden: false });
   storage.write(KEY, 'on').catch(() => {});
