@@ -33,7 +33,7 @@ type Kind =
 
 /** Checked top to bottom; the first that fits wins. */
 const KINDS: [Kind, RegExp][] = [
-  ['transfer', /payment[ -]+thank you|autopay|auto[- ]?pay(ment)?\b|online payment|e-?payment|epay\b|crcardpmt|card payment|cardmember serv|payment to .*card|credit crd|transfer|xfer|\btfr\b|to savings|from savings|to checking|from checking|balance forward|brokerage|vanguard|fidelity|schwab|robinhood|coinbase|internet payment|mobile payment|bill ?pay .*card/],
+  ['transfer', /payment[ -]+thank you|\bpymt\b|\bpmt\b|payment received|autopay|auto[- ]?pay(ment)?\b|online payment|e-?payment|epay\b|crcardpmt|card payment|cardmember serv|payment to .*card|credit crd|transfer|xfer|\btfr\b|to savings|from savings|to checking|from checking|balance forward|brokerage|vanguard|fidelity|schwab|robinhood|coinbase|internet payment|mobile payment|bill ?pay .*card/],
   ['pay', /payroll|direct dep|dir dep|salary|paycheck|\bwages?\b|gusto|\badp\b|paychex|employer/],
   ['subscriptions', /netflix|spotify|hulu|disney ?plus|disney\+|apple\.com\/bill|icloud|youtube|hbo|\bmax\.com|paramount|peacock|prime video|amazon prime|audible|adobe|dropbox|patreon|nytimes|new york times|openai|chatgpt|google (one|storage)|microsoft 365|msft|sirius|kindle|substack|subscription/],
   ['utilities', /electric|energy|\bpower\b|water|sewer|\bgas (co|company|service)|comcast|xfinity|verizon|at&t|\batt\b|t-mobile|tmobile|spectrum|internet|utilit|pg&e|pge\b|duke|con ?ed|national grid|sanitation|waste|trash|cox comm|centurylink|mint mobile|visible|google fi/],
@@ -42,7 +42,7 @@ const KINDS: [Kind, RegExp][] = [
   ['exercise', /\bgym\b|fitness|peloton|yoga|pilates|ymca|crossfit|equinox|orangetheory|climbing|strava/],
   ['gas', /shell|exxon|chevron|\bbp\b|mobil|sunoco|speedway|wawa|7-?eleven|circle k|marathon|valero|\bfuel\b|\bgas\b|gasoline|texaco|citgo|phillips 66|conoco|arco|quiktrip|\bqt\b|sheetz|racetrac|casey|costco gas|buc-?ee|love's|pilot/],
   ['groceries', /kroger|safeway|whole ?foods|wholefds|trader joe|aldi|publix|wegmans|costco|h-?e-?b\b|food lion|giant|stop & shop|sprouts|albertsons|meijer|instacart|grocer|supermarket|\bmarket\b|winco|harris teeter|ralphs|vons|food 4 less|fred meyer|hy-?vee|piggly|shoprite|lidl|sam'?s ?club|bj's|fresh/],
-  ['dining', /restaurant|mcdonald|starbucks|chipotle|doordash|uber ?eats|grubhub|pizza|cafe|coffee|taco|burger|wendy|chick-?fil|subway|dunkin|panera|grill|\bbar\b|kitchen|sushi|diner|bakery|domino|kfc|popeyes|five guys|shake shack|panda express|sweetgreen|\bdeli\b|bistro|brew|pub\b|eatery|ramen|noodle|bbq|steakhouse|ice cream|donut|bagel|tavern|cantina|thai|wing/],
+  ['dining', /restaurant|roadhouse|jersey mike|supper|applebee|olive garden|chili's|buffalo wild|culver|arby|sonic drive|dairy queen|jimmy john|qdoba|\bihop\b|waffle|denny's|cracker barrel|red robin|outback|longhorn|tim horton|biggby|little caesar|papa john|taco bell|in-n-out|whataburger|zaxby|raising cane|wingstop|firehouse sub|potbelly|cheesecake factory|winery|brewery|brewing|taproom|tap room|grille|pizzeria|trattoria|taqueria|cocina|chophouse|smokehouse|creamery|espresso|mcdonald|starbucks|chipotle|doordash|uber ?eats|grubhub|pizza|cafe|coffee|taco|burger|wendy|chick-?fil|subway|dunkin|panera|grill|\bbar\b|kitchen|sushi|diner|bakery|domino|kfc|popeyes|five guys|shake shack|panda express|sweetgreen|\bdeli\b|bistro|brew|pub\b|eatery|ramen|noodle|bbq|steakhouse|ice cream|donut|bagel|tavern|cantina|thai|wing/],
   ['travel', /airline|\bdelta\b|united air|american air|southwest|jetblue|alaska air|spirit air|frontier air|airbnb|vrbo|hotel|marriott|hilton|hyatt|expedia|booking\.com|hertz|enterprise rent|avis|amtrak|\binn\b|resort|airport|priceline|kayak/],
   ['transport', /\buber\b|lyft|parking|\btoll|transit|metro\b|\bmta\b|e-?zpass|car wash|jiffy lube|autozone|o'?reilly|\bdmv\b|bart\b|clipper|ventra/],
   ['health', /pharmacy|cvs|walgreens|rite aid|medical|doctor|dental|dentist|hospital|clinic|\bhealth|optometr|vision|urgent care|labcorp|quest diag|therapy|kaiser/],
@@ -100,6 +100,8 @@ export function guessCategory(txn: Txn, categories: SpendCategory[], remembered:
   if (kind === 'transfer') return { choice: 'skip', sure: true };
 
   if (txn.amount < 0) {
+    // Money in that calls itself a payment is someone paying a card off, not income.
+    if (/\bpayment\b|\bpymt\b/.test(text) && kind !== 'pay') return { choice: 'skip', sure: true };
     // Money in: a refund goes back to where the spending was; pay goes to a paycheck.
     if (kind && kind !== 'pay' && /refund|return|reversal|credit/.test(text)) {
       const id = named(shown, ['recurring', 'variable'], NAMES[kind]);

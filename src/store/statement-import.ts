@@ -4,7 +4,7 @@ import { counts, pickedRules, totalsOf, type Item } from '@/lib/statement';
 import { storage } from '@/lib/storage';
 import type { Cents, ID, MonthKey, SpendCategory } from '@/lib/types';
 
-import { useStore } from './index';
+import { isReplacing, isSwitching, useStore } from './index';
 import { activeProfile } from './profile-list';
 
 /**
@@ -56,6 +56,11 @@ interface Last {
 
 /** The import just made, so it can be undone from the month it went into. Forgotten when the app closes. */
 export const useLastImport = create<{ last: Last | null }>(() => ({ last: null }));
+
+// Restoring a backup, erasing, or switching profile changes what the month holds: the import can't be taken back out of it.
+useStore.subscribe(() => {
+  if ((isReplacing() || isSwitching()) && useLastImport.getState().last) useLastImport.setState({ last: null });
+});
 
 /** Add the reviewed lines to the month, and remember the choices made. Returns how many lines were added. */
 export function applyImport(month: MonthKey, items: Item[], categories: SpendCategory[]): number {

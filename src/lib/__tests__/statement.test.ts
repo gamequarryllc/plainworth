@@ -175,6 +175,11 @@ test('guesses a category from the merchant, and leaves transfers out', () => {
   assert.deepEqual(guess('INTEREST PAID', -112), { choice: 'other-income', sure: false });
   assert.deepEqual(guess('AMZN MKTP US REFUND', -2450), { choice: 'shopping', sure: true });
   assert.deepEqual(guess('VENMO PAYMENT JORDAN'), { choice: 'general', sure: false });
+  // A card statement's payments are not income.
+  assert.deepEqual(guess('CAPITAL ONE MOBILE PYMT', -91498), { choice: 'skip', sure: true });
+  assert.deepEqual(guess('TEXAS ROADHOUSE #2259 PORTAGE MI'), { choice: 'eating-out', sure: true });
+  assert.deepEqual(guess('JERSEY MIKES 31041 GRAND RAPIDS MI'), { choice: 'eating-out', sure: true });
+  assert.deepEqual(guess('SQ *SUNROOM SUPPERS Grand Rapids MI'), { choice: 'eating-out', sure: true });
   // A choice made before wins, even over a known merchant.
   assert.deepEqual(guess('KROGER #442', 1000, { KROGER: 'general' }), { choice: 'general', sure: true });
   assert.deepEqual(guess('VENMO PAYMENT JORDAN', 1000, { 'VENMO PAYMENT': 'skip' }), { choice: 'skip', sure: true });
