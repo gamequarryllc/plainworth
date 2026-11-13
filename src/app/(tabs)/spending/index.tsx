@@ -118,7 +118,6 @@ function SpendingScreen({ sample }: { sample?: boolean }) {
       }
     : undefined;
 
-  const hasYear = withData.length > 0;
 
   // The sample can be scrolled but not tapped.
   const Body = sample ? SampleBody : Fragment;
@@ -175,15 +174,6 @@ function SpendingScreen({ sample }: { sample?: boolean }) {
 
         <MonthsTable title="Months" columns={columns} rows={rows} total={total} />
 
-        {hasYear ? (
-          <Section>
-            <Row
-              title="Where It Went"
-              subtitle={`Categories and income for ${year}`}
-              onPress={() => router.push({ pathname: '/insights/where-it-went', params: { year: String(year) } })}
-            />
-          </Section>
-        ) : null}
       </Body>
     </Screen>
   );

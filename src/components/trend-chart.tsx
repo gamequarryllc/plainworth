@@ -33,6 +33,10 @@ const PAD_X = 5;
 const LABEL_BOX = 56;
 const TAG_BOX = 96;
 const TAG_HEIGHT = 16;
+/** About one digit of the tag's type, to know how wide a tag is. */
+const TAG_CHAR = 7.4;
+/** Clear of the line and of an end dot. */
+const TAG_GAP = 8;
 /** A drag this far sideways, or a hold this long, makes the chart keep the finger (as in LineChart). */
 const SIDEWAYS = 5;
 const HOLD_MS = 250;
@@ -85,9 +89,11 @@ export function TrendChart({
     min -= 1;
     max += 1;
   }
-  const inner = height - PAD_Y * 2;
+  // Room above and below the lines for their tags.
+  const room = series.some((s) => s.tag) ? TAG_HEIGHT + TAG_GAP : 0;
+  const inner = height - PAD_Y * 2 - room * 2;
   const x = (i: number) => (count <= 1 ? width / 2 : PAD_X + (i / (count - 1)) * (width - PAD_X * 2));
-  const y = (v: number) => PAD_Y + inner - ((v - min) / (max - min)) * inner;
+  const y = (v: number) => PAD_Y + room + inner - ((v - min) / (max - min)) * inner;
 
   const pathOf = (values: (number | null)[]) => {
     let d = '';
@@ -172,7 +178,7 @@ export function TrendChart({
                 color={t.color}
                 align={t.align}
                 numberOfLines={1}
-                style={[styles.tag, { left: t.left, top: t.top }]}>
+                style={[styles.tag, { left: t.left, top: t.top, width: t.width }]}>
                 {t.text}
               </Text>
             ))
@@ -202,10 +208,25 @@ export function TrendChart({
   );
 }
 
+/** The height of a series' line at a horizontal position, between its points. Null where it has no line. */
+function lineY(values: (number | null)[], px: number, x: (i: number) => number, y: (v: number) => number): number | null {
+  for (let i = 0; i < values.length; i++) {
+    const v = values[i];
+    if (v == null) continue;
+    if (Math.abs(x(i) - px) < 0.5) return y(v);
+    const next = values[i + 1];
+    if (next == null || px < x(i) || px > x(i + 1)) continue;
+    const t = (px - x(i)) / (x(i + 1) - x(i));
+    return y(v) + (y(next) - y(v)) * t;
+  }
+  return null;
+}
+
 /**
- * Where each line's tag goes: the upper line's above its point and the lower
- * line's below, so two lines that run close together don't print over each
- * other, ending at the point and kept inside the chart.
+ * Where each line's tag goes, so it never sits on a line or a dot. The upper
+ * line's tag ends at its point and goes above every line that passes under
+ * its width; the lower line's starts at its point and goes below every line
+ * over its width. Both stay inside the chart.
  */
 function placeTags(
   series: TrendSeries[],
@@ -221,14 +242,19 @@ function placeTags(
     })
     .sort((a, b) => a.py - b.py);
   return tags.map((t, i) => {
-    const above = i === 0 && (tags.length > 1 || t.py > TAG_HEIGHT + 6);
-    const left = Math.min(Math.max(t.px - TAG_BOX + 6, 0), width - TAG_BOX);
-    const top = above ? t.py - TAG_HEIGHT - 6 : t.py + 7;
+    const above = i === 0;
+    const w = Math.min(TAG_BOX, Math.ceil(t.text.length * TAG_CHAR) + 4);
+    const left = Math.min(Math.max(above ? t.px + 4 - w : t.px - 4, 0), width - w);
+    // Every line's height across the tag: at its two ends and at each point in between.
+    const at = [left, left + w, ...series[0].values.map((_, j) => x(j)).filter((px) => px > left && px < left + w)];
+    const ys = series.flatMap((s) => at.map((px) => lineY(s.values, px, x, y))).filter((v): v is number => v != null);
+    const top = above ? Math.min(t.py, ...ys) - TAG_HEIGHT - TAG_GAP : Math.max(t.py, ...ys) + TAG_GAP;
     return {
       ...t,
       left,
+      width: w,
       top: Math.min(Math.max(top, 0), height - TAG_HEIGHT),
-      align: (t.px - TAG_BOX + 6 < 0 ? 'left' : 'right') as 'left' | 'right',
+      align: (above ? 'right' : 'left') as 'left' | 'right',
     };
   });
 }
@@ -343,7 +369,6 @@ const styles = StyleSheet.create({
   tag: {
     position: 'absolute',
     pointerEvents: 'none',
-    width: TAG_BOX,
   },
   axis: {
     height: 13,
