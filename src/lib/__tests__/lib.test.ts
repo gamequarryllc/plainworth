@@ -5,7 +5,7 @@ import { valueTicks } from '../axis';
 import { addMonths, dayNumber, keyFromDayNumber, shiftMonth } from '../dates';
 import { formatMoney, formatTyping, parseAmount } from '../money';
 import { buildSeries, leadStart, seriesByAccount, sliceSeries, seriesChange, summarizeAccounts, totalsOf, updatesByAccount } from '../networth';
-import { emptyData } from '../../store/defaults';
+import { DATA_VERSION, emptyData } from '../../store/defaults';
 import { migrate } from '../../store/migrate';
 import { categoriesForMonth, categoryTotals, earnedTotals, monthTotals, yearSummary } from '../spending';
 import type { Account, NWCategory, Snapshot, SpendCategory } from '../types';
@@ -172,7 +172,7 @@ test('the old Invested group is dropped and its money counts as saved', () => {
     },
   };
   const migrated = migrate(old);
-  assert.equal(migrated.version, 4);
+  assert.equal(migrated.version, DATA_VERSION);
   assert.deepEqual(migrated.spendCategories.map((c) => c.id), ['rent', 'pay']);
   // A month that only had investing is left empty.
   assert.deepEqual(migrated.spend, { '2026-01': { rent: 125000, pay: 370600 } });

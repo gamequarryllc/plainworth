@@ -14,6 +14,10 @@ export function migrate(raw: unknown): Data {
   let accounts = d.accounts ?? [];
   // Version 3 folded the Retirement category into Investments.
   if (version < 3) ({ nwCategories, accounts } = foldRetirement(nwCategories, accounts));
+  // Version 5 turned Payoff Order on (Avalanche) by default. Before that it started
+  // off and was saved that way, so an old "off" just means it was never chosen.
+  const settings = { ...d.settings };
+  if (version < 5 && settings.payoffOrder === 'off') settings.payoffOrder = 'avalanche';
   return {
     version: DATA_VERSION,
     nwCategories,
@@ -24,7 +28,7 @@ export function migrate(raw: unknown): Data {
     monthNotes: d.monthNotes ?? {},
     settings: {
       ...defaultSettings(),
-      ...d.settings,
+      ...settings,
       reminder: { ...defaultReminder(), ...d.settings?.reminder },
       outlook: { ...defaultOutlook(), ...d.settings?.outlook },
     },

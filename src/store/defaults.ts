@@ -50,7 +50,7 @@ export const defaultSpendCategories = (): SpendCategory[] => [
 ];
 
 /** Bump when stored data needs migrating (see `migrate` in the store). */
-export const DATA_VERSION = 4;
+export const DATA_VERSION = 5;
 
 /** Off until turned on; when on, the 1st of each month at 9:00 AM. */
 export const defaultReminder = (): Reminder => ({
@@ -76,7 +76,7 @@ export const defaultSettings = (): Settings => ({
   requireUnlock: false,
   nwRange: '6M',
   nwView: 'accounts',
-  payoffOrder: 'off',
+  payoffOrder: 'avalanche',
   nwSort: 'value',
   reminder: defaultReminder(),
   outlook: defaultOutlook(),

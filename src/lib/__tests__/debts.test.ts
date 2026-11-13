@@ -3,6 +3,8 @@ import { test } from 'node:test';
 
 import { formatRate, monthlyInterest, payFirst, sortDebts } from '../debts';
 import type { AccountSummary } from '../networth';
+import { DATA_VERSION, defaultSettings, emptyData } from '../../store/defaults';
+import { migrate } from '../../store/migrate';
 
 const debt = (name: string, balance: number, apr?: number) =>
   ({
@@ -50,4 +52,15 @@ test('monthly interest and rate labels', () => {
   assert.equal(formatRate(24.99), '24.99%');
   assert.equal(formatRate(6.5), '6.5%');
   assert.equal(formatRate(0), '0%');
+});
+
+test('payoff order starts on Avalanche, and old saved "off" moves to it', () => {
+  assert.equal(defaultSettings().payoffOrder, 'avalanche');
+  const old = { ...emptyData(), version: 4, settings: { ...defaultSettings(), payoffOrder: 'off' as const } };
+  assert.equal(migrate(old).settings.payoffOrder, 'avalanche');
+  const snow = { ...old, settings: { ...old.settings, payoffOrder: 'snowball' as const } };
+  assert.equal(migrate(snow).settings.payoffOrder, 'snowball');
+  // Turned off on purpose after the change: stays off.
+  const off = { ...old, version: DATA_VERSION };
+  assert.equal(migrate(off).settings.payoffOrder, 'off');
 });
