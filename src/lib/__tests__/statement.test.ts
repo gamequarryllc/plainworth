@@ -189,6 +189,10 @@ test('guesses a category from the merchant, and leaves transfers out', () => {
   assert.deepEqual(guess('TEXAS ROADHOUSE #2259 PORTAGE MI'), { choice: 'eating-out', sure: true });
   assert.deepEqual(guess('JERSEY MIKES 31041 GRAND RAPIDS MI'), { choice: 'eating-out', sure: true });
   assert.deepEqual(guess('SQ *SUNROOM SUPPERS Grand Rapids MI'), { choice: 'eating-out', sure: true });
+  assert.deepEqual(guess('SQ *CHATEAU GRAND TRAVERS Traverse City MI'), { choice: 'eating-out', sure: true });
+  assert.deepEqual(guess('FSP*BLACK STAR FARMS SUTTONS BAY MI'), { choice: 'eating-out', sure: true });
+  // No category of the person's fits a haircut, so it's General and worth a look.
+  assert.deepEqual(guess('LADY JANES GR NORTH BELTLINE'), { choice: 'general', sure: false });
   // A choice made before wins, even over a known merchant.
   assert.deepEqual(guess('KROGER #442', 1000, { KROGER: 'general' }), { choice: 'general', sure: true });
   assert.deepEqual(guess('VENMO PAYMENT JORDAN', 1000, { 'VENMO PAYMENT': 'skip' }), { choice: 'skip', sure: true });

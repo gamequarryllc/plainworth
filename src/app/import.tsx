@@ -1,10 +1,12 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Switch, View } from 'react-native';
+import type { SFSymbol } from 'sf-symbols-typescript';
 
 import { EmptyState } from '@/components/empty-state';
 import { Button } from '@/components/button';
 import { Icon } from '@/components/icon';
+import { ImportHero } from '@/components/import-hero';
 import { Row, Section } from '@/components/list';
 import { Screen } from '@/components/screen';
 import { StatTiles } from '@/components/stat-tiles';
@@ -312,14 +314,23 @@ export default function ImportScreen() {
 
   return (
     <Screen title="Import Statement" left={[cancel]}>
-      <Section footer={`Add ${monthName}’s statement from every account you use: checking, savings, credit cards, brokerage. Transfers between them and card payments are left out, and you review everything before it’s added. Read on this ${canReadDocuments ? 'iPhone' : 'device'}; nothing is uploaded.`}>
-        <Row
-          title="Choose Statements"
-          subtitle={canReadDocuments ? 'PDF, Excel or CSV. Pick several at once.' : 'Excel or CSV. Pick several at once.'}
-          leading={<Icon name="doc" size={20} color={c.tint} />}
-          onPress={() => read(false)}
-        />
-      </Section>
+      <ImportHero month={monthName} />
+      <View style={styles.choose}>
+        <Button title="Choose Statements" icon="doc" onPress={() => read(false)} style={styles.button} />
+        <Text variant="footnote" color="secondary" style={styles.formats}>
+          {canReadDocuments ? 'PDF, Excel or CSV. Pick several at once.' : 'Excel or CSV. Pick several at once.'}
+        </Text>
+      </View>
+      <View style={styles.points}>
+        {POINTS.map((p) => (
+          <View key={p.text} style={styles.point}>
+            <Icon name={p.icon} size={17} color={c.secondary} style={styles.pointIcon} />
+            <Text variant="subheadline" color="secondary" style={styles.pointText}>
+              {p.text === 'device' ? `Read on this ${canReadDocuments ? 'iPhone' : 'device'}. Nothing is uploaded.` : p.text}
+            </Text>
+          </View>
+        ))}
+      </View>
       {status === 'available' ? (
         <Section footer="Optional. Can help with messy PDFs. It runs on this iPhone; use at your discretion.">
           <Row
@@ -350,6 +361,12 @@ export default function ImportScreen() {
   );
 }
 
+const POINTS: { icon: SFSymbol; text: string }[] = [
+  { icon: 'arrow.left.arrow.right', text: 'Transfers and card payments are left out.' },
+  { icon: 'checklist', text: 'You review everything before it’s added.' },
+  { icon: 'lock', text: 'device' },
+];
+
 function titleCase(s: string): string {
   return s.toLowerCase().replace(/(^|\s)\S/g, (ch) => ch.toUpperCase());
 }
@@ -364,6 +381,30 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 12,
+  },
+  choose: {
+    marginHorizontal: layout.margin,
+    marginTop: 20,
+    gap: 8,
+  },
+  formats: {
+    textAlign: 'center',
+  },
+  points: {
+    marginHorizontal: layout.margin,
+    marginTop: 22,
+    gap: 10,
+  },
+  point: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  pointIcon: {
+    width: 22,
+  },
+  pointText: {
+    flex: 1,
   },
   button: {
     alignSelf: 'stretch',

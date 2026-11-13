@@ -63,6 +63,11 @@ const MATERIAL: Partial<Record<SFSymbol, MaterialName>> = {
   tablecells: 'table',
   'checkmark.seal.fill': 'verified',
   doc: 'description',
+  'doc.fill': 'description',
+  'building.columns': 'account_balance',
+  banknote: 'payments',
+  'arrow.left.arrow.right': 'swap_horiz',
+  checklist: 'checklist',
   sparkles: 'auto_awesome',
 };
 
