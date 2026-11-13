@@ -663,7 +663,11 @@ function HeadedCard({
       <TrendKey
         items={[
           { label: "Your net worth", color: c.up },
-          { label: early ? "With growth" : "At your pace", color: c.up, dashed: true },
+          {
+            label: early ? "With growth" : "At your pace",
+            color: c.up,
+            dashed: true,
+          },
           ...(showGoal
             ? [
                 {
