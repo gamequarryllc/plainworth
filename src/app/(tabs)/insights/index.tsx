@@ -245,7 +245,7 @@ function NetWorth({ filled }: { filled?: boolean }) {
       </Section>
     );
   }
-  // In the first month there's what you own today, and a word on what comes next.
+  // In the first month there's the mix as it stands, and a word on what comes next.
   if (history.length < 2 && !cards.some((x) => x.key === "headed")) {
     return (
       <>
@@ -293,8 +293,6 @@ function DistributionCard() {
   const d = distribution({ accounts, snapshots, nwCategories }, today, unit);
   if (d.periods.length === 0 || d.categories.length === 0) return null;
   const last = d.periods.length - 1;
-  // One month in, there's no "over time" yet: the mix as it stands, as one bar.
-  const single = unit === "month" && last === 0;
   const at = picked != null && picked <= last ? picked : last;
   const totalAt = (i: number) => d.values[i].reduce((s, v) => s + v, 0);
   const shareAt = (i: number, k: number) =>
@@ -313,7 +311,7 @@ function DistributionCard() {
 
   return (
     <InsightCard
-      label={single ? "What You Own" : "Distribution Over Time"}
+      label="Distribution Over Time"
       sentence={lock.text(
         sentence,
         "See how what you own is split across cash, investments and more, and how that mix has shifted.",
@@ -321,40 +319,22 @@ function DistributionCard() {
       note="What you own, by category. Debts aren’t included."
       {...lock.card}
     >
-      {single ? (
-        <View style={styles.mixBar}>
-          {d.categories.map((cat, k) =>
-            d.values[0][k] > 0 ? (
-              <View
-                key={cat.id}
-                style={{
-                  flex: d.values[0][k],
-                  backgroundColor: colors[k % colors.length],
-                }}
-              />
-            ) : null,
-          )}
-        </View>
-      ) : (
-        <>
-          <Segmented
-            options={UNITS}
-            value={unit}
-            onChange={(u) => {
-              setUnit(u);
-              setPicked(null);
-            }}
-            style={styles.horizon}
-          />
-          <StackedBars
-            values={d.values}
-            colors={colors}
-            labels={d.periods.map(periodLabel)}
-            selected={at}
-            onSelect={lock.locked ? undefined : setPicked}
-          />
-        </>
-      )}
+      <Segmented
+        options={UNITS}
+        value={unit}
+        onChange={(u) => {
+          setUnit(u);
+          setPicked(null);
+        }}
+        style={styles.horizon}
+      />
+      <StackedBars
+        values={d.values}
+        colors={colors}
+        labels={d.periods.map(periodLabel)}
+        selected={at}
+        onSelect={lock.locked ? undefined : setPicked}
+      />
       <View style={styles.mixList}>
         <Text variant="footnote" weight="600" color="secondary">
           {`${periodName(d.periods[at])}${at === last ? " (so far)" : ""}`}
@@ -1395,8 +1375,7 @@ function CategoryCard({ categories }: { categories: SpendCategory[] }) {
       params: { id: category.id },
     });
   const selected = at != null ? months[at] : null;
-  const verb =
-    category.group === "income" ? "Earned" : "Spent";
+  const verb = category.group === "income" ? "Earned" : "Spent";
 
   return (
     <InsightCard
@@ -1592,13 +1571,6 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "baseline",
     marginBottom: 8,
-  },
-  mixBar: {
-    flexDirection: "row",
-    height: 14,
-    gap: 2,
-    borderRadius: 7,
-    overflow: "hidden",
   },
   mixList: {
     marginTop: 16,
