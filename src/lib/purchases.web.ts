@@ -1,9 +1,9 @@
 /** The web build has no App Store: Pro there only comes from the Developer switch. */
-export const PRO_ENTITLEMENT = 'plainworth_pro';
-export const LIFETIME_PRODUCT_ID = 'plainworth_pro_lifetime';
+export { hasPro, LIFETIME_PRODUCT_ID, ownsLifetime, PRO_PRODUCT_IDS, type Entitlement } from './entitlements';
+
 export const purchasesAvailable = false;
 
-export type Offer = { price: string };
+export type Offer = { price: string; productId: string };
 export type PurchaseResult = 'bought' | 'cancelled' | 'pending' | 'failed';
 
 export function startPurchases(_onChange: (pro: boolean) => void) {}

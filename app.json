@@ -70,8 +70,6 @@
     },
     "extra": {
       "sourceCodeUrl": "https://github.com/gamequarryllc/plainworth",
-      "revenueCatAppleKey": "appl_qGFwdKpJJlvREaRayGbbpTDRjYV",
-      "revenueCatGoogleKey": "",
       "router": {
         "asyncRoutes": {
           "web": true

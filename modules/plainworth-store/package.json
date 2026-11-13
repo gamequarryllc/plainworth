@@ -1,0 +1,9 @@
+{
+  "name": "plainworth-store",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Plainworth Pro purchases through Apple's StoreKit 2, with no outside service",
+  "license": "MIT",
+  "author": "Game Quarry LLC",
+  "homepage": "https://github.com/gamequarryllc/plainworth"
+}

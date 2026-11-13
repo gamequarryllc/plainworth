@@ -20,7 +20,7 @@ const TEST_KEY = 'tally.pro.test';
 const OWNED_KEY = 'tally.pro.owned';
 
 interface ProState {
-  /** Owned on the App Store, as RevenueCat last reported. */
+  /** Owned on the App Store, as StoreKit last reported. */
   owned: boolean;
   /** The Developer switch (development builds only). */
   test: boolean;
