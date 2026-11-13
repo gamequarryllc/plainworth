@@ -299,16 +299,20 @@ function DistributionCard() {
     totalAt(i) > 0 ? d.values[i][k] / totalAt(i) : 0;
   const top = d.categories[0];
 
+  // What it all adds up to and how that moved, not the share the list below already shows.
+  const whole = (cents: number) => money(cents, { whole: true });
+  const total = totalAt(last);
   let sentence =
     d.categories.length > 1
-      ? `${top.name}: ${wholePercent(shareAt(last, 0))} of what you own.`
-      : `${top.name} is all of what you own.`;
-  if (last > 0 && d.categories.length > 1) {
-    const then = shareAt(0, 0);
-    const now = shareAt(last, 0);
-    if (Math.abs(now - then) >= 0.02) {
-      sentence = `${top.name}: ${wholePercent(now)}, ${now > then ? "up" : "down"} from ${wholePercent(then)}.`;
-    }
+      ? `${whole(total)} across ${d.categories.length} categories.`
+      : `${whole(total)}, all in ${top.name}.`;
+  if (last > 0) {
+    const diff = total - totalAt(0);
+    const since = periodName(d.periods[0]);
+    sentence =
+      Math.abs(diff) < Math.max(totalAt(0) * 0.01, 100_00)
+        ? `${whole(total)}, about the same as ${since}.`
+        : `${whole(total)}, ${diff > 0 ? "up" : "down"} ${whole(Math.abs(diff))} since ${since}.`;
   }
 
   return (
@@ -1418,7 +1422,7 @@ function WhereItWentCard({ year }: { year: number }) {
     <InsightCard
       label="Where It Went"
       sentence={lock.text(
-        `${top.category.name} took ${formatPercent(top.share)}.`,
+        `${top.category.name} took ${formatPercent(top.share)} of your spending.`,
         "See every category a month on average, and how each compares with last year.",
       )}
       note={
