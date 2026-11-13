@@ -6,6 +6,7 @@ import { Section } from '@/components/list';
 import { Screen } from '@/components/screen';
 import { StatTiles } from '@/components/stat-tiles';
 import { TrendHeader } from '@/components/trend-header';
+import { useFundBadge } from '@/hooks/use-emergency-fund';
 import { useMoney } from '@/hooks/use-money';
 import { formatPercent } from '@/lib/money';
 import { buildSeries, updatesByAccount, summarizeAccounts, totalsOf } from '@/lib/networth';
@@ -13,6 +14,7 @@ import { sortAccounts } from '@/lib/sort';
 import { useStore } from '@/store';
 
 export default function CategoryScreen() {
+  const fundBadge = useFundBadge();
   const { id } = useLocalSearchParams<{ id: string }>();
   const money = useMoney();
   const accounts = useStore((s) => s.accounts);
@@ -77,6 +79,7 @@ export default function CategoryScreen() {
                 key={s.account.id}
                 summary={s}
                 series={perAccount.get(s.account.id)}
+                fund={fundBadge(s.account.id)}
                 onPress={() => open$(s.account.id)}
               />
             ))}

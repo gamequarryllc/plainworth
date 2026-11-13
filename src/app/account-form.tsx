@@ -39,6 +39,7 @@ export default function AccountFormScreen() {
   const addAccount = useStore((s) => s.addAccount);
   const updateAccount = useStore((s) => s.updateAccount);
   const isNew = !existing;
+  const fundPart = useStore((s) => s.settings.emergencyFund?.accounts.find((a) => a.id === params.id));
 
   const sorted = [...categories].sort((a, b) => (a.kind === b.kind ? a.order - b.order : a.kind === 'asset' ? -1 : 1));
   const [name, setName] = useState(existing?.name ?? '');
@@ -352,6 +353,17 @@ export default function AccountFormScreen() {
         </Section>
       ) : null}
 
+      {existing && isAsset && !existing.closed ? (
+        <Section footer="See how many months of costs it covers.">
+          <Row
+            title="Emergency Fund"
+            value={fundPart ? (fundPart.cap != null ? `Up to ${money(fundPart.cap, { whole: true })}` : 'On') : 'Off'}
+            onPress={() =>
+              router.push({ pathname: '/emergency-fund', params: fundPart ? {} : { account: existing.id } })
+            }
+          />
+        </Section>
+      ) : null}
     </Screen>
   );
 }

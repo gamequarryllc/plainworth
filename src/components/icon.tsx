@@ -37,6 +37,7 @@ const MATERIAL: Partial<Record<SFSymbol, MaterialName>> = {
   'lock.fill': 'lock',
   hourglass: 'hourglass_empty',
   'lock.shield.fill': 'shield_lock',
+  'shield.fill': 'shield',
   'arrow.up.right': 'arrow_outward',
   'info.circle': 'info',
   faceid: 'face',

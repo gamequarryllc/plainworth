@@ -33,6 +33,7 @@ import {
   TrendKey,
   type TrendLabel,
 } from "@/components/trend-chart";
+import { useEmergencyFund } from "@/hooks/use-emergency-fund";
 import { useMoney } from "@/hooks/use-money";
 import { useToday } from "@/hooks/use-today";
 import {
@@ -73,6 +74,7 @@ import {
   type PeriodUnit,
   type YearGoals,
 } from "@/lib/trends";
+import { formatMonths, fundSide } from "@/lib/emergency";
 import { categoryTotals } from "@/lib/spending";
 import type { SpendCategory, SpendingGoal } from "@/lib/types";
 import { useStore } from "@/store";
@@ -207,6 +209,9 @@ function NetWorth({ filled }: { filled?: boolean }) {
 
   const history = netWorthHistory({ accounts, snapshots, nwCategories }, today);
   const some = history.length > 0;
+  const fund = useStore((s) => s.settings.emergencyFund);
+  const spendAll = useStore((s) => s.spend);
+  const fundHere = fundSide(fund, { accounts, spend: spendAll }) === "networth";
   const compared =
     history.length >= 2 && lastIndex(netWorthSoFar(history, year)) >= 0;
 
@@ -234,6 +239,7 @@ function NetWorth({ filled }: { filled?: boolean }) {
           ) : null}
         </Section>
       ) : null}
+      {fundHere && fund ? <EmergencyFundCard /> : null}
       <Waiting needs={some ? null : "Needs a balance"}>
         <HeadedFromStore />
       </Waiting>
@@ -243,6 +249,7 @@ function NetWorth({ filled }: { filled?: boolean }) {
       <Waiting needs={some ? null : "Needs a balance"}>
         <DistributionCard />
       </Waiting>
+      {fundHere && !fund ? <EmergencyFundCard /> : null}
     </>
   );
 }
@@ -745,7 +752,7 @@ function GoalLink({
   onPress,
 }: {
   title: string;
-  icon?: "flag";
+  icon?: "flag" | "shield.fill";
   onPress: () => void;
 }) {
   const c = useColors();
@@ -888,6 +895,9 @@ function Spending({ filled }: { filled?: boolean }) {
   const history = spendHistory(data, today);
   const sp = spendingYear(data, year, today);
   const chartable = chartableCategories(data, today);
+  const fund = useStore((s) => s.settings.emergencyFund);
+  const accountsAll = useStore((s) => s.accounts);
+  const fundHere = fundSide(fund, { accounts: accountsAll, spend: data.spend }) === "spending";
   const cards = useCards([
     lastIndex(soFar) >= 0 ? (
       <SpentYearCard
@@ -926,15 +936,110 @@ function Spending({ filled }: { filled?: boolean }) {
       </Section>
     );
   }
+  const fundCard = fundHere ? <EmergencyFundCard /> : null;
   if (!cards.length) {
     return (
-      <InsightCard
-        label="This Year vs Last Year"
-        sentence="Your year adds up here once a month is over."
-      />
+      <>
+        {fundCard}
+        <InsightCard
+          label="This Year vs Last Year"
+          sentence="Your year adds up here once a month is over."
+        />
+      </>
     );
   }
-  return <>{cards}</>;
+  return (
+    <>
+      {fund ? fundCard : null}
+      {cards}
+      {fund ? null : fundCard}
+    </>
+  );
+}
+
+/**
+ * How many months of costs the emergency fund covers, against the goal for
+ * your situation, with how that has grown. Before it's set up, a short
+ * question and a Set Up button.
+ */
+function EmergencyFundCard() {
+  const c = useColors();
+  const lock = useLock();
+  const whole = (cents: number) => lock.money(cents, { whole: true });
+  const { fund, status } = useEmergencyFund();
+  const edit = () => router.push("/emergency-fund");
+
+  if (!fund || !status) {
+    return (
+      <InsightCard
+        label="Emergency Fund"
+        sentence={
+          !fund
+            ? "How many months could your savings cover?"
+            : fund.accounts.length || fund.saved != null
+              ? "Add what a month costs you."
+              : "Add how much you’ve saved."
+        }
+        note={
+          !fund
+            ? "Most people aim for 3 to 6 months of costs, and 9 to 12 if their income varies."
+            : null
+        }
+      >
+        <GoalLink
+          title={fund ? "Finish Setting Up" : "Set Up"}
+          icon="shield.fill"
+          onPress={edit}
+        />
+      </InsightCard>
+    );
+  }
+
+  const { covered, goal, toGo, balance, target, monthly, history, historyMonths } = status;
+  const max = Math.max(goal * 1.12, covered);
+  const shown = history.filter((v) => v != null).length;
+  return (
+    <InsightCard
+      label="Emergency Fund"
+      sentence={lock.text(
+        `${formatMonths(covered)} of ${goal} months covered.`,
+        "See how many months your savings would cover.",
+      )}
+      note={`${whole(balance)} saved ÷ ${whole(monthly)} a month, ${
+        fund.monthly != null ? "the cost you typed in" : "your average spending over recent months"
+      }. ${goal} months is ${whole(target)}.`}
+      {...lock.card}
+    >
+      <View style={[styles.fundBar, { backgroundColor: c.fill }]}>
+        <View
+          style={[
+            styles.fundFill,
+            { width: `${Math.min(covered / max, 1) * 100}%`, backgroundColor: c.up },
+          ]}
+        />
+        <View style={[styles.fundTick, { left: `${(goal / max) * 100}%`, backgroundColor: c.secondary }]} />
+      </View>
+      <Text variant="footnote" color="secondary">
+        {toGo > 0
+          ? `${whole(toGo)} more reaches ${goal} months.`
+          : covered >= goal * 1.05
+            ? `Goal reached, with ${whole(balance - target)} extra.`
+            : "Goal reached."}
+      </Text>
+      {shown >= 2 ? (
+        <TrendChart
+          count={12}
+          zero
+          series={[
+            { values: history.map(() => goal), color: c.tertiary, dashed: true },
+            { values: history, color: c.up, endDot: true },
+          ]}
+          labels={historyMonths.map((m, index) => ({ index, text: MONTHS_SHORT[m - 1][0] }))}
+        />
+      ) : null}
+      <GoalLink title="Edit" onPress={edit} />
+    </InsightCard>
+  );
 }
 
 /**
@@ -1640,6 +1745,27 @@ const styles = StyleSheet.create({
   },
   more: {
     marginTop: 12,
+  },
+  fundBar: {
+    height: 10,
+    borderRadius: 5,
+    marginTop: 6,
+    marginBottom: 8,
+  },
+  fundFill: {
+    position: "absolute",
+    left: 0,
+    top: 0,
+    bottom: 0,
+    borderRadius: 5,
+  },
+  fundTick: {
+    position: "absolute",
+    top: -4,
+    bottom: -4,
+    width: 2,
+    marginLeft: -1,
+    borderRadius: 1,
   },
   link: {
     flexDirection: "row",

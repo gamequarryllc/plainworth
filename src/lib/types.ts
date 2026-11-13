@@ -114,6 +114,25 @@ export interface SpendingGoal {
   limit?: Cents;
 }
 
+/** Who you are, for how many months an emergency fund should cover. */
+export type EmergencySituation = 'steady' | 'stake' | 'self';
+
+/**
+ * Money set aside for emergencies, and how many months of costs it should
+ * cover. It's either accounts marked on Net Worth (all of each, or up to a cap)
+ * or, for someone who only tracks spending, an amount typed in.
+ */
+export interface EmergencyFund {
+  accounts: { id: ID; cap?: Cents }[];
+  /** With no accounts marked: what's saved, typed in. */
+  saved?: Cents;
+  /** What a month costs, typed in. Left out, it's the spending average. */
+  monthly?: Cents;
+  situation?: EmergencySituation;
+  /** The goal, in months of costs. */
+  months: number;
+}
+
 export interface Settings {
   currency: string;
   /** Optional, for "Alex’s Net Worth" and shared images. Empty means none was given or it was cleared. */
@@ -133,6 +152,7 @@ export interface Settings {
   birthYear?: number;
   outlook: Outlook;
   spendingGoal?: SpendingGoal;
+  emergencyFund?: EmergencyFund;
 }
 
 export interface Data {

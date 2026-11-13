@@ -120,6 +120,8 @@ export function sampleData(months = HISTORY): Data {
 
   data.accounts = accounts;
   data.snapshots = snapshots;
+  const savings = accounts.find((a) => a.name === 'High-Yield Savings');
+  if (savings) data.settings.emergencyFund = { accounts: [{ id: savings.id }], situation: 'stake', months: 6 };
 
   // Spending: every month that's over, as far back as the sample goes. Pay
   // and prices rise about 3% a year, so earlier years are a little lower.

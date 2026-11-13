@@ -448,6 +448,7 @@ const realStore = create<Store>()((set, get) => ({
           name: '',
           outlook: { ...settings.outlook, monthly: undefined },
           spendingGoal: undefined,
+          emergencyFund: undefined,
         },
       }),
     );

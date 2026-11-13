@@ -40,7 +40,7 @@ export interface Replica {
  * its lock, hidden amounts, reminder, last backup, and how its lists and
  * charts are set.
  */
-export const SYNCED_SETTINGS = ['currency', 'name', 'goal', 'birthYear', 'outlook', 'spendingGoal'] as const;
+export const SYNCED_SETTINGS = ['currency', 'name', 'goal', 'birthYear', 'outlook', 'spendingGoal', 'emergencyFund'] as const;
 type SyncedSetting = (typeof SYNCED_SETTINGS)[number];
 
 /** Is epoch `a` newer than `b`? */
