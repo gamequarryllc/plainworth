@@ -37,6 +37,7 @@ const MATERIAL: Partial<Record<SFSymbol, MaterialName>> = {
   'lock.fill': 'lock',
   'lock.shield.fill': 'shield_lock',
   'arrow.up.right': 'arrow_outward',
+  'info.circle': 'info',
   faceid: 'face',
   calendar: 'calendar_month',
   'chart.line.uptrend.xyaxis': 'show_chart',

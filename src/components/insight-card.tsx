@@ -9,25 +9,23 @@ import { ProBadge } from './pro-badge';
 import { Text } from './text';
 
 /**
- * One finding, the way Health shows its highlights: a small label, a plain
- * sentence that says what happened, and a chart that shows it. With `onPress`,
- * a chevron by the label says there's more to see.
+ * One finding, the way Health shows its highlights: a small label, one short
+ * sentence that says what happened, and a chart that shows it. Small print
+ * waits behind an (i) by the label. With `onPress`, a chevron by the label
+ * says there's more to see.
  */
 export function InsightCard({
   label,
   sentence,
   note,
-  folded,
   children,
   onPress,
   locked,
 }: {
   label: string;
   sentence: string;
-  /** A line of small print under the chart. */
+  /** Small print on how it's figured, shown when the (i) is tapped. */
   note?: string | null;
-  /** Long small print stays behind a "How It's Figured" toggle until asked for. */
-  folded?: boolean;
   children?: ReactNode;
   onPress?: () => void;
   /** Part of Pro: a PRO badge by the label, and the chart is blurred behind an Unlock with Pro tag. */
@@ -44,6 +42,16 @@ export function InsightCard({
           {label}
         </Text>
         {locked ? <ProBadge /> : null}
+        {note ? (
+          <Pressable
+            onPress={() => setOpen((o) => !o)}
+            hitSlop={10}
+            accessibilityRole="button"
+            accessibilityLabel="How it’s figured"
+            accessibilityState={{ expanded: open }}>
+            <Icon name="info.circle" size={15} color={open ? c.tint : c.tertiary} />
+          </Pressable>
+        ) : null}
         {onPress ? <Icon name="chevron.right" size={12} weight="semibold" color={c.tertiary} /> : null}
       </View>
       <Text variant="headline" style={styles.sentence}>
@@ -67,21 +75,8 @@ export function InsightCard({
           ) : null}
         </View>
       ) : null}
-      {note && folded ? (
-        <Pressable
-          onPress={() => setOpen((o) => !o)}
-          accessibilityRole="button"
-          accessibilityState={{ expanded: open }}
-          hitSlop={8}
-          style={({ pressed }) => [styles.foldRow, pressed && { opacity: 0.5 }]}>
-          <Text variant="footnote" color="secondary">
-            How It’s Figured
-          </Text>
-          <Icon name={open ? 'chevron.up' : 'chevron.down'} size={11} weight="semibold" color={c.secondary} />
-        </Pressable>
-      ) : null}
-      {note && (!folded || open) ? (
-        <Text variant="footnote" color="secondary" style={folded ? styles.foldNote : styles.note}>
+      {note && open ? (
+        <Text variant="footnote" color="secondary" style={styles.note}>
           {note}
         </Text>
       ) : null}
@@ -204,16 +199,6 @@ const styles = StyleSheet.create({
   },
   note: {
     marginTop: 12,
-  },
-  foldRow: {
-    marginTop: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    alignSelf: 'flex-start',
-    gap: 4,
-  },
-  foldNote: {
-    marginTop: 6,
   },
   rank: {
     paddingVertical: 7,

@@ -30,14 +30,13 @@ export function categorySentence(
   if (!change) {
     const first = months.find((m) => m.value != null);
     if (average == null || !first) return `Nothing entered for ${name} yet.`;
-    return `${name} has averaged ${whole(average)} a month since ${MONTHS[first.month - 1]} ${first.year}.`;
+    return `${whole(average)} a month since ${MONTHS_SHORT[first.month - 1]} ${first.year}.`;
   }
-  const ago = change.since === 'year' ? 'a year ago' : 'in your first months';
+  const ago = change.since === 'year' ? 'last year' : 'at first';
   const { recent, before } = change;
-  const lately = `${name} has averaged ${whole(recent)} a month lately`;
-  if (before > 0 && Math.abs(recent / before - 1) < 0.05) return `${lately}, about the same as ${ago}.`;
-  if (recent === before) return `${lately}, the same as ${ago}.`;
-  return `${lately}, ${recent > before ? 'up' : 'down'} from ${whole(before)} ${ago}.`;
+  const lately = `${whole(recent)} a month lately`;
+  if (recent === before || (before > 0 && Math.abs(recent / before - 1) < 0.05)) return `${lately}, same as ${ago}.`;
+  return `${lately}, ${recent > before ? 'up' : 'down'} ${whole(Math.abs(recent - before))} from ${ago}.`;
 }
 
 /** Bars for a run of months. A month with nothing entered at all is an empty slot. */

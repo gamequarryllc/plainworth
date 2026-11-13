@@ -252,7 +252,7 @@ function NetWorth({ filled }: { filled?: boolean }) {
         {cards}
         <InsightCard
           label="More Coming"
-          sentence="Keep updating your balances each month and more charts appear here."
+          sentence="More charts appear as you update each month."
         />
       </>
     );
@@ -299,13 +299,15 @@ function DistributionCard() {
     totalAt(i) > 0 ? d.values[i][k] / totalAt(i) : 0;
   const top = d.categories[0];
 
-  let sentence = `${top.name} ${d.categories.length > 1 ? `makes up ${formatPercent(shareAt(last, 0))} of` : "is all of"} what you own.`;
+  let sentence =
+    d.categories.length > 1
+      ? `${top.name}: ${wholePercent(shareAt(last, 0))} of what you own.`
+      : `${top.name} is all of what you own.`;
   if (last > 0 && d.categories.length > 1) {
     const then = shareAt(0, 0);
     const now = shareAt(last, 0);
-    const since = periodName(d.periods[0]);
     if (Math.abs(now - then) >= 0.02) {
-      sentence = `${top.name} makes up ${formatPercent(now)} of what you own, ${now > then ? "up" : "down"} from ${formatPercent(then)} in ${since}.`;
+      sentence = `${top.name}: ${wholePercent(now)}, ${now > then ? "up" : "down"} from ${wholePercent(then)}.`;
     }
   }
 
@@ -381,12 +383,6 @@ const WITH_GOAL: { value: Horizon; label: string }[] = [
 
 const inYears = (months: number) =>
   months <= 12 ? "in a year" : `in ${Math.round(months / 12)} years`;
-/** "in 8 months", "in about 21 years". */
-function fromNow(months: number): string {
-  if (months < 12) return `in ${months} ${months === 1 ? "month" : "months"}`;
-  const years = Math.round(months / 12);
-  return `in about ${years} ${years === 1 ? "year" : "years"}`;
-}
 /** Nearest $10, for amounts that are estimates anyway. */
 const roughly = (cents: number) => Math.round(cents / 1000) * 1000;
 
@@ -517,39 +513,33 @@ function HeadedCard({
     const reached = reach != null ? shift(now, reach).year : null;
     const needed = status.needed != null ? whole(roughly(status.needed)) : "";
     if (status.progress >= 1) {
-      sentence = `You’ve reached your ${target} goal. Time for a bigger one?`;
+      sentence = `You reached ${target}. Time for a bigger goal?`;
     } else if (late) {
-      sentence = `Your ${target} goal date has passed. Pick a new one.`;
+      sentence = `Your ${target} date has passed. Pick a new one.`;
     } else if (status.due != null && status.onTrack) {
-      sentence = `You’re on track for ${target} ${byWhen}. At your pace you’d get there ${when(reached!)}.`;
+      sentence = `On track for ${target} ${byWhen}.`;
     } else if (status.due != null) {
-      sentence =
-        `${reached != null ? `At your pace you’d hit ${target} ${when(reached)}.` : `At your pace you wouldn’t hit ${target} within 50 years.`}` +
-        ` To make it ${byWhen}, add about ${needed} a month.`;
+      sentence = `Add about ${needed} a month to hit ${target} ${byWhen}.`;
     } else {
       sentence =
         reached != null
-          ? `At your pace you’d hit ${target} ${when(reached)}, ${fromNow(reach!)}.`
-          : `At your pace you wouldn’t hit ${target} within 50 years.`;
+          ? `${target} ${when(reached)} at your pace.`
+          : `${target} is over 50 years away at your pace.`;
     }
   } else {
     const lead =
       pace == null
         ? ""
         : pace > 0
-          ? `Your net worth grows about ${whole(pace)} a month. `
+          ? `Growing ${whole(pace)} a month.`
           : pace < 0
-            ? `Your net worth has fallen about ${whole(-pace)} a month lately. `
-            : "Your net worth has held steady lately. ";
-    const keepsUp =
-      plan.source === "yours"
-        ? `Adding ${whole(plan.monthly)} a month`
-        : "If that keeps up";
+            ? `Falling ${whole(-pace)} a month.`
+            : "Holding steady.";
     if (away != null && away > 0 && away <= MAX_MONTHS) {
       const d = shift(now, away);
-      sentence = `${lead}${keepsUp}, you’d ${milestone === 0 ? "be back above zero" : `pass ${whole(milestone)}`} around ${MONTHS[d.month - 1]} ${d.year}.`;
+      sentence = `${lead} ${milestone === 0 ? "Above zero" : whole(milestone)} by ${MONTHS_SHORT[d.month - 1]} ${d.year}.`.trim();
     } else {
-      sentence = `${lead}${keepsUp}, you’d have about ${whole(projected)} ${inYears(ahead)}, in today’s money.`;
+      sentence = lead || `About ${whole(projected)} ${inYears(ahead)}.`;
     }
   }
 
@@ -594,7 +584,6 @@ function HeadedCard({
       )}
       {...lock.card}
       note={note}
-      folded
     >
       <Segmented
         options={options}
@@ -762,18 +751,13 @@ function NetWorthYearCard({
   const signed = (cents: number) => money(cents, { signed: true, whole: true });
 
   const since = from > 0 ? `since ${MONTHS[from]}` : "this year";
-  let sentence =
-    value >= 0
-      ? `Your net worth is up ${whole(value)} ${since}`
-      : `Your net worth is down ${whole(-value)} ${since}`;
+  let sentence = `${value >= 0 ? "Up" : "Down"} ${whole(Math.abs(value))} ${since}`;
   if (then != null) {
     const diff = value - then;
-    const ref =
-      from > 0 ? "over the same months last year" : "at this point last year";
     sentence +=
       Math.abs(diff) <= Math.max(Math.abs(then) * 0.03, 100)
-        ? `, about the same as ${ref}.`
-        : `, ${whole(Math.abs(diff))} ${diff > 0 ? "more" : "less"} than ${ref}.`;
+        ? ", same as last year."
+        : `, ${whole(Math.abs(diff))} ${diff > 0 ? "ahead of" : "behind"} last year.`;
   } else {
     sentence += ".";
   }
@@ -893,7 +877,7 @@ function Spending({ filled }: { filled?: boolean }) {
     return (
       <InsightCard
         label="This Year vs Last Year"
-        sentence="Once a month you’ve entered is over, this page shows how your spending adds up over the year."
+        sentence="Your year adds up here once a month is over."
       />
     );
   }
@@ -934,23 +918,12 @@ function SpentYearCard({
   let sentence: string;
   if (then != null) {
     const diff = value - then;
-    const ref =
-      from === 0
-        ? `by ${MONTHS_SHORT[last]} last year`
-        : from === last
-          ? `in ${MONTHS_SHORT[last]} last year`
-          : "in the same months last year";
     sentence =
       Math.abs(diff) <= then * 0.03
-        ? `About the same as ${ref}.`
-        : `${whole(Math.abs(diff))} ${diff < 0 ? "less" : "more"} than ${ref}.`;
+        ? "About the same as last year."
+        : `${whole(Math.abs(diff))} ${diff < 0 ? "less" : "more"} than last year.`;
   } else {
-    sentence =
-      from === 0
-        ? `You’ve spent ${whole(value)} this year through ${MONTHS[last]}.`
-        : from === last
-          ? `You’ve spent ${whole(value)} in ${MONTHS[last]}.`
-          : `You’ve spent ${whole(value)} from ${MONTHS[from]} through ${MONTHS[last]}.`;
+    sentence = `${whole(value)} spent ${from === 0 ? "this year" : from === last ? `in ${MONTHS[last]}` : `since ${MONTHS[from]}`}.`;
   }
 
   const hidden = useStore((s) => s.settings.hideAmounts);
@@ -1109,27 +1082,14 @@ function goalSentence(
   g: YearGoals,
   whole: (cents: number) => string,
 ): string | null {
+  // The goal bars show where you stand; words only for what to do next.
   const keepOk = goal.keep != null && g.kept != null && g.kept >= goal.keep;
   const over = goal.limit != null && g.spent != null && g.spent > goal.limit;
-  if (goal.keep != null && !(keepOk && over)) {
-    if (g.kept == null)
-      return g.months
-        ? "Enter your income in Spending to see how much of it you keep."
-        : null;
-    if (keepOk)
-      return `You’ve kept ${wholePercent(g.kept)} of what you earned, above your ${wholePercent(goal.keep)} goal.`;
-    if (g.keepFromHere != null && g.keepFromHere <= 0.9) {
-      return `Keep ${wholePercent(g.keepFromHere)} of what you earn from here on to end the year at your ${wholePercent(goal.keep)} goal.`;
-    }
-    return `You’ve kept ${wholePercent(g.kept)} of what you earned, short of your ${wholePercent(goal.keep)} goal.`;
-  }
-  if (goal.limit == null || g.spent == null) return null;
-  if (!over)
-    return `That’s ${whole(g.spent)} in an average month, under your ${whole(goal.limit)} limit.`;
-  if (g.spendFromHere != null && g.spendFromHere > 0) {
-    return `Averaging ${whole(g.spendFromHere)} a month from here on gets you back under your ${whole(goal.limit)} limit.`;
-  }
-  return `That’s ${whole(g.spent)} in an average month, over your ${whole(goal.limit)} limit.`;
+  if (goal.keep != null && g.kept != null && !keepOk && g.keepFromHere != null && g.keepFromHere <= 0.9)
+    return `Keep ${wholePercent(g.keepFromHere)} from here to hit your goal.`;
+  if (over && g.spendFromHere != null && g.spendFromHere > 0)
+    return `Spend under ${whole(g.spendFromHere)} a month to get back on track.`;
+  return null;
 }
 
 type CreepRange = "12" | "24" | "60" | "all";
@@ -1155,7 +1115,6 @@ function monthSpan(from: Month, to: Month): string {
  * Lifestyle creep in plain dollars: every month's spending as a bar, with
  * the steady months before the climb faded and the month it started marked,
  * so "about $1,800 a month, then a raise, then up and up" reads at a glance.
- * Income, when it's entered, says whether you're keeping more or less.
  */
 function CreepCard({ all }: { all: CreepMonth[] }) {
   const c = useColors();
@@ -1192,23 +1151,10 @@ function CreepCard({ all }: { all: CreepMonth[] }) {
       : `${MONTHS[m.month - 1]} ${m.year}`;
 
   const diff = lately.spent - before.spent;
-  let sentence =
+  const sentence =
     direction === "steady" || start == null
-      ? `Your spending has held steady at about ${whole(lately.spent)} a month.`
-      : `Your spending started ${direction === "up" ? "climbing" : "falling"} in ${when(months[start])}. It’s ${direction === "up" ? "up" : "down"} ${whole(Math.abs(diff))} a month from before.`;
-  if (before.earned != null && lately.earned != null) {
-    const raise = lately.earned - before.earned;
-    const kept = raise - diff;
-    const keeping =
-      Math.abs(kept) < lately.earned * 0.03
-        ? "you’re keeping about the same"
-        : `you’re keeping ${whole(Math.abs(kept))} ${kept > 0 ? "more" : "less"} a month`;
-    if (Math.abs(raise) >= before.earned * 0.03) {
-      sentence += ` Your income ${raise > 0 ? "rose" : "fell"} ${whole(Math.abs(raise))} a month, so ${keeping}.`;
-    } else if (direction !== "steady") {
-      sentence += ` Your income stayed about the same, so ${keeping}.`;
-    }
-  }
+      ? `Steady at about ${whole(lately.spent)} a month.`
+      : `${direction === "up" ? "Up" : "Down"} ${whole(Math.abs(diff))} a month since ${when(months[start])}.`;
 
   const count = months.length;
   const selected = at != null && at < count ? months[at] : null;
@@ -1472,7 +1418,7 @@ function WhereItWentCard({ year }: { year: number }) {
     <InsightCard
       label="Where It Went"
       sentence={lock.text(
-        `${top.category.name} took the biggest share of your spending this year, ${formatPercent(top.share)}.`,
+        `${top.category.name} took ${formatPercent(top.share)}.`,
         "See every category a month on average, and how each compares with last year.",
       )}
       note={
