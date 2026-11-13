@@ -20,6 +20,8 @@ import { formatPercent } from '@/lib/money';
 import { categoriesForMonth, GROUPS, monthTotals, type MonthTotals } from '@/lib/spending';
 import type { SpendCategory } from '@/lib/types';
 import { useStore } from '@/store';
+import { useProfiles } from '@/store/profile-list';
+import { undoImport, useLastImport } from '@/store/statement-import';
 import { type, useColors } from '@/theme';
 
 const EMPTY = {};
@@ -47,6 +49,8 @@ export default function MonthScreen() {
   const removeSpendCategory = useStore((s) => s.removeSpendCategory);
   const updateSpendCategory = useStore((s) => s.updateSpendCategory);
   const setSpendCategoryOrder = useStore((s) => s.setSpendCategoryOrder);
+  const profile = useProfiles((s) => s.active);
+  const imported = useLastImport((s) => (s.last?.month === month && s.last.profile === profile ? s.last : null));
   const chain = useFieldChain();
   const [swipes] = useState(() => new SwipeGroup());
   const lists = GROUPS.map((group) => categoriesForMonth(categories, entries, group.key));
@@ -132,8 +136,15 @@ export default function MonthScreen() {
       />
       <StatTiles tiles={tiles} />
 
-      {canFill ? (
-        <Section>
+      <Section>
+        <Row
+          title="Import Statement"
+          titleColor="tint"
+          leading={<Icon name="square.and.arrow.down" size={18} color={c.tint} />}
+          chevron={false}
+          onPress={() => router.push({ pathname: '/import', params: { month } })}
+        />
+        {canFill ? (
           <Row
             title={`Copy Recurring from ${prevName}`}
             titleColor="tint"
@@ -143,8 +154,20 @@ export default function MonthScreen() {
               if (fillRecurring(month)) haptics.success();
             }}
           />
-        </Section>
-      ) : null}
+        ) : null}
+        {imported ? (
+          <Row
+            title={`Undo Import (${imported.count} ${imported.count === 1 ? 'line' : 'lines'})`}
+            titleColor="down"
+            leading={<Icon name="arrow.uturn.backward" size={18} color={c.down} />}
+            chevron={false}
+            onPress={() => {
+              undoImport();
+              haptics.light();
+            }}
+          />
+        ) : null}
+      </Section>
 
       {GROUPS.map((group, g) => {
         const list = lists[g];

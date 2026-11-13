@@ -63,6 +63,8 @@ interface Actions {
   moveNWCategory(id: ID, direction: -1 | 1): void;
 
   setSpend(month: MonthKey, categoryId: ID, amount: Cents | null): void;
+  /** Add to (or with a negative amount, take from) a month's categories, as a statement import does. Never goes below zero. */
+  addToSpend(month: MonthKey, changes: Record<ID, Cents>): void;
   /** Copy last month's recurring amounts into empty recurring fields. Returns how many were filled. */
   fillRecurring(month: MonthKey): number;
   setMonthNote(month: MonthKey, note: string): void;
@@ -308,6 +310,23 @@ const realStore = create<Store>()((set, get) => ({
       const entries = { ...s.spend[month] };
       if (amount == null || amount === 0) delete entries[categoryId];
       else entries[categoryId] = amount;
+      const spend = { ...s.spend };
+      if (Object.keys(entries).length) spend[month] = entries;
+      else delete spend[month];
+      return { spend };
+    });
+  },
+
+  addToSpend(month, changes) {
+    set((s) => {
+      const known = new Set(s.spendCategories.map((c) => c.id));
+      const entries = { ...s.spend[month] };
+      for (const [id, change] of Object.entries(changes)) {
+        if (!known.has(id)) continue;
+        const next = Math.max(0, (entries[id] ?? 0) + Math.round(change));
+        if (next) entries[id] = next;
+        else delete entries[id];
+      }
       const spend = { ...s.spend };
       if (Object.keys(entries).length) spend[month] = entries;
       else delete spend[month];

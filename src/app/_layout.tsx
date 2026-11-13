@@ -72,6 +72,7 @@ export default function RootLayout() {
           <Stack.Screen name="export" options={modal} />
           <Stack.Screen name="goal" options={modal} />
           <Stack.Screen name="spending-goal" options={modal} />
+          <Stack.Screen name="import" options={modal} />
         </Stack>
         <LockGate />
         <StatusBar style="auto" />

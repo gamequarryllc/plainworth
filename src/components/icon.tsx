@@ -62,6 +62,9 @@ const MATERIAL: Partial<Record<SFSymbol, MaterialName>> = {
   'hand.draw': 'gesture',
   tablecells: 'table',
   'checkmark.seal.fill': 'verified',
+  doc: 'description',
+  photo: 'image',
+  sparkles: 'auto_awesome',
 };
 
 export interface IconProps {

@@ -1,0 +1,344 @@
+import { router, useLocalSearchParams } from 'expo-router';
+import { useEffect, useState } from 'react';
+import { ActivityIndicator, StyleSheet, Switch, View } from 'react-native';
+
+import { EmptyState } from '@/components/empty-state';
+import { Button } from '@/components/button';
+import { Icon } from '@/components/icon';
+import { Row, Section } from '@/components/list';
+import { Screen } from '@/components/screen';
+import { StatTiles } from '@/components/stat-tiles';
+import { Text } from '@/components/text';
+import { useMoney } from '@/hooks/use-money';
+import { currentMonthKey, formatDate, MONTHS, parseMonthKey } from '@/lib/dates';
+import { haptics } from '@/lib/haptics';
+import { GROUPS } from '@/lib/spending';
+import {
+  buildReview,
+  choose,
+  counts,
+  readSpreadsheet,
+  readText,
+  readTextWithAi,
+  totalsOf,
+  type Item,
+  type Txn,
+} from '@/lib/statement';
+import { merchantKey } from '@/lib/statement/categorize';
+import {
+  aiAsk,
+  aiStatus,
+  canReadDocuments,
+  imageFragments,
+  pdfFragments,
+  pickFile,
+  pickPhotos,
+  type AiStatus,
+  type Picked,
+} from '@/lib/statement/reader';
+import { useStore } from '@/store';
+import { applyImport, importMemory, seenIn, setImportAi } from '@/store/statement-import';
+import { layout, useColors } from '@/theme';
+
+type Step = 'pick' | 'reading' | 'review' | 'problem';
+
+/**
+ * Import a statement into one month of Spending (?month=YYYY-MM). A file or
+ * photos are read on the phone, the month's lines are sorted into the person's
+ * categories, and nothing is added until they've looked the list over.
+ */
+export default function ImportScreen() {
+  const params = useLocalSearchParams<{ month: string }>();
+  const month = /^\d{4}-\d{2}$/.test(params.month ?? '') ? params.month : currentMonthKey();
+  const target = parseMonthKey(month);
+  const monthName = MONTHS[target.month - 1];
+  const c = useColors();
+  const money = useMoney();
+  const categories = useStore((s) => s.spendCategories);
+
+  const [step, setStep] = useState<Step>('pick');
+  const [progress, setProgress] = useState('');
+  const [problem, setProblem] = useState({ title: '', message: '' });
+  const [txns, setTxns] = useState<Txn[]>([]);
+  const [items, setItems] = useState<Item[]>([]);
+  const [otherMonths, setOtherMonths] = useState(0);
+  const [usedAi, setUsedAi] = useState(false);
+  const [picking, setPicking] = useState<string | null>(null);
+  const [ai, setAi] = useState(() => importMemory().ai);
+  const [status, setStatus] = useState<AiStatus>('unsupported');
+
+  useEffect(() => {
+    aiStatus().then(setStatus);
+  }, []);
+
+  const fail = (title: string, message: string) => {
+    setProblem({ title, message });
+    setStep('problem');
+  };
+
+  const show = (found: Txn[]) => {
+    const review = buildReview(found, month, categories, importMemory().rules, seenIn(month));
+    setTxns(found);
+    setItems(review.items);
+    setOtherMonths(review.otherMonths);
+    if (review.items.length) setStep('review');
+    else if (found.length) fail(`Nothing from ${monthName}`, `This statement has ${found.length} ${found.length === 1 ? 'line' : 'lines'}, all from other months.`);
+    else fail('No Transactions Found', 'Try a clearer photo, or a PDF or CSV from your bank’s website.');
+  };
+
+  const read = async (pick: () => Promise<Picked | null>) => {
+    let picked: Picked | null;
+    try {
+      picked = await pick();
+    } catch {
+      fail('Couldn’t Open That', 'Try choosing it again.');
+      return;
+    }
+    if (!picked) return;
+    setStep('reading');
+    setProgress('');
+    setUsedAi(false);
+    try {
+      if (picked.kind === 'unsupported') {
+        fail('Can’t Read This File', 'Use a PDF, an Excel file (.xlsx), a CSV, or a photo.');
+      } else if (picked.kind === 'table') {
+        show(readSpreadsheet(picked.bytes, target));
+      } else {
+        const fragments =
+          picked.kind === 'pdf'
+            ? await pdfFragments(picked.uri)
+            : await imageFragments(picked.uris, (done, of) => setProgress(of > 1 ? `Photo ${done + 1} of ${of}` : ''));
+        if (ai && status === 'available') {
+          const result = await readTextWithAi(fragments, target, aiAsk, (done, of) => setProgress(`Part ${done + 1} of ${of}`));
+          setUsedAi(result.usedAi);
+          show(result.txns);
+        } else show(readText(fragments, target));
+      }
+    } catch (e) {
+      const reason = e instanceof Error ? e.message : '';
+      if (/locked/.test(reason)) fail('This PDF Has a Password', 'Save a copy without the password, then try again.');
+      else if (/unsupported/.test(reason)) fail('Not on This Device', 'PDFs and photos are read on iPhone. Excel and CSV files work here.');
+      else fail('Couldn’t Read That', 'Try another file, or a clearer photo.');
+    }
+  };
+
+  const totals = totalsOf(items, categories);
+  const byId = new Map(categories.map((x) => [x.id, x]));
+
+  const add = () => {
+    if (!applyImport(month, items, categories)) return;
+    haptics.success();
+    router.back();
+  };
+
+  /** A bank or card that writes its amounts the other way round: flip them all and sort again. */
+  const swap = () => {
+    haptics.light();
+    show(txns.map((t) => ({ ...t, amount: -t.amount })));
+  };
+
+  const cancel = { label: 'Cancel', icon: 'xmark' as const, onPress: () => router.back() };
+
+  // Choosing a category for one line.
+  const pickingItem = picking != null ? items.find((i) => i.id === picking) : undefined;
+  if (step === 'review' && pickingItem) {
+    const set = (choice: string) => {
+      haptics.selection();
+      setItems(choose(items, pickingItem.id, choice));
+      setPicking(null);
+    };
+    const merchant = merchantKey(pickingItem.description);
+    return (
+      <Screen title="Category" left={[{ label: 'Back', icon: 'chevron.left', onPress: () => setPicking(null) }]}>
+        <Section>
+          <Row
+            title={pickingItem.description}
+            subtitle={pickingItem.date ? formatDate(pickingItem.date) : undefined}
+            value={money(Math.abs(pickingItem.amount))}
+          />
+        </Section>
+        <Section>
+          <Row
+            title="Don’t Add"
+            titleColor="down"
+            chevron={false}
+            accessory={pickingItem.choice === 'skip' ? <Icon name="checkmark" size={16} weight="semibold" color={c.tint} /> : null}
+            onPress={() => set('skip')}
+          />
+        </Section>
+        {GROUPS.map((group) => (
+          <Section key={group.key} header={group.title}>
+            {categories
+              .filter((x) => x.group === group.key && (!x.hidden || x.id === pickingItem.choice))
+              .sort((a, b) => a.order - b.order)
+              .map((x) => (
+                <Row
+                  key={x.id}
+                  title={x.name}
+                  chevron={false}
+                  accessory={pickingItem.choice === x.id ? <Icon name="checkmark" size={16} weight="semibold" color={c.tint} /> : null}
+                  onPress={() => set(x.id)}
+                />
+              ))}
+          </Section>
+        ))}
+        {merchant ? (
+          <Text variant="footnote" color="secondary" style={styles.note}>
+            Remembered for {titleCase(merchant)} next time.
+          </Text>
+        ) : null}
+      </Screen>
+    );
+  }
+
+  if (step === 'review') {
+    const leftOut = items.filter((i) => !counts(i) && (i.choice === 'skip' || i.seen));
+    const check = items.filter((i) => !leftOut.includes(i) && (!i.sure || !i.choice));
+    const sorted = items.filter((i) => !leftOut.includes(i) && !check.includes(i));
+    const line = (i: Item) => {
+      const already = i.seen && !i.picked;
+      const category = !already && i.choice && i.choice !== 'skip' ? byId.get(i.choice) : undefined;
+      const label = category ? category.name : already ? 'Already added' : i.choice === 'skip' ? 'Not added' : 'Choose';
+      return (
+        <Row
+          key={i.id}
+          title={i.description}
+          subtitle={i.date ? formatDate(i.date, { year: false }) : 'No date'}
+          value={
+            <Text variant="body" tabular numberOfLines={1} color={i.amount < 0 ? 'up' : 'text'}>
+              {i.amount < 0 ? '+' : ''}
+              {money(Math.abs(i.amount))}
+            </Text>
+          }
+          detail={
+            <Text variant="subheadline" numberOfLines={1} color={category ? 'tint' : !i.choice ? 'warning' : 'secondary'}>
+              {label}
+            </Text>
+          }
+          onPress={() => setPicking(i.id)}
+          accessibilityLabel={`${i.description}, ${label}`}
+        />
+      );
+    };
+    return (
+      <Screen
+        title={`Import to ${monthName}`}
+        left={[cancel]}
+        right={[{ label: totals.count ? `Add ${totals.count}` : 'Add', icon: 'checkmark', variant: 'done', disabled: !totals.count, onPress: add }]}>
+        <StatTiles
+          tiles={[
+            { label: 'Spending', value: money(totals.spending) },
+            { label: 'Income', value: money(totals.income) },
+          ]}
+        />
+        <Text variant="footnote" color="secondary" style={styles.note}>
+          Added on top of what’s in {monthName}. Tap a line to change it.
+          {usedAi ? ' Read with Apple Intelligence, so check the amounts.' : ''}
+        </Text>
+        {check.length ? <Section header="Check These">{check.map(line)}</Section> : null}
+        {sorted.length ? <Section header="Sorted">{sorted.map(line)}</Section> : null}
+        {leftOut.length || otherMonths ? (
+          <Section
+            header={leftOut.length ? 'Not Added' : undefined}
+            footer={otherMonths ? `${otherMonths} from other months left out.` : undefined}>
+            {leftOut.map(line)}
+          </Section>
+        ) : null}
+        <Section footer="Use this if spending shows up as income.">
+          <Row title="Swap Money In and Out" titleColor="tint" chevron={false} onPress={swap} />
+        </Section>
+      </Screen>
+    );
+  }
+
+  if (step === 'reading') {
+    return (
+      <Screen title="Import Statement" left={[cancel]} scroll={false}>
+        <View style={styles.center}>
+          <ActivityIndicator />
+          <Text variant="callout" color="secondary">
+            {progress || 'Reading…'}
+          </Text>
+        </View>
+      </Screen>
+    );
+  }
+
+  if (step === 'problem') {
+    return (
+      <Screen title="Import Statement" left={[cancel]}>
+        <EmptyState icon="doc" title={problem.title} message={problem.message}>
+          <Button title="Try Another" onPress={() => setStep('pick')} style={styles.button} />
+        </EmptyState>
+      </Screen>
+    );
+  }
+
+  return (
+    <Screen title="Import Statement" left={[cancel]}>
+      <Section footer={`Sorted into your categories for you to review. Read on this ${canReadDocuments ? 'iPhone' : 'device'}; nothing is uploaded.`}>
+        <Row
+          title="Choose File"
+          subtitle={canReadDocuments ? 'PDF, Excel or CSV' : 'Excel or CSV'}
+          leading={<Icon name="doc" size={20} color={c.tint} />}
+          onPress={() => read(pickFile)}
+        />
+        {canReadDocuments ? (
+          <Row
+            title="Choose Photos"
+            subtitle="Screenshots or photos of a statement"
+            leading={<Icon name="photo" size={20} color={c.tint} />}
+            onPress={() => read(pickPhotos)}
+          />
+        ) : null}
+      </Section>
+      {status === 'available' ? (
+        <Section footer="Optional. Can help with messy PDFs and photos. It runs on this iPhone; use at your discretion.">
+          <Row
+            title="Apple Intelligence"
+            leading={<Icon name="sparkles" size={20} color={c.tint} />}
+            accessory={
+              <Switch
+                value={ai}
+                onValueChange={(on) => {
+                  setAi(on);
+                  setImportAi(on);
+                }}
+              />
+            }
+          />
+        </Section>
+      ) : status === 'off' || status === 'notReady' ? (
+        <Section footer="Optional. Turn on Apple Intelligence in the Settings app to use it here.">
+          <Row
+            title="Apple Intelligence"
+            titleColor="secondary"
+            leading={<Icon name="sparkles" size={20} color={c.tertiary} />}
+            value={status === 'off' ? 'Off' : 'Not Ready'}
+          />
+        </Section>
+      ) : null}
+    </Screen>
+  );
+}
+
+function titleCase(s: string): string {
+  return s.toLowerCase().replace(/(^|\s)\S/g, (ch) => ch.toUpperCase());
+}
+
+const styles = StyleSheet.create({
+  note: {
+    marginHorizontal: layout.margin,
+    marginTop: 8,
+  },
+  center: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
+  },
+  button: {
+    alignSelf: 'stretch',
+    marginHorizontal: 0,
+  },
+});
