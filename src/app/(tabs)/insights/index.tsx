@@ -93,9 +93,13 @@ const PARTS: { value: Part; label: string }[] = [
 export default function InsightsTab() {
   const snapshots = useStore((s) => s.snapshots);
   const spend = useStore((s) => s.spend);
-  const sample = useSampleOn() && firstYear({ snapshots, spend }) == null;
-  // With nothing entered yet, the page shows itself drawn from made-up
-  // sample data, numbers and all, whether or not Pro is unlocked.
+  const preview = useInsightsPreview();
+  const sampleOn = useSampleOn();
+  const sample =
+    !preview && sampleOn && firstYear({ snapshots, spend }) == null;
+  // With nothing entered yet and Pro unlocked, the page shows itself drawn
+  // from made-up sample data, numbers and all. Without Pro it's the preview,
+  // as ever: the same sample charts, blurred behind Unlock with Pro.
   return sample ? (
     <SampleData>
       <InsightsUnlocked>
@@ -112,9 +116,10 @@ function InsightsScreen({ sample }: { sample?: boolean }) {
   const snapshots = useStore((s) => s.snapshots);
   const spend = useStore((s) => s.spend);
   const [part, setPart] = useState<Part>("networth");
+  const preview = useInsightsPreview();
   const Body = sample ? SampleBody : Fragment;
 
-  if (firstYear({ snapshots, spend }) == null) {
+  if (!preview && firstYear({ snapshots, spend }) == null) {
     return (
       <Screen title="Insights" large left={tabButtons}>
         <EmptyState
@@ -246,8 +251,8 @@ function NetWorth({ filled }: { filled?: boolean }) {
       <>
         {cards}
         <InsightCard
-          label="Where You’re Headed"
-          sentence="Update your balances next month to see where your net worth is headed."
+          label="More Coming"
+          sentence="Keep updating your balances each month and more charts appear here."
         />
       </>
     );
