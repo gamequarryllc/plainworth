@@ -28,7 +28,7 @@ import { currentData, flushSave, useStore } from '@/store';
 import { BackupError, backupFileName, contents, makeBackup, readBackup, type Backup } from '@/store/backup';
 import { useProfiles } from '@/store/profile-list';
 import { allProfiles, eraseEverything, restoreBackup } from '@/store/profiles';
-import { openPaywall, restorePurchases, setTestPro, useProStore } from '@/store/pro';
+import { openPaywall, restorePurchases, setTestFree, setTestPro, useProStore } from '@/store/pro';
 import { markReminderOffered, resetReminderOffer } from '@/store/reminder-offer';
 import { resetSample } from '@/store/sample-hidden';
 import { useSync } from '@/store/sync';
@@ -49,6 +49,8 @@ export default function SettingsScreen() {
   const loadSampleData = useStore((s) => s.loadSampleData);
   const proSource = useProStore((s) => s.source);
   const pro = proSource != null;
+  const testStore = useProStore((s) => s.testStore);
+  const testFree = useProStore((s) => s.testFree);
   const syncOn = useSync((s) => s.on);
   const syncTrouble = useSync((s) => s.on && s.problem != null);
   const [lockLabel, setLockLabel] = useState('Face ID');
@@ -254,6 +256,12 @@ export default function SettingsScreen() {
       <Section>
         <Row title="Erase All Data" titleColor="down" onPress={onErase} chevron={false} />
       </Section>
+
+      {testStore ? (
+        <Section header="TestFlight" footer="Only in TestFlight. Hides your test purchase so you can see Plainworth as a free user. Turn off to get Pro back.">
+          <Row title="Test as Free" accessory={<Switch value={testFree} onValueChange={setTestFree} />} />
+        </Section>
+      ) : null}
 
       {__DEV__ ? (
         <Section header="Developer" footer="Only shown in development builds.">

@@ -48,6 +48,17 @@ public class PlainworthStoreModule: Module {
       return await Self.entitlements()
     }
 
+    /// Which App Store this copy buys from: "Production" (the App Store),
+    /// "Sandbox" (TestFlight) or "Xcode". Apple signs this, so it can't be faked
+    /// into "Sandbox" on an App Store copy.
+    AsyncFunction("environment") { () async -> String in
+      if let result = try? await AppTransaction.shared, case .verified(let app) = result {
+        return app.environment.rawValue
+      }
+      // No answer (offline on first launch): TestFlight copies have a sandbox receipt.
+      return Bundle.main.appStoreReceiptURL?.lastPathComponent == "sandboxReceipt" ? "Sandbox" : "Unknown"
+    }
+
     /// Shows Apple's purchase sheet. Result: bought, cancelled, pending, or failed.
     AsyncFunction("purchase") { (id: String) async throws -> [String: Any] in
       guard let product = try await Product.products(for: [id]).first else {

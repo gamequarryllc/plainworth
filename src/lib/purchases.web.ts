@@ -8,6 +8,10 @@ export type PurchaseResult = 'bought' | 'cancelled' | 'pending' | 'failed';
 
 export function startPurchases(_onChange: (pro: boolean) => void) {}
 
+export async function isTestStore(): Promise<boolean> {
+  return false;
+}
+
 export async function loadOffer(): Promise<Offer | null> {
   return null;
 }

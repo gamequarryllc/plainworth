@@ -21,6 +21,7 @@ type StoreModule = {
   getProducts(ids: string[]): Promise<{ id: string; displayPrice: string; displayName: string }[]>;
   currentEntitlements(): Promise<Entitlement[]>;
   sync(): Promise<Entitlement[]>;
+  environment(): Promise<string>;
   purchase(id: string): Promise<{ result: PurchaseResult; message?: string; entitlements?: Entitlement[] }>;
   addListener(event: 'onPurchasesChanged', listener: (e: { entitlements: Entitlement[] }) => void): EventSubscription;
 };
@@ -51,6 +52,20 @@ export function startPurchases(onChange: (pro: boolean) => void) {
     .currentEntitlements()
     .then((list) => onChange(hasPro(list)))
     .catch(() => {}); // Keep what we knew last time.
+}
+
+/**
+ * True when this copy buys from Apple's test store: TestFlight or a build run
+ * from Xcode. Always false for a copy from the App Store.
+ */
+export async function isTestStore(): Promise<boolean> {
+  if (!store) return false;
+  try {
+    const env = await store.environment();
+    return env === 'Sandbox' || env === 'Xcode';
+  } catch {
+    return false;
+  }
 }
 
 /** The lifetime offer with its price, or null if the store can't be reached. */
