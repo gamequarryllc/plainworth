@@ -1,6 +1,7 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { StyleSheet } from 'react-native';
 
+import { IncomeSources } from '@/components/income-sources';
 import { InsightCard, RankRow } from '@/components/insight-card';
 import { PreviewFooter, useInsightsPreview } from '@/components/insights-preview';
 import { Row, Section } from '@/components/list';
@@ -11,20 +12,23 @@ import { useToday } from '@/hooks/use-today';
 import { parseDateKey } from '@/lib/dates';
 import { monthsLabel, recentMonths, spendingMonths, spendingYear } from '@/lib/insights';
 import { formatPercent } from '@/lib/money';
-import { filterSpend, groupTitle, type SpendFilter } from '@/lib/spending';
+import { categoryTotals, groupTitle } from '@/lib/spending';
 import type { SpendGroup } from '@/lib/types';
 import { useStore } from '@/store';
 import { layout, useColors } from '@/theme';
 
-const ALL_GROUPS: SpendGroup[] = ['recurring', 'variable'];
+const GROUPS: SpendGroup[] = ['recurring', 'variable'];
 
-/** Every spending category for a year (or the preview's two months), a month on average, by group. */
+/**
+ * Every spending category for a year (or the preview's two months), a month
+ * on average, by group, then what the year's income was made of.
+ */
 export default function WhereItWentScreen() {
   const c = useColors();
   const money = useMoney();
   const today = useToday();
   const preview = useInsightsPreview();
-  const params = useLocalSearchParams<{ year?: string; filter?: SpendFilter }>();
+  const params = useLocalSearchParams<{ year?: string }>();
   const spend = useStore((s) => s.spend);
   const spendCategories = useStore((s) => s.spendCategories);
   const now = parseDateKey(today);
@@ -32,10 +36,7 @@ export default function WhereItWentScreen() {
   const whole = (cents: number) => money(cents, { whole: true });
   const signed = (cents: number) => money(cents, { signed: true, whole: true });
 
-  const savedFilter = useStore((s) => s.settings.spendFilter);
-  const filter = params.filter ?? savedFilter ?? 'all';
-  const GROUPS = filter === 'all' ? ALL_GROUPS : ALL_GROUPS.filter((g) => g === filter);
-  const data = filterSpend({ spend, spendCategories }, filter);
+  const data = { spend, spendCategories };
   const months = preview ? recentMonths(today) : null;
   const sp = months ? spendingMonths(data, months) : spendingYear(data, year, today);
   const spBefore = months ? null : spendingYear(data, year - 1, today);
@@ -93,6 +94,13 @@ export default function WhereItWentScreen() {
           ? ` Next to each bar is how much more or less you spent a month than in ${year - 1}.`
           : ' Next to each bar is its share of your spending.'}
       </Text>
+      {preview ? null : (
+        <IncomeSources
+          totals={categoryTotals(data, year, ['income'])}
+          when={year === now.y ? 'this year' : `in ${year}`}
+          money={money}
+        />
+      )}
       <PreviewFooter />
     </Screen>
   );

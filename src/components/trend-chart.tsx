@@ -16,6 +16,8 @@ export interface TrendSeries {
   dashed?: boolean;
   /** A dot on the last value, like Health's "today" marker. */
   endDot?: boolean;
+  /** A value printed by the line at one slot, e.g. each year's total where the years are compared. */
+  tag?: { index: number; text: string };
 }
 
 export interface TrendLabel {
@@ -29,6 +31,8 @@ const PAD_Y = 8;
 /** Room for the end dots. */
 const PAD_X = 5;
 const LABEL_BOX = 56;
+const TAG_BOX = 96;
+const TAG_HEIGHT = 16;
 /** A drag this far sideways, or a hold this long, makes the chart keep the finger (as in LineChart). */
 const SIDEWAYS = 5;
 const HOLD_MS = 250;
@@ -158,6 +162,21 @@ export function TrendChart({
             ) : null}
           </Svg>
         ) : null}
+        {width > 0 && active == null
+          ? placeTags(series, x, y, width, height).map((t) => (
+              <Text
+                key={t.key}
+                variant="caption"
+                weight="600"
+                tabular
+                color={t.color}
+                align={t.align}
+                numberOfLines={1}
+                style={[styles.tag, { left: t.left, top: t.top }]}>
+                {t.text}
+              </Text>
+            ))
+          : null}
       </View>
       {labels.length ? (
         <View style={styles.axis} pointerEvents="none">
@@ -181,6 +200,37 @@ export function TrendChart({
       ) : null}
     </View>
   );
+}
+
+/**
+ * Where each line's tag goes: the upper line's above its point and the lower
+ * line's below, so two lines that run close together don't print over each
+ * other, ending at the point and kept inside the chart.
+ */
+function placeTags(
+  series: TrendSeries[],
+  x: (i: number) => number,
+  y: (v: number) => number,
+  width: number,
+  height: number,
+) {
+  const tags = series
+    .flatMap((s, k) => {
+      const v = s.tag ? s.values[s.tag.index] : null;
+      return s.tag && v != null ? [{ key: `tag${k}`, text: s.tag.text, color: s.color, px: x(s.tag.index), py: y(v) }] : [];
+    })
+    .sort((a, b) => a.py - b.py);
+  return tags.map((t, i) => {
+    const above = i === 0 && (tags.length > 1 || t.py > TAG_HEIGHT + 6);
+    const left = Math.min(Math.max(t.px - TAG_BOX + 6, 0), width - TAG_BOX);
+    const top = above ? t.py - TAG_HEIGHT - 6 : t.py + 7;
+    return {
+      ...t,
+      left,
+      top: Math.min(Math.max(top, 0), height - TAG_HEIGHT),
+      align: (t.px - TAG_BOX + 6 < 0 ? 'left' : 'right') as 'left' | 'right',
+    };
+  });
 }
 
 /**
@@ -290,6 +340,11 @@ export function TrendKey({ items }: { items: { label: string; color: string; das
 }
 
 const styles = StyleSheet.create({
+  tag: {
+    position: 'absolute',
+    pointerEvents: 'none',
+    width: TAG_BOX,
+  },
   axis: {
     height: 13,
     marginTop: 6,

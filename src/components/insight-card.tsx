@@ -1,5 +1,6 @@
+import { BlurView } from 'expo-blur';
 import { useState, type ReactNode } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, useColorScheme, View } from 'react-native';
 
 import { layout, useColors } from '@/theme';
 
@@ -29,10 +30,11 @@ export function InsightCard({
   folded?: boolean;
   children?: ReactNode;
   onPress?: () => void;
-  /** Part of Pro: a PRO badge by the label, and the chart can't be touched. */
+  /** Part of Pro: a PRO badge by the label, and the chart is blurred behind an Unlock with Pro tag. */
   locked?: boolean;
 }) {
   const c = useColors();
+  const dark = useColorScheme() === 'dark';
   const [open, setOpen] = useState(false);
   const frame = [styles.card, { backgroundColor: c.card, borderColor: c.separator }];
   const content = (
@@ -50,6 +52,19 @@ export function InsightCard({
       {children ? (
         <View style={styles.body} pointerEvents={locked ? 'none' : 'auto'}>
           {children}
+          {locked ? (
+            <>
+              <BlurView intensity={28} tint={dark ? 'dark' : 'light'} style={styles.blur} />
+              <View style={styles.unlock}>
+                <View style={[styles.unlockTag, { backgroundColor: c.fillStrong }]}>
+                  <Icon name="lock.fill" size={12} weight="semibold" color={c.text} />
+                  <Text variant="subheadline" weight="600">
+                    Unlock with Pro
+                  </Text>
+                </View>
+              </View>
+            </>
+          ) : null}
         </View>
       ) : null}
       {note && folded ? (
@@ -213,6 +228,31 @@ const styles = StyleSheet.create({
   },
   body: {
     marginTop: 14,
+  },
+  // Out to the card's edges, so the blur has no visible border.
+  blur: {
+    position: 'absolute',
+    top: -8,
+    bottom: -8,
+    left: -layout.margin,
+    right: -layout.margin,
+  },
+  unlock: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  unlockTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 18,
   },
   note: {
     marginTop: 12,

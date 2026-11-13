@@ -17,8 +17,8 @@ export default function InsightsLayout() {
 }
 
 /**
- * Insights is part of Pro. Without it, every card shows the shape of its
- * chart with the numbers hidden, with a way to unlock them at the end of the page.
+ * Insights is part of Pro. Without it, every card's chart is blurred behind
+ * an Unlock with Pro tag, with a way to unlock them at the end of the page.
  */
 function ProPreview({ children }: { children: ReactNode }) {
   const pro = usePro();
@@ -29,7 +29,7 @@ function ProPreview({ children }: { children: ReactNode }) {
         <UnlockCard
           feature="insights"
           title="See your numbers with Pro"
-          text="These charts are drawn from your own data. Plainworth Pro shows the numbers behind them, the answers, and lets you drag across each chart."
+          text="Plainworth Pro unlocks every chart here with your own numbers, and lets you drag across each one."
         />
       }>
       {children}
