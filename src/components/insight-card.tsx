@@ -6,6 +6,7 @@ import { layout, useColors } from '@/theme';
 import { Icon } from './icon';
 import { ProBadge } from './pro-badge';
 import { Text } from './text';
+import { F } from '@/mock';
 
 /**
  * One finding, the way Health shows its highlights: a small label, a plain
@@ -44,15 +45,25 @@ export function InsightCard({
         {locked ? <ProBadge /> : null}
         {onPress ? <Icon name="chevron.right" size={12} weight="semibold" color={c.tertiary} /> : null}
       </View>
-      <Text variant="headline" style={styles.sentence}>
-        {sentence}
-      </Text>
-      {children ? (
+      {sentence ? (
+        <Text variant={locked && F === 'titles' ? 'subheadline' : 'headline'} color={locked && F === 'titles' ? 'secondary' : 'text'} style={styles.sentence}>
+          {sentence}
+        </Text>
+      ) : null}
+      {children && !(locked && F === 'titles') ? (
         <View style={styles.body} pointerEvents={locked ? 'none' : 'auto'}>
-          {children}
+          <View style={locked && F === 'blur' ? ({ filter: 'blur(9px)', opacity: 0.8 } as object) : undefined}>{children}</View>
+          {locked && F === 'blur' ? (
+            <View style={[StyleSheet.absoluteFill, { alignItems: 'center', justifyContent: 'center' }]}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 18, backgroundColor: c.fillStrong }}>
+                <Icon name="lock.fill" size={12} weight="semibold" color={c.text} />
+                <Text variant="subheadline" weight="600">Unlock with Pro</Text>
+              </View>
+            </View>
+          ) : null}
         </View>
       ) : null}
-      {note && folded ? (
+      {note && folded && !(locked && F === 'titles') ? (
         <Pressable
           onPress={() => setOpen((o) => !o)}
           accessibilityRole="button"
@@ -65,7 +76,7 @@ export function InsightCard({
           <Icon name={open ? 'chevron.up' : 'chevron.down'} size={11} weight="semibold" color={c.secondary} />
         </Pressable>
       ) : null}
-      {note && (!folded || open) ? (
+      {note && (!folded || open) && !(locked && F === 'titles') ? (
         <Text variant="footnote" color="secondary" style={folded ? styles.foldNote : styles.note}>
           {note}
         </Text>

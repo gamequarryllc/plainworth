@@ -21,6 +21,8 @@ const MATERIAL: Partial<Record<SFSymbol, MaterialName>> = {
   eye: 'visibility',
   'eye.slash': 'visibility_off',
   ellipsis: 'more_horiz',
+  'line.3.horizontal.decrease': 'filter_list',
+
   'ellipsis.circle': 'more_horiz',
   trash: 'delete',
   pencil: 'edit',

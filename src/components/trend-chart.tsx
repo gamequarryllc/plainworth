@@ -16,6 +16,9 @@ export interface TrendSeries {
   dashed?: boolean;
   /** A dot on the last value, like Health's "today" marker. */
   endDot?: boolean;
+  /** MOCK: an amount printed by the line, at `labelAt` or its last value. */
+  endLabel?: string;
+  labelAt?: number;
 }
 
 export interface TrendLabel {
@@ -158,6 +161,35 @@ export function TrendChart({
             ) : null}
           </Svg>
         ) : null}
+        {width > 0
+          ? (() => {
+              const tags = series
+                .filter((s) => s.endLabel)
+                .map((s) => {
+                  const i = s.labelAt ?? s.values.reduce<number>((l, v, j) => (v != null ? j : l), -1);
+                  return { s, i, yy: y(s.values[i] ?? 0) };
+                })
+                .sort((a, b) => a.yy - b.yy);
+              return tags.map((t, k) => (
+                <Text
+                  key={`tag${k}`}
+                  variant="caption"
+                  weight="600"
+                  tabular
+                  color={k === 0 && tags.length > 1 ? t.s.color : k === 0 ? t.s.color : 'secondary'}
+                  numberOfLines={1}
+                  style={{
+                    position: 'absolute',
+                    width: 90,
+                    textAlign: k === 0 ? 'right' : 'left',
+                    left: k === 0 ? x(t.i) - 98 : x(t.i) + 8,
+                    top: k === 0 ? t.yy - 9 : t.yy - 3,
+                  }}>
+                  {t.s.endLabel}
+                </Text>
+              ));
+            })()
+          : null}
       </View>
       {labels.length ? (
         <View style={styles.axis} pointerEvents="none">

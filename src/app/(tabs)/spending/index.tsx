@@ -20,6 +20,7 @@ import { categoryTotals, earnedTotals, savedCash, yearSummary } from '@/lib/spen
 import { useStore } from '@/store';
 import { useSampleOn } from '@/store/sample-hidden';
 import { layout, useColors } from '@/theme';
+import { M } from '@/mock';
 
 
 /** Until a first amount is entered, the page shows made-up sample spending (see the Net Worth tab). */
@@ -188,7 +189,12 @@ function SpendingScreen({ sample }: { sample?: boolean }) {
 
         <MonthsTable title="Months" columns={columns} rows={rows} total={total} />
 
-        {spendingTotals.length > 0 ? (
+        {M ? (
+          <Section>
+            <Row title="Where It Went" subtitle="Categories and income for the year" onPress={() => router.push('/insights')} />
+          </Section>
+        ) : null}
+        {!M && spendingTotals.length > 0 ? (
           <Section header={`Where it went in ${year}`}>
             {spendingTotals.map((t) => (
               <ShareRow key={t.category.id} title={t.category.name} value={money(t.total)} share={t.share} color={c.bar} />
@@ -196,7 +202,7 @@ function SpendingScreen({ sample }: { sample?: boolean }) {
           </Section>
         ) : null}
 
-        {investTotals.length > 0 ? (
+        {!M && investTotals.length > 0 ? (
           <Section header={`Invested in ${year}`}>
             {investTotals.map((t) => (
               <ShareRow key={t.category.id} title={t.category.name} value={money(t.total)} share={t.share} color={c.invest} />
@@ -204,7 +210,7 @@ function SpendingScreen({ sample }: { sample?: boolean }) {
           </Section>
         ) : null}
 
-        {incomeTotals.length > 0 ? (
+        {!M && incomeTotals.length > 0 ? (
           <Section header={`Income in ${year}`}>
             {incomeTotals.length > 1 ? (
               <Row

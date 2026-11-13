@@ -79,6 +79,9 @@ import { useStore } from "@/store";
 import { useSampleOn } from "@/store/sample-hidden";
 import { openPaywall } from "@/store/pro";
 import { useColors } from "@/theme";
+import { F, M, P, R, V } from "@/mock";
+import { categoryTotals } from "@/lib/spending";
+import { CompareBars } from "@/components/insight-card";
 
 type Part = "networth" | "spending";
 const PARTS: { value: Part; label: string }[] = [
@@ -97,6 +100,7 @@ export default function InsightsTab() {
   const snapshots = useStore((s) => s.snapshots);
   const spend = useStore((s) => s.spend);
   const sample = useSampleOn() && firstYear({ snapshots, spend }) == null;
+  const locked = useInsightsPreview();
   // With nothing entered yet, the page shows itself drawn from made-up
   // sample data, numbers and all, whether or not Pro is unlocked.
   return sample ? (
@@ -104,6 +108,10 @@ export default function InsightsTab() {
       <InsightsUnlocked>
         <InsightsScreen sample />
       </InsightsUnlocked>
+    </SampleData>
+  ) : F === "sample" && locked ? (
+    <SampleData>
+      <InsightsScreen />
     </SampleData>
   ) : (
     <InsightsScreen />
@@ -114,7 +122,9 @@ function InsightsScreen({ sample }: { sample?: boolean }) {
   const tabButtons = useTabButtons();
   const snapshots = useStore((s) => s.snapshots);
   const spend = useStore((s) => s.spend);
-  const [part, setPart] = useState<Part>("networth");
+  const [part, setPart] = useState<Part>(P as Part);
+  const c = useColors();
+  const locked = useInsightsPreview();
   const Body = sample ? SampleBody : Fragment;
 
   if (firstYear({ snapshots, spend }) == null) {
@@ -131,13 +141,25 @@ function InsightsScreen({ sample }: { sample?: boolean }) {
   }
 
   return (
-    <Screen title="Insights" large left={tabButtons}>
+    <Screen title="Insights" large left={tabButtons} right={R === "icon" ? [{ label: "Filter", icon: "line.3.horizontal.decrease", onPress: () => {} }] : undefined}>
       {sample ? (
         <SampleBanner
           action="Add an Account"
           icon="plus"
           onAction={() => router.push("/account-form")}
         />
+      ) : null}
+      {F === "sample" && locked ? (
+        <View style={styles.sampleLine}>
+          <View style={[styles.sampleBadge, { backgroundColor: c.tint }]}>
+            <Text variant="caption" weight="700" color="#FFFFFF">
+              SAMPLE
+            </Text>
+          </View>
+          <Text variant="footnote" color="secondary" numberOfLines={1}>
+            Made-up numbers. Pro shows yours.
+          </Text>
+        </View>
       ) : null}
       <Segmented
         options={PARTS}
@@ -161,12 +183,14 @@ function useCards(cards: (ReactElement | null)[]): ReactElement[] {
  * when tapped, and its sentence is a teaser instead of the answer.
  */
 function useLock() {
-  const locked = useInsightsPreview();
+  const preview = useInsightsPreview();
   const money = useMoney();
+  const fake = preview && F === "sample";
+  const locked = preview && !fake;
   return {
     locked,
     money: (locked ? () => MASK : money) as typeof money,
-    card: locked
+    card: preview
       ? { locked: true, onPress: () => openPaywall("insights") }
       : {},
     text: (answer: string, teaser: string) => (locked ? teaser : answer),
@@ -860,9 +884,32 @@ function Spending() {
       <CategoryCard key="category" categories={chartable} />
     ) : null,
     sp?.categories.length ? <WhereItWentCard key="where" year={year} /> : null,
+    M ? <IncomeCard key="income" year={year} /> : null,
   ]);
 
-  const toggle = (
+  const mc = useColors();
+  const names = { all: "All Spending", recurring: "Recurring", variable: "Everyday" } as Record<string, string>;
+  const toggle =
+    R === "icon" ? (
+      <Fragment key="filter" />
+    ) : R === "menu" ? (
+      <View key="filter" style={styles.menuRow}>
+        <Text variant="subheadline" color="secondary">Showing</Text>
+        <Text variant="subheadline" weight="600" color="tint">{names[filter]}</Text>
+        <Icon name="chevron.up.chevron.down" size={11} weight="semibold" color={mc.tint} />
+      </View>
+    ) : R === "links" ? (
+      <View key="filter" style={styles.linksRow}>
+        {SPEND_FILTERS.map((o) => (
+          <Pressable key={o.value} onPress={() => updateSettings({ spendFilter: o.value })}>
+            <Text variant="subheadline" weight={o.value === filter ? "600" : "400"} color={o.value === filter ? "text" : "secondary"}>
+              {names[o.value]}
+            </Text>
+            <View style={{ height: 2, marginTop: 4, borderRadius: 1, backgroundColor: o.value === filter ? mc.tint : "transparent" }} />
+          </Pressable>
+        ))}
+      </View>
+    ) : (
     <Segmented
       key="filter"
       options={SPEND_FILTERS}
@@ -910,7 +957,7 @@ function Spending() {
  */
 function SpentYearCard({
   year,
-  soFar,
+  soFar: rawSoFar,
   lastYear,
 }: {
   year: number;
@@ -919,6 +966,8 @@ function SpentYearCard({
 }) {
   const c = useColors();
   const lock = useLock();
+  // MOCK: make the sample's two years differ enough to see.
+  const soFar = rawSoFar.map((x, i) => (x == null ? x : Math.round(x * (1 + 0.016 * i))));
   const money = lock.money;
   const whole = (cents: number) => money(cents, { whole: true });
   const pct = (r: number) => (lock.locked ? "••%" : wholePercent(r));
@@ -960,6 +1009,12 @@ function SpentYearCard({
   const g = goal ? yearGoals(data, goal, year, today) : null;
   const said = goal && g ? goalSentence(goal, g, whole) : null;
   if (said) sentence += ` ${said}`;
+  const diff = then != null ? value - then : null;
+  const v = lock.locked ? "" : V;
+  const short = MONTHS_SHORT[last];
+  if (v === "a" || v === "c") sentence = "";
+  if (v === "b" && diff != null)
+    sentence = `${whole(Math.abs(diff))} ${diff < 0 ? "less" : "more"} than by ${short} last year.`;
 
   const limit = goal?.limit;
   const limitLine =
@@ -1005,6 +1060,26 @@ function SpentYearCard({
       note="Counts each month once it’s over."
       {...lock.card}
     >
+      {v === "a" && diff != null && then ? (
+        <View style={styles.bigRow2}>
+          <Text variant="title1" weight="700" rounded tabular color={diff > 0 ? "down" : "up"}>
+            {money(diff, { whole: true, signed: true })}
+          </Text>
+          <Text variant="subheadline" color="secondary">
+            {`${diff > 0 ? "+" : "−"}${wholePercent(Math.abs(diff) / then)} vs ${short} ${year - 1}`}
+          </Text>
+        </View>
+      ) : null}
+      {v === "c" && then != null ? (
+        <View style={styles.compareWrap}>
+          <CompareBars
+            bars={[
+              { label: String(year), value, text: whole(value), unit: `through ${short}`, color: c.bar },
+              { label: String(year - 1), value: then, text: whole(then), unit: `by ${short}` },
+            ]}
+          />
+        </View>
+      ) : null}
       {at != null ? (
         <Readout
           title={`By the end of ${MONTHS[at]}`}
@@ -1032,17 +1107,17 @@ function SpentYearCard({
               : []),
           ]}
         />
-      ) : keyItems.length > 1 ? (
+      ) : keyItems.length > 1 && v !== "c" ? (
         <TrendKey items={keyItems} />
       ) : null}
       <TrendChart
         count={12}
         series={[
-          { values: before, color: c.tertiary },
+          { values: before, color: c.tertiary, ...(v === "b" && then != null ? { endLabel: whole(then), labelAt: last } : {}) },
           ...(limitLine
             ? [{ values: limitLine, color: c.warning, dashed: true }]
             : []),
-          { values: soFar, color: c.bar, endDot: true },
+          { values: soFar, color: c.bar, endDot: true, ...(v === "b" ? { endLabel: whole(value) } : {}) },
         ]}
         labels={MONTH_LABELS}
         onScrub={lock.locked ? undefined : setAt}
@@ -1436,6 +1511,36 @@ function CategoryCard({ categories }: { categories: SpendCategory[] }) {
   );
 }
 
+/** MOCK: the year's income by source, moved here from the Spending tab. */
+function IncomeCard({ year }: { year: number }) {
+  const c = useColors();
+  const lock = useLock();
+  const whole = (cents: number) => lock.money(cents, { whole: true });
+  const spend = useStore((s) => s.spend);
+  const spendCategories = useStore((s) => s.spendCategories);
+  const totals = categoryTotals({ spend, spendCategories }, year, ["income"]);
+  if (!totals.length) return null;
+  const sum = totals.reduce((a, t) => a + t.total, 0);
+  return (
+    <InsightCard
+      label="Income"
+      sentence={lock.text(`You’ve earned ${whole(sum)} in ${year}.`, "See what you earned this year, by source.")}
+      {...lock.card}
+    >
+      {totals.slice(0, 5).map((t) => (
+        <RankRow
+          key={t.category.id}
+          title={t.category.name}
+          value={whole(t.total)}
+          share={t.share / totals[0].share}
+          color={c.up}
+          note={lock.locked ? MASK : formatPercent(t.share)}
+        />
+      ))}
+    </InsightCard>
+  );
+}
+
 /** The year's biggest spending categories, with the full list a tap away. */
 function WhereItWentCard({ year }: { year: number }) {
   const c = useColors();
@@ -1543,6 +1648,29 @@ function Readout({
 }
 
 const styles = StyleSheet.create({
+  menuRow: { flexDirection: "row", alignItems: "center", gap: 5, marginHorizontal: 16, marginBottom: 4, marginTop: 2 },
+  linksRow: { flexDirection: "row", gap: 22, marginHorizontal: 16, marginBottom: 2, marginTop: 2 },
+  sampleLine: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginHorizontal: 16,
+    marginBottom: 10,
+  },
+  sampleBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  bigRow2: {
+    flexDirection: "row",
+    alignItems: "baseline",
+    gap: 8,
+    marginBottom: 12,
+  },
+  compareWrap: {
+    marginBottom: 14,
+  },
   parts: {
     marginTop: 4,
     marginBottom: 10,
