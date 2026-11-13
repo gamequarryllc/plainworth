@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { test } from 'node:test';
 
 import { defaultSpendCategories } from '../../store/defaults';
-import { buildReview, choose, pickedRules, readSpreadsheet, readText, readTextWithAi, totalsOf } from '../statement';
+import { buildReview, choose, pairTransfers, pickedRules, readSpreadsheet, readText, readTextWithAi, totalsOf } from '../statement';
 import { chunkLines, readAiAnswer } from '../statement/ai';
 import { guessCategory, merchantKey } from '../statement/categorize';
 import { readLines, toLines } from '../statement/lines';
@@ -172,7 +172,16 @@ test('guesses a category from the merchant, and leaves transfers out', () => {
   assert.deepEqual(guess('PAYMENT - THANK YOU', -62000), { choice: 'skip', sure: true });
   assert.deepEqual(guess('TRANSFER TO SAVINGS'), { choice: 'skip', sure: true });
   assert.deepEqual(guess('ACME CORP PAYROLL DIRECT DEP', -245000), { choice: 'paycheck-1', sure: true });
-  assert.deepEqual(guess('INTEREST PAID', -112), { choice: 'other-income', sure: false });
+  assert.deepEqual(guess('INTEREST PAID', -112), { choice: 'other-income', sure: true });
+  assert.deepEqual(guess('QUALIFIED DIVIDEND VTSAX', -4210), { choice: 'other-income', sure: true });
+  // A big deposit with no employer named is most likely pay, but worth a look.
+  assert.deepEqual(guess('ACH DEPOSIT 8841 PPD', -210000), { choice: 'paycheck-1', sure: false });
+  assert.deepEqual(guess('WORKDAY PAYROLL', -210000), { choice: 'paycheck-1', sure: true });
+  // Brokerage activity is money moving, not spending or income.
+  assert.deepEqual(guess('YOU BOUGHT VANGUARD TOTAL STOCK'), { choice: 'skip', sure: true });
+  assert.deepEqual(guess('ELECTRONIC FUNDS TRANSFER RECEIVED', -50000), { choice: 'skip', sure: true });
+  assert.deepEqual(guess('BEST BUY 00012'), guess('BEST BUY #99'));
+  assert.notEqual(guess('BEST BUY 00012').choice, 'skip');
   assert.deepEqual(guess('AMZN MKTP US REFUND', -2450), { choice: 'shopping', sure: true });
   assert.deepEqual(guess('VENMO PAYMENT JORDAN'), { choice: 'general', sure: false });
   // A card statement's payments are not income.
@@ -256,4 +265,31 @@ test("the phone's model: its answer is read, and made-up lines are dropped", asy
     throw new Error('no model');
   });
   assert.equal(failed.usedAi, false);
+});
+
+test('money moved between your own statements is left out', () => {
+  const txns: Txn[] = [
+    { date: '2026-11-03', description: 'ONLINE PMT TO CARD 4417', amount: 64450, source: 'checking' },
+    { date: '2026-11-04', description: 'ONLINE DEPOSIT', amount: -64450, source: 'card' },
+    { date: '2026-11-10', description: 'ZELLE TO SAM', amount: 30000, source: 'checking' },
+    { date: '2026-11-10', description: 'MOVE MONEY', amount: 30000, source: 'checking' },
+    { date: '2026-11-12', description: 'DEPOSIT', amount: -30000, source: 'savings' },
+    { date: '2026-11-14', description: 'KROGER #442', amount: 5431, source: 'card' },
+    // Same amount in and out of one statement is not a pair.
+    { date: '2026-11-15', description: 'TARGET', amount: 2000, source: 'card' },
+    { date: '2026-11-16', description: 'TARGET REFUND', amount: -2000, source: 'card' },
+    // Too far apart.
+    { date: '2026-11-01', description: 'CHECK 101', amount: 12345, source: 'checking' },
+    { date: '2026-11-20', description: 'MISC CREDIT', amount: -12345, source: 'savings' },
+  ];
+  const paired = pairTransfers(txns);
+  assert.deepEqual(paired.map((t) => !!t.transfer), [true, true, true, false, true, false, false, false, false, false]);
+  // One deposit pairs with only one withdrawal.
+  const review = buildReview(paired, '2026-11', cats, {}, []);
+  const skipped = review.items.filter((i) => i.transfer);
+  assert.equal(skipped.length, 4);
+  assert.ok(skipped.every((i) => i.choice === 'skip' && i.sure));
+  assert.equal(review.items.find((i) => i.description === 'KROGER #442')?.choice, 'groceries');
+  // With only one statement nothing is paired.
+  assert.ok(pairTransfers(txns.map((t) => ({ ...t, source: 'one' }))).every((t) => !t.transfer));
 });

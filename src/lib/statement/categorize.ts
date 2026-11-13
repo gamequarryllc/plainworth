@@ -33,8 +33,8 @@ type Kind =
 
 /** Checked top to bottom; the first that fits wins. */
 const KINDS: [Kind, RegExp][] = [
-  ['transfer', /payment[ -]+thank you|\bpymt\b|\bpmt\b|payment received|autopay|auto[- ]?pay(ment)?\b|online payment|e-?payment|epay\b|crcardpmt|card payment|cardmember serv|payment to .*card|credit crd|transfer|xfer|\btfr\b|to savings|from savings|to checking|from checking|balance forward|brokerage|vanguard|fidelity|schwab|robinhood|coinbase|internet payment|mobile payment|bill ?pay .*card/],
-  ['pay', /payroll|direct dep|dir dep|salary|paycheck|\bwages?\b|gusto|\badp\b|paychex|employer/],
+  ['transfer', /payment[ -]+thank you|\bpymt\b|\bpmt\b|payment received|autopay|auto[- ]?pay(ment)?\b|online payment|e-?payment|epay\b|crcardpmt|card payment|cardmember serv|payment to .*card|credit crd|transfer|xfer|\btfr\b|to savings|from savings|to checking|from checking|balance forward|you bought|you sold|\bbought\b|\bsold\b|reinvest|redemption|\bsweep|money market|contribution|\b401k|\bira\b|journal|wire (in|out)|funds? (received|sent)|electronic funds|\beft\b|brokerage|vanguard|fidelity|schwab|robinhood|coinbase|internet payment|mobile payment|bill ?pay .*card/],
+  ['pay', /payroll|workday|\bppd\b.*\b(pay|sal)|direct dep|dir dep|salary|paycheck|\bwages?\b|gusto|\badp\b|paychex|employer/],
   ['subscriptions', /netflix|spotify|hulu|disney ?plus|disney\+|apple\.com\/bill|icloud|youtube|hbo|\bmax\.com|paramount|peacock|prime video|amazon prime|audible|adobe|dropbox|patreon|nytimes|new york times|openai|chatgpt|google (one|storage)|microsoft 365|msft|sirius|kindle|substack|subscription/],
   ['utilities', /electric|energy|\bpower\b|water|sewer|\bgas (co|company|service)|comcast|xfinity|verizon|at&t|\batt\b|t-mobile|tmobile|spectrum|internet|utilit|pg&e|pge\b|duke|con ?ed|national grid|sanitation|waste|trash|cox comm|centurylink|mint mobile|visible|google fi/],
   ['housing', /\brent\b|mortgage|apartment|property (mgmt|management)|leasing|\bhoa\b|landlord|realty/],
@@ -111,7 +111,13 @@ export function guessCategory(txn: Txn, categories: SpendCategory[], remembered:
       const id = named(shown, ['income'], [/paycheck|salary|pay\b|wage|job|work/]) ?? shown.find((c) => c.group === 'income')?.id;
       if (id) return { choice: id, sure: true };
     }
+    // Interest and dividends are income for sure; a big unexplained deposit is most likely pay.
     const other = named(shown, ['income'], [/other/]) ?? shown.find((c) => c.group === 'income')?.id ?? null;
+    if (/interest|dividend|\bdiv\b|cash ?back|reward/.test(text)) return { choice: other, sure: true };
+    if (-txn.amount >= 50000 && /deposit|\bdep\b|\bach\b|\bppd\b|des:|credit/.test(text)) {
+      const pay = named(shown, ['income'], [/paycheck|salary|pay\b|wage|job|work/]) ?? other;
+      return { choice: pay, sure: false };
+    }
     return { choice: other, sure: false };
   }
 

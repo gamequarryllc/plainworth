@@ -63,7 +63,6 @@ const MATERIAL: Partial<Record<SFSymbol, MaterialName>> = {
   tablecells: 'table',
   'checkmark.seal.fill': 'verified',
   doc: 'description',
-  photo: 'image',
   sparkles: 'auto_awesome',
 };
 

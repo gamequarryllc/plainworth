@@ -26,6 +26,34 @@ function hash(s: string): string {
   return (h >>> 0).toString(36);
 }
 
+const DAY = 86_400_000;
+
+/**
+ * Marks money that only moved between the person's own accounts: the same
+ * amount going out of one statement and into another within a few days (a
+ * card payment, a move to savings or to a brokerage). Neither half is spending
+ * or income. Statements are told apart by `source`.
+ */
+export function pairTransfers(txns: Txn[], days = 5): Txn[] {
+  const out = txns.map((t) => ({ ...t }));
+  const time = (t: Txn) => (t.date ? Date.parse(t.date) : NaN);
+  const ins = out.filter((t) => t.amount < 0 && t.date);
+  for (const a of out) {
+    if (a.amount <= 0 || !a.date || a.transfer) continue;
+    let best: Txn | null = null;
+    for (const b of ins) {
+      if (b.transfer || b.source === a.source || b.amount !== -a.amount) continue;
+      const gap = Math.abs(time(b) - time(a));
+      if (gap <= days * DAY && (!best || gap < Math.abs(time(best) - time(a)))) best = b;
+    }
+    if (best) {
+      a.transfer = true;
+      best.transfer = true;
+    }
+  }
+  return out;
+}
+
 export interface Review {
   items: Item[];
   /** Lines dated in other months, which were left out. */
@@ -57,7 +85,7 @@ export function buildReview(
       const n = counts.get(base) ?? 0;
       counts.set(base, n + 1);
       const mark = hash(`${base}|${n}`);
-      const guess = guessCategory(t, categories, remembered);
+      const guess = t.transfer ? { choice: 'skip' as const, sure: true } : guessCategory(t, categories, remembered);
       return { ...t, id: String(i), mark, ...guess, seen: already.has(mark), picked: false };
     });
   return { items, otherMonths: txns.length - inMonth.length };

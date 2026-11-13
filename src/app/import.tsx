@@ -16,6 +16,7 @@ import { GROUPS } from '@/lib/spending';
 import {
   buildReview,
   choose,
+  pairTransfers,
   counts,
   readSpreadsheet,
   readText,
@@ -29,10 +30,8 @@ import {
   aiAsk,
   aiStatus,
   canReadDocuments,
-  imageFragments,
   pdfFragments,
-  pickFile,
-  pickPhotos,
+  pickFiles,
   type AiStatus,
   type Picked,
 } from '@/lib/statement/reader';
@@ -43,8 +42,8 @@ import { layout, useColors } from '@/theme';
 type Step = 'pick' | 'reading' | 'review' | 'problem';
 
 /**
- * Import a statement into one month of Spending (?month=YYYY-MM). A file or
- * photos are read on the phone, the month's lines are sorted into the person's
+ * Import statements into one month of Spending (?month=YYYY-MM). The files
+ * are read on the phone, the month's lines are sorted into the person's
  * categories, and nothing is added until they've looked the list over.
  */
 export default function ImportScreen() {
@@ -63,6 +62,8 @@ export default function ImportScreen() {
   const [items, setItems] = useState<Item[]>([]);
   const [otherMonths, setOtherMonths] = useState(0);
   const [usedAi, setUsedAi] = useState(false);
+  const [files, setFiles] = useState<string[]>([]);
+  const [skipped, setSkipped] = useState<string[]>([]);
   const [picking, setPicking] = useState<string | null>(null);
   const [ai, setAi] = useState(() => importMemory().ai);
   const [status, setStatus] = useState<AiStatus>('unsupported');
@@ -76,50 +77,67 @@ export default function ImportScreen() {
     setStep('problem');
   };
 
-  const show = (found: Txn[]) => {
-    const review = buildReview(found, month, categories, importMemory().rules, seenIn(month));
+  /** Lay out everything read so far. Picks already made by hand carry over when another statement is added. */
+  const show = (found: Txn[], names: string[], unread: string[]) => {
+    const paired = pairTransfers(found.map((t) => ({ ...t, transfer: false })));
+    const review = buildReview(paired, month, categories, importMemory().rules, seenIn(month));
+    const key = (t: Txn) => `${t.source}|${t.date}|${t.amount}|${t.description}`;
+    const kept = new Map(items.filter((i) => i.picked).map((i) => [key(i), i.choice]));
     setTxns(found);
-    setItems(review.items);
+    setFiles(names);
+    setItems(review.items.map((i) => (kept.has(key(i)) ? { ...i, choice: kept.get(key(i))!, sure: true, picked: true } : i)));
     setOtherMonths(review.otherMonths);
+    setSkipped(unread);
     if (review.items.length) setStep('review');
-    else if (found.length) fail(`Nothing from ${monthName}`, `This statement has ${found.length} ${found.length === 1 ? 'line' : 'lines'}, all from other months.`);
-    else fail('No Transactions Found', 'Try a clearer photo, or a PDF or CSV from your bank’s website.');
+    else if (found.length) fail(`Nothing from ${monthName}`, `${found.length} ${found.length === 1 ? 'line was' : 'lines were'} found, all from other months.`);
+    else if (unread.length) fail('Can’t Read This File', 'Use a PDF, an Excel file (.xlsx) or a CSV from your bank’s website.');
+    else fail('No Transactions Found', 'Try the PDF or CSV statement from your bank’s website.');
   };
 
-  const read = async (pick: () => Promise<Picked | null>) => {
-    let picked: Picked | null;
+  /** Pick statements and read them. `more` adds to the ones already in the review. */
+  const read = async (more: boolean) => {
+    let picked: Picked[] | null;
     try {
-      picked = await pick();
+      picked = await pickFiles();
     } catch {
-      fail('Couldn’t Open That', 'Try choosing it again.');
+      if (!more) fail('Couldn’t Open That', 'Try choosing it again.');
       return;
     }
     if (!picked) return;
     setStep('reading');
     setProgress('');
-    setUsedAi(false);
-    try {
-      if (picked.kind === 'unsupported') {
-        fail('Can’t Read This File', 'Use a PDF, an Excel file (.xlsx), a CSV, or a photo.');
-      } else if (picked.kind === 'table') {
-        show(readSpreadsheet(picked.bytes, target));
-      } else {
-        const fragments =
-          picked.kind === 'pdf'
-            ? await pdfFragments(picked.uri)
-            : await imageFragments(picked.uris, (done, of) => setProgress(of > 1 ? `Photo ${done + 1} of ${of}` : ''));
-        if (ai && status === 'available') {
-          const result = await readTextWithAi(fragments, target, aiAsk, (done, of) => setProgress(`Part ${done + 1} of ${of}`));
-          setUsedAi(result.usedAi);
-          show(result.txns);
-        } else show(readText(fragments, target));
+    const found = more ? [...txns] : [];
+    const names = more ? [...files] : [];
+    const unread: string[] = [];
+    let locked = false;
+    let aiUsed = more && usedAi;
+    for (const [n, file] of picked.entries()) {
+      if (picked.length > 1) setProgress(`Statement ${n + 1} of ${picked.length}`);
+      try {
+        let lines: Txn[];
+        if (file.kind === 'unsupported') throw new Error('unsupported');
+        else if (file.kind === 'table') lines = readSpreadsheet(file.bytes, target);
+        else {
+          const fragments = await pdfFragments(file.uri);
+          if (ai && status === 'available') {
+            const result = await readTextWithAi(fragments, target, aiAsk, (done, of) => setProgress(`Part ${done + 1} of ${of}`));
+            aiUsed = aiUsed || result.usedAi;
+            lines = result.txns;
+          } else lines = readText(fragments, target);
+        }
+        if (!lines.length) throw new Error('empty');
+        const source = names.length;
+        names.push(file.name);
+        found.push(...lines.map((t) => ({ ...t, source })));
+      } catch (e) {
+        if (e instanceof Error && /locked/.test(e.message)) locked = true;
+        unread.push(file.name);
       }
-    } catch (e) {
-      const reason = e instanceof Error ? e.message : '';
-      if (/locked/.test(reason)) fail('This PDF Has a Password', 'Save a copy without the password, then try again.');
-      else if (/unsupported/.test(reason)) fail('Not on This Device', 'PDFs and photos are read on iPhone. Excel and CSV files work here.');
-      else fail('Couldn’t Read That', 'Try another file, or a clearer photo.');
     }
+    setUsedAi(aiUsed);
+    if (!found.length && locked) fail('This PDF Has a Password', 'Save a copy without the password, then try again.');
+    else if (!found.length && !canReadDocuments && picked.some((f) => f.kind === 'pdf')) fail('Not on This Device', 'PDFs are read on iPhone. Excel and CSV files work here.');
+    else show(found, names, unread);
   };
 
   const totals = totalsOf(items, categories);
@@ -131,10 +149,10 @@ export default function ImportScreen() {
     router.back();
   };
 
-  /** A bank or card that writes its amounts the other way round: flip them all and sort again. */
-  const swap = () => {
+  /** A bank or card that writes its amounts the other way round: flip that statement's and sort again. */
+  const swap = (source: number) => {
     haptics.light();
-    show(txns.map((t) => ({ ...t, amount: -t.amount })));
+    show(txns.map((t) => (t.source === source ? { ...t, amount: -t.amount } : t)), files, []);
   };
 
   const cancel = { label: 'Cancel', icon: 'xmark' as const, onPress: () => router.back() };
@@ -244,8 +262,26 @@ export default function ImportScreen() {
             {leftOut.map(line)}
           </Section>
         ) : null}
-        <Section footer="Use this if spending shows up as income.">
-          <Row title="Swap Money In and Out" titleColor="tint" chevron={false} onPress={swap} />
+        <Section
+          header="Statements"
+          footer={`${skipped.length ? `Couldn’t read ${skipped.join(', ')}. ` : ''}Add every account you used in ${monthName}. If a statement’s spending shows as income, tap it to swap.`}>
+          {files.map((name, source) => (
+            <Row
+              key={source}
+              title={name}
+              value={`${txns.filter((t) => t.source === source && (!t.date || t.date.startsWith(month))).length}`}
+              chevron={false}
+              onPress={() => swap(source)}
+              accessibilityLabel={`${name}, swap money in and out`}
+            />
+          ))}
+          <Row
+            title="Add Another Statement"
+            titleColor="tint"
+            chevron={false}
+            leading={<Icon name="plus" size={17} weight="semibold" color={c.tint} />}
+            onPress={() => read(true)}
+          />
         </Section>
       </Screen>
     );
@@ -276,24 +312,16 @@ export default function ImportScreen() {
 
   return (
     <Screen title="Import Statement" left={[cancel]}>
-      <Section footer={`Sorted into your categories for you to review. Read on this ${canReadDocuments ? 'iPhone' : 'device'}; nothing is uploaded.`}>
+      <Section footer={`Add ${monthName}’s statement from every account you use: checking, savings, credit cards, brokerage. Transfers between them and card payments are left out, and you review everything before it’s added. Read on this ${canReadDocuments ? 'iPhone' : 'device'}; nothing is uploaded.`}>
         <Row
-          title="Choose File"
-          subtitle={canReadDocuments ? 'PDF, Excel or CSV' : 'Excel or CSV'}
+          title="Choose Statements"
+          subtitle={canReadDocuments ? 'PDF, Excel or CSV. Pick several at once.' : 'Excel or CSV. Pick several at once.'}
           leading={<Icon name="doc" size={20} color={c.tint} />}
-          onPress={() => read(pickFile)}
+          onPress={() => read(false)}
         />
-        {canReadDocuments ? (
-          <Row
-            title="Choose Photos"
-            subtitle="Screenshots or photos of a statement"
-            leading={<Icon name="photo" size={20} color={c.tint} />}
-            onPress={() => read(pickPhotos)}
-          />
-        ) : null}
       </Section>
       {status === 'available' ? (
-        <Section footer="Optional. Can help with messy PDFs and photos. It runs on this iPhone; use at your discretion.">
+        <Section footer="Optional. Can help with messy PDFs. It runs on this iPhone; use at your discretion.">
           <Row
             title="Apple Intelligence"
             leading={<Icon name="sparkles" size={20} color={c.tint} />}

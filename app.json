@@ -42,14 +42,6 @@
       "expo-router",
       "expo-sqlite",
       [
-        "expo-image-picker",
-        {
-          "photosPermission": "Plainworth reads the photos you choose to find their transactions. They stay on your iPhone.",
-          "cameraPermission": false,
-          "microphonePermission": false
-        }
-      ],
-      [
         "expo-local-authentication",
         {
           "faceIDPermission": "Plainworth uses Face ID to keep your finances private."

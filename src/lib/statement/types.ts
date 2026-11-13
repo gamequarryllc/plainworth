@@ -5,6 +5,10 @@ export interface Txn {
   date: DateKey | null;
   description: string;
   amount: Cents;
+  /** Which of the statements imported together it came from. */
+  source?: number;
+  /** The other half of it is in another statement: money moved between the person's own accounts. */
+  transfer?: boolean;
 }
 
 /** A piece of text and where it sits on a page (0 to 1, from the top left), from a PDF or a photo. */
