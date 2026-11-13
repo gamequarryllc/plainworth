@@ -99,7 +99,7 @@ const KINDS = {
 type Kind = (typeof KINDS)[keyof typeof KINDS];
 
 const KIND_ORDER: string[] = ['asset', 'liability'];
-const GROUP_ORDER: string[] = ['recurring', 'variable', 'invest', 'income'];
+const GROUP_ORDER: string[] = ['recurring', 'variable', 'income'];
 const byText = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
 
 const byId = <T extends { id: string }>(items: T[]): Map<string, T> => new Map(items.map((i) => [i.id, i]));

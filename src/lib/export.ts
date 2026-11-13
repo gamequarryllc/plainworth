@@ -2,7 +2,7 @@ import { dayNumber, formatDate, keyFromDayNumber, MONTHS_SHORT, parseDateKey } f
 import { holdingsOn, netWorthMonths, netWorthYear, valueAt, type Month } from './insights';
 import { currencyDecimals, currencySymbol, formatMoney } from './money';
 import { compareSnapshots, kindOf, seriesByAccount } from './networth';
-import { GROUPS, savedCash, yearSummary, yearsWithData } from './spending';
+import { GROUPS, yearSummary, yearsWithData } from './spending';
 import type { Account, Cents, Data, DateKey } from './types';
 import { buildWorkbook, excelDate, moneyFormat, type Cell, type Sheet, type Style } from './xlsx';
 
@@ -229,10 +229,7 @@ function overviewSheet(data: Data, today: DateKey): Sheet {
         format: 'money',
         color: NAVY,
       }),
-      note: cell(
-        summary.invested > 0 ? `${formatMoney(summary.invested, currency, { whole: true })} of it invested` : span,
-        S.muted,
-      ),
+      note: cell(span, S.muted),
     });
     if (summary.savingsRate != null) {
       tiles.push({
@@ -328,7 +325,7 @@ function overviewSheet(data: Data, today: DateKey): Sheet {
       band(
         [
           'Spending by Year',
-          ...['Earned', 'Spent', 'Invested', 'Savings Rate'].map((h) => ({
+          ...['Earned', 'Spent', 'Saved', 'Savings Rate'].map((h) => ({
             value: h,
             style: { align: 'right' } as Style,
           })),
@@ -350,7 +347,7 @@ function overviewSheet(data: Data, today: DateKey): Sheet {
             ),
             amount(s.income),
             amount(s.expenses),
-            amount(s.invested),
+            amount(s.net),
             s.savingsRate == null ? null : cell(round4(s.savingsRate), S.percent),
           ],
           width,
@@ -536,9 +533,7 @@ function spendingSheet(data: Data, year: number): Sheet {
         ? m.recurring
         : group.key === 'variable'
           ? m.variable
-          : group.key === 'invest'
-            ? m.invested
-            : m.income;
+          : m.income;
     };
     rows.push(band([`Total ${group.title}`, ...monthly(subtotal, S.total)], width, S.totalLabel));
     rows.push([]);
@@ -549,13 +544,12 @@ function spendingSheet(data: Data, year: number): Sheet {
     ['Earned', (i) => summary.months[i].income],
     ['Spent (Recurring + Spending)', (i) => summary.months[i].expenses],
   ];
-  if (summary.invested > 0) lines.push(['Invested', (i) => summary.months[i].invested]);
   lines.forEach(([label, f], i) => rows.push(striped([label, ...monthly(f, S.money, { bold: true })], width, i)));
-  rows.push(band(['Saved', ...monthly((i) => savedCash(summary.months[i]), S.grand, S.grand)], width, S.grandLabel));
+  rows.push(band(['Saved', ...monthly((i) => summary.months[i].net, S.grand, S.grand)], width, S.grandLabel));
   const rate = (r: number | null, strong = false): Cell =>
     r == null ? null : cell(round4(r), { format: 'percent', bold: strong });
   rows.push([
-    'Savings Rate (Saved + Invested)',
+    'Savings Rate',
     ...summary.months.map((m) => rate(m.income > 0 ? m.net / m.income : null)),
     rate(summary.savingsRate, true),
   ]);

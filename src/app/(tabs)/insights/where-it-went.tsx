@@ -43,7 +43,7 @@ export default function WhereItWentScreen() {
   const lastYearMonthly = new Map(spBefore?.categories.map((x) => [x.category.id, x.monthly]) ?? []);
   const when = months ? `in ${monthsLabel(months)}` : year === now.y ? 'this year' : `in ${year}`;
 
-  if (!sp || (!sp.categories.length && !sp.invested.length)) {
+  if (!sp || !sp.categories.length) {
     return (
       <Screen title="Where It Went">
         <Section footer={`Nothing spent in ${months ? monthsLabel(months) : year} yet.`}>
@@ -56,8 +56,6 @@ export default function WhereItWentScreen() {
 
   const openCategory = (id: string) => router.push({ pathname: '/insights/category', params: { id } });
   const top = sp.categories[0]?.share ?? 0;
-  const investTop = sp.invested[0]?.share ?? 0;
-  const investedTotal = sp.invested.reduce((sum, x) => sum + x.total, 0);
   const counted = sp.months === 1 ? 'one month' : `${sp.months} months`;
   return (
     <Screen title="Where It Went">
@@ -89,24 +87,6 @@ export default function WhereItWentScreen() {
           </InsightCard>
         );
       })}
-      {sp.invested.length ? (
-        <InsightCard
-          label="Invested"
-          sentence={`${whole(Math.round(investedTotal / sp.months))} a month ${when}, not counted as spending.`}>
-          {sp.invested.map((x) => (
-            <RankRow
-              key={x.category.id}
-              title={x.category.name}
-              value={`${whole(x.monthly)}/mo`}
-              share={x.share / investTop}
-              color={c.invest}
-              note={formatPercent(x.share)}
-              noteColor="secondary"
-              onPress={preview ? undefined : () => openCategory(x.category.id)}
-            />
-          ))}
-        </InsightCard>
-      ) : null}
       <Text variant="footnote" color="secondary" style={styles.footer}>
         {`Amounts are a month, on average over ${counted}.${preview ? '' : ' Tap one to see it month by month.'}`}
         {canCompare

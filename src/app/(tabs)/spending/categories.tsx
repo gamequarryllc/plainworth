@@ -50,7 +50,7 @@ export default function SpendCategoriesScreen() {
               />
             ))}
             <Row
-              title={`Add ${group.key === 'income' ? 'Income Source' : group.key === 'invest' ? 'Investment' : 'Category'}`}
+              title={`Add ${group.key === 'income' ? 'Income Source' : 'Category'}`}
               titleColor="tint"
               chevron={false}
               onPress={() => router.push({ pathname: '/spend-category-form', params: { group: group.key } })}

@@ -15,8 +15,8 @@ export interface CategoryMonth extends Month {
   value: Cents | null;
 }
 
-/** Recurring and everyday spending first, ranked together by size, then investments and income. */
-const RANK: Record<SpendGroup, number> = { recurring: 0, variable: 0, invest: 1, income: 2 };
+/** Recurring and everyday spending first, ranked together by size, then income. */
+const RANK: Record<SpendGroup, number> = { recurring: 0, variable: 0, income: 1 };
 
 const hasData = (entries: Record<ID, Cents> | undefined) => !!entries && Object.values(entries).some(Boolean);
 
@@ -143,7 +143,7 @@ export function categoryYears(months: CategoryMonth[]): CategoryYear[] {
 /**
  * The categories worth charting: any with an amount by the last counted
  * month, stopped ones included since they keep their history. Spending
- * comes first, biggest over the last year first, then investments and income.
+ * comes first, biggest over the last year first, then income.
  */
 export function chartableCategories(data: SpendData, today: DateKey): SpendCategory[] {
   const end = lastCountedMonth(data, today);

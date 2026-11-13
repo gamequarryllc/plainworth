@@ -264,8 +264,6 @@ export interface SpendingYear {
   rates: (number | null)[];
   /** Spending categories, biggest first. */
   categories: CategorySpend[];
-  /** Invested categories, biggest first, each share out of everything invested. */
-  invested: CategorySpend[];
 }
 
 /**
@@ -312,7 +310,6 @@ function summarize(
     }
   }
   const spentTotal = months.reduce((sum, m) => sum + m.expenses, 0);
-  const investedTotal = months.reduce((sum, m) => sum + m.invested, 0);
   const ranked = (groups: SpendGroup[], whole: Cents) =>
     data.spendCategories
       .filter((c) => groups.includes(c.group) && (totals.get(c.id) ?? 0) > 0)
@@ -322,7 +319,6 @@ function summarize(
       })
       .sort((a, b) => b.total - a.total);
   const categories = ranked(['recurring', 'variable'], spentTotal);
-  const invested = ranked(['invest'], investedTotal);
 
   return {
     months: counted.size,
@@ -331,7 +327,6 @@ function summarize(
     rate: savingsRate(earned),
     rates: all.map((m, i) => (counted.has(i) ? savingsRate(m) : null)),
     categories,
-    invested,
   };
 }
 

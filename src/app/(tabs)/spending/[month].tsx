@@ -17,27 +17,18 @@ import { currentMonthKey, formatMonth, MONTHS, parseMonthKey, shiftMonth } from 
 import { confirm } from '@/lib/dialogs';
 import { haptics } from '@/lib/haptics';
 import { formatPercent } from '@/lib/money';
-import { categoriesForMonth, GROUPS, monthTotals, savedCash, type MonthTotals } from '@/lib/spending';
+import { categoriesForMonth, GROUPS, monthTotals, type MonthTotals } from '@/lib/spending';
 import type { SpendCategory } from '@/lib/types';
 import { useStore } from '@/store';
 import { type, useColors } from '@/theme';
 
 const EMPTY = {};
 
-/**
- * "Saved 30.7% of income", or with money invested, how what was kept splits
- * between savings and investing: "Saved $937.84 · Invested $200.00".
- */
+/** "Saved 30.7% of income", or how far spending went past it. */
 function keptLine(t: MonthTotals, money: ReturnType<typeof useMoney>): string {
-  if (t.income <= 0) return t.invested > 0 ? `Invested ${money(t.invested)}` : 'Enter this month’s totals below';
-  if (t.net < 0) {
-    const over = `Spent ${money(-t.net)} more than earned`;
-    return t.invested > 0 ? `${over} · Invested ${money(t.invested)}` : over;
-  }
-  if (t.invested <= 0) return `Saved ${formatPercent(t.net / t.income)} of income`;
-  const saved = savedCash(t);
-  if (saved < 0) return `Invested ${money(t.invested)}, ${money(-saved)} of it from savings`;
-  return `Saved ${money(saved)} · Invested ${money(t.invested)}`;
+  if (t.income <= 0) return 'Enter this month’s totals below';
+  if (t.net < 0) return `Spent ${money(-t.net)} more than earned`;
+  return `Saved ${formatPercent(t.net / t.income)} of income`;
 }
 
 export default function MonthScreen() {
@@ -163,9 +154,7 @@ export default function MonthScreen() {
             ? totals.recurring
             : group.key === 'variable'
               ? totals.variable
-              : group.key === 'invest'
-                ? totals.invested
-                : totals.income;
+              : totals.income;
         return (
           <Section key={group.key} title={<SectionTitle title={group.title} value={money(subtotal)} />}>
             {list.map((cat) => {
@@ -215,7 +204,7 @@ export default function MonthScreen() {
               );
             })}
             <Row
-              title={`Add ${group.key === 'income' ? 'Income Source' : group.key === 'invest' ? 'Investment' : 'Category'}`}
+              title={`Add ${group.key === 'income' ? 'Income Source' : 'Category'}`}
               titleColor="tint"
               chevron={false}
               leading={<Icon name="plus" size={17} weight="semibold" color={c.tint} />}

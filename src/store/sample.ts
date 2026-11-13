@@ -146,7 +146,6 @@ export function sampleData(months = HISTORY): Data {
       shopping: amounts(140, 220),
       gifts: month === 12 ? amounts(420, 150) : amounts(20, 40),
       travel: travel ? amounts(1_150, 500) : 0,
-      investing: travel ? 0 : month === 3 ? 1_000_00 : 250_00,
       'paycheck-1': Math.round(1_853_07 * pay),
       'paycheck-2': Math.round(1_853_07 * pay),
       'other-income': month === 3 ? Math.round(2_400_00 * pay) : month % 4 === 0 ? amounts(300, 200) : 0,

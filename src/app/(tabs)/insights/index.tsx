@@ -1238,7 +1238,7 @@ function CreepCard({ all }: { all: CreepMonth[] }) {
         "See when your spending started to climb, and how much more a month it is now.",
       )}
       {...lock.card}
-      note={`Each bar is what you spent that month${filter === "recurring" ? " on Recurring categories" : filter === "variable" ? " on Spending categories, without Recurring bills" : ", not counting investing"}. Lately is your last three months. Counts each month once it’s over.`}
+      note={`Each bar is what you spent that month${filter === "recurring" ? " on Recurring categories" : filter === "variable" ? " on Spending categories, without Recurring bills" : ""}. Lately is your last three months. Counts each month once it’s over.`}
     >
       {options.length > 1 ? (
         <View pointerEvents={lock.locked ? "none" : "auto"}>
@@ -1371,11 +1371,7 @@ function CategoryCard({ categories }: { categories: SpendCategory[] }) {
     });
   const selected = at != null ? months[at] : null;
   const verb =
-    category.group === "income"
-      ? "Earned"
-      : category.group === "invest"
-        ? "Invested"
-        : "Spent";
+    category.group === "income" ? "Earned" : "Spent";
 
   return (
     <InsightCard

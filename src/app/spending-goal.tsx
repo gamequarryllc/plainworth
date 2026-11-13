@@ -55,7 +55,7 @@ export default function SpendingGoalScreen() {
       right={[{ label: 'Save', icon: 'checkmark', variant: 'done', onPress: save }]}>
       <Section
         header="Savings"
-        footer="Of what you earn this year, saved or invested. It’s judged over the whole year, so one big month, like buying a car, can be made up later.">
+        footer="Of what you earn this year, how much you save. It’s judged over the whole year, so one big month, like buying a car, can be made up later.">
         <Row
           title="Keep at Least"
           accessory={

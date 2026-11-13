@@ -44,17 +44,13 @@ export const defaultSpendCategories = (): SpendCategory[] => [
   sc('shopping', 'Shopping', 'variable', 5),
   sc('gifts', 'Gifts', 'variable', 6),
   sc('travel', 'Travel', 'variable', 7),
-  ...defaultInvestCategories(),
   sc('paycheck-1', 'Paycheck 1', 'income', 0),
   sc('paycheck-2', 'Paycheck 2', 'income', 1),
   sc('other-income', 'Other Income', 'income', 2),
 ];
 
-/** Added in data version 2, so older copies get them too. */
-export const defaultInvestCategories = (): SpendCategory[] => [sc('investing', 'Investing', 'invest', 0)];
-
 /** Bump when stored data needs migrating (see `migrate` in the store). */
-export const DATA_VERSION = 3;
+export const DATA_VERSION = 4;
 
 /** Off until turned on; when on, the 1st of each month at 9:00 AM. */
 export const defaultReminder = (): Reminder => ({

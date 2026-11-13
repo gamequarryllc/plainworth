@@ -10,10 +10,10 @@ import { layout, useColors } from '@/theme';
 import type { Bar } from './bar-chart';
 import { Text } from './text';
 
-/** Spending in blue, investing in purple, income in green, as elsewhere in the app. */
+/** Spending in blue, income in green, as elsewhere in the app. */
 export function useGroupColor() {
   const c = useColors();
-  return (group: SpendGroup) => (group === 'invest' ? c.invest : group === 'income' ? c.up : c.bar);
+  return (group: SpendGroup) => (group === 'income' ? c.up : c.bar);
 }
 
 /**

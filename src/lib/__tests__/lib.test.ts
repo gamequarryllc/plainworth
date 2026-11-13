@@ -7,7 +7,7 @@ import { formatMoney, formatTyping, parseAmount } from '../money';
 import { buildSeries, leadStart, seriesByAccount, sliceSeries, seriesChange, summarizeAccounts, totalsOf, updatesByAccount } from '../networth';
 import { emptyData } from '../../store/defaults';
 import { migrate } from '../../store/migrate';
-import { categoriesForMonth, categoryTotals, earnedTotals, monthTotals, savedCash, yearSummary } from '../spending';
+import { categoriesForMonth, categoryTotals, earnedTotals, monthTotals, yearSummary } from '../spending';
 import type { Account, NWCategory, Snapshot, SpendCategory } from '../types';
 
 test('dates', () => {
@@ -150,7 +150,7 @@ test('a month without income entered yet does not count against savings', () => 
   };
   const y = yearSummary(data, 2026);
   const earned = earnedTotals(y.months);
-  assert.deepEqual(earned, { income: 4_000_00, expenses: 3_050_00, invested: 0, net: 950_00 });
+  assert.deepEqual(earned, { income: 4_000_00, expenses: 3_050_00, net: 950_00 });
   assert.equal(y.savingsRate, 950_00 / 4_000_00);
   // Spending still counts every month.
   assert.equal(y.expenses, 4_300_00);
@@ -158,38 +158,31 @@ test('a month without income entered yet does not count against savings', () => 
   assert.equal(yearSummary(data, 2025).savingsRate, null);
 });
 
-test('invested money is kept, not spent', () => {
-  const cats = new Map<string, SpendCategory>([
-    ['rent', { id: 'rent', name: 'Rent', group: 'recurring', order: 0, hidden: false }],
-    ['food', { id: 'food', name: 'Food', group: 'variable', order: 0, hidden: false }],
-    ['brokerage', { id: 'brokerage', name: 'Brokerage', group: 'invest', order: 0, hidden: false }],
-    ['pay', { id: 'pay', name: 'Pay', group: 'income', order: 0, hidden: false }],
-  ]);
-  const t = monthTotals({ rent: 125000, food: 40000, brokerage: 20000, pay: 370600 }, cats);
-  assert.equal(t.expenses, 165000);
-  assert.equal(t.invested, 20000);
-  assert.equal(t.net, 205600);
-  assert.equal(savedCash(t), 185600);
-  const year = yearSummary(
-    { spend: { '2026-01': { brokerage: 20000, pay: 100000 }, '2026-02': { brokerage: 5000 } }, spendCategories: [...cats.values()] },
-    2026,
-  );
-  assert.equal(year.invested, 25000);
-  assert.equal(year.expenses, 0);
-});
-
-test('older saved data gets the Invested group once', () => {
-  const old = { version: 1, spendCategories: [{ id: 'rent', name: 'Rent', group: 'recurring', order: 0, hidden: false }] };
+test('the old Invested group is dropped and its money counts as saved', () => {
+  const old = {
+    version: 3,
+    spendCategories: [
+      { id: 'rent', name: 'Rent', group: 'recurring', order: 0, hidden: false },
+      { id: 'brokerage', name: 'Brokerage', group: 'invest', order: 0, hidden: false },
+      { id: 'pay', name: 'Pay', group: 'income', order: 0, hidden: false },
+    ],
+    spend: {
+      '2026-01': { rent: 125000, brokerage: 20000, pay: 370600 },
+      '2026-02': { brokerage: 5000 },
+    },
+  };
   const migrated = migrate(old);
-  assert.equal(migrated.version, 3);
-  assert.deepEqual(
-    migrated.spendCategories.map((c) => c.group),
-    ['recurring', 'invest'],
-  );
-  // Someone who removed it on version 2 doesn't get it back.
-  const later = migrate({ ...migrated, spendCategories: migrated.spendCategories.filter((c) => c.group !== 'invest') });
-  assert.deepEqual(later.spendCategories.map((c) => c.group), ['recurring']);
-  assert.ok(migrate(null).spendCategories.some((c) => c.group === 'invest'));
+  assert.equal(migrated.version, 4);
+  assert.deepEqual(migrated.spendCategories.map((c) => c.id), ['rent', 'pay']);
+  // A month that only had investing is left empty.
+  assert.deepEqual(migrated.spend, { '2026-01': { rent: 125000, pay: 370600 } });
+  // Saved is still income minus spending, the same total as before.
+  const year = yearSummary(migrated, 2026);
+  assert.equal(year.net, 245600);
+  assert.equal(year.monthsWithData, 1);
+  // New data has no Invested group, and it isn't added back.
+  assert.ok(!migrate(null).spendCategories.some((c) => (c.group as string) === 'invest'));
+  assert.deepEqual(migrate({ version: 1, spendCategories: old.spendCategories.slice(0, 1) }).spendCategories.map((c) => c.id), ['rent']);
 });
 
 test('Retirement accounts move into Investments', () => {

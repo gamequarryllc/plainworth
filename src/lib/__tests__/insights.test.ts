@@ -102,14 +102,13 @@ const spendCategories: SpendCategory[] = [
   { id: 'rent', name: 'Rent', group: 'recurring', order: 0, hidden: false },
   { id: 'food', name: 'Groceries', group: 'variable', order: 0, hidden: false },
   { id: 'fun', name: 'Fun', group: 'variable', order: 1, hidden: false },
-  { id: 'inv', name: 'Investing', group: 'invest', order: 0, hidden: false },
   { id: 'pay', name: 'Paycheck', group: 'income', order: 0, hidden: false },
 ];
 const spend = {
   '2025-01': { rent: 1_000_00, food: 300_00, pay: 2_000_00 },
   '2025-02': { rent: 1_000_00, food: 250_00, fun: 100_00, pay: 2_000_00 },
   '2025-03': { rent: 1_000_00, food: 400_00, pay: 2_000_00 },
-  '2026-01': { rent: 1_100_00, food: 350_00, inv: 200_00, pay: 2_200_00 },
+  '2026-01': { rent: 1_100_00, food: 350_00, pay: 2_200_00 },
   '2026-02': { rent: 1_100_00, food: 300_00, fun: 900_00, pay: 2_000_00 },
 };
 const spendData = { spend, spendCategories };

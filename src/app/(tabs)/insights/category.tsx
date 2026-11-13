@@ -72,9 +72,9 @@ export default function CategoryTrendScreen() {
   const years = categoryYears(all).reverse();
   const color = groupColor(category.group);
   const selected = at != null ? months[at] : null;
-  const verb = category.group === 'income' ? 'Earned' : category.group === 'invest' ? 'Invested' : 'Spent';
-  // Spending more is the bad direction; earning or investing more is the good one.
-  const moreIsGood = category.group === 'income' || category.group === 'invest';
+  const verb = category.group === 'income' ? 'Earned' : 'Spent';
+  // Spending more is the bad direction; earning more is the good one.
+  const moreIsGood = category.group === 'income';
 
   const pick = (id: string) => {
     setPicked(id);

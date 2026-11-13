@@ -24,12 +24,12 @@ test('backup: everything comes back as it was', () => {
 
 test('backup: an older format is brought up to date, including from when the app was called Tally', () => {
   const old = sample() as unknown as Record<string, unknown>;
-  // Version 1 had no Invested group.
-  old.spendCategories = (old.spendCategories as { group: string }[]).filter((c) => c.group !== 'invest');
+  // Up to version 3 there was an Invested group; it's dropped on restore.
+  old.spendCategories = [...(old.spendCategories as object[]), { id: 'investing', name: 'Investing', group: 'invest', order: 0, hidden: false }];
   const text = JSON.stringify({ app: 'Tally', version: 1, date: '2025-06-01', data: { ...old, version: 1 } });
   const { data } = readBackup(text);
   assert.equal(data.version, DATA_VERSION);
-  assert.ok(data.spendCategories.some((c) => c.group === 'invest'));
+  assert.ok(!data.spendCategories.some((c) => (c.group as string) === 'invest'));
   assert.equal(data.accounts[0].name, 'Checking');
 });
 

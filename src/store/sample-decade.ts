@@ -284,8 +284,6 @@ export function decadeSampleData(): Data {
     if (travel) put('travel', cents(m < 66 ? 900 : 1_600, 500));
     if (m >= 72) put(dogCat.id, cents(85, 60) + (m === 72 ? 650_00 : 0));
 
-    put('investing', investedPerMonth(m) * 100 + (month === 3 && m >= 48 ? 700_00 : 0));
-
     put('paycheck-1', paycheck(m));
     put('paycheck-2', paycheck(m));
     if (month === 3 && m >= 30) put('other-income', Math.round(salary(m) * 0.06 * 100));

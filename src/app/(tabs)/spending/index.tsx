@@ -16,7 +16,7 @@ import { Text } from '@/components/text';
 import { useMoney } from '@/hooks/use-money';
 import { currentMonthKey, MONTHS, MONTHS_SHORT, parseMonthKey } from '@/lib/dates';
 import { formatPercent } from '@/lib/money';
-import { categoryTotals, earnedTotals, savedCash, yearSummary } from '@/lib/spending';
+import { categoryTotals, earnedTotals, yearSummary } from '@/lib/spending';
 import { useStore } from '@/store';
 import { useSampleOn } from '@/store/sample-hidden';
 import { layout, useColors } from '@/theme';
@@ -57,7 +57,6 @@ function SpendingScreen({ sample }: { sample?: boolean }) {
   const withData = summary.months.filter((m) => m.hasData);
   const picked = selected != null ? summary.months[selected] : null;
   const hasIncome = summary.income > 0;
-  const hasInvested = summary.invested > 0;
   const hasOver = summary.months.some((m) => m.income > 0 && m.expenses > m.income);
   const whole = (v: number) => money(v, { whole: true });
 
@@ -66,15 +65,10 @@ function SpendingScreen({ sample }: { sample?: boolean }) {
     setSelected(null);
   };
 
-  /**
-   * "Earned $3,706 · Saved $1,262 (34.0%)", or with investing, "Earned $3,706 ·
-   * Saved $1,062 · Invested $200", or how far spending went past income.
-   */
-  const incomeLine = (m: { income: number; net: number; invested: number }) => {
+  /** "Earned $3,706 · Saved $1,262 (34.0%)", or how far spending went past income. */
+  const incomeLine = (m: { income: number; net: number }) => {
     const earnedText = `Earned ${whole(m.income)}`;
-    const invested = m.invested > 0 ? ` · Invested ${whole(m.invested)}` : '';
-    if (m.net < 0) return `${earnedText} · Over by ${whole(-m.net)}${invested}`;
-    if (invested) return `${earnedText} · Saved ${whole(Math.max(0, savedCash(m)))}${invested}`;
+    if (m.net < 0) return `${earnedText} · Over by ${whole(-m.net)}`;
     return `${earnedText} · Saved ${whole(m.net)} (${formatPercent(m.net / m.income)})`;
   };
 
@@ -94,10 +88,10 @@ function SpendingScreen({ sample }: { sample?: boolean }) {
 
   const dash: TableCell = { text: '—', color: 'tertiary' };
   const signed = (v: number): TableCell => ({ text: whole(v), color: v > 0 ? 'up' : v < 0 ? 'down' : undefined });
-  // Income first: what came in, then where it went (spent, saved, invested).
-  const columns = [...(hasIncome ? ['Income'] : []), 'Spent', 'Saved', ...(hasInvested ? ['Invested'] : [])];
+  // Income first: what came in, then where it went (spent, saved).
+  const columns = [...(hasIncome ? ['Income'] : []), 'Spent', 'Saved'];
   const rows: TableRow[] = shown.map(({ m, i }) => {
-    const saved = savedCash(m);
+    const saved = m.net;
     return {
       key: m.key,
       name: MONTHS[i],
@@ -107,12 +101,11 @@ function SpendingScreen({ sample }: { sample?: boolean }) {
             ...(hasIncome ? [m.income > 0 ? { text: whole(m.income) } : dash] : []),
             { text: whole(m.expenses) },
             m.income > 0 ? signed(saved) : dash,
-            ...(hasInvested ? [m.invested > 0 ? { text: whole(m.invested) } : dash] : []),
           ]
-        : [...(hasIncome ? [null] : []), isFuture(i) ? null : dash, null, ...(hasInvested ? [null] : [])],
+        : [...(hasIncome ? [null] : []), isFuture(i) ? null : dash, null],
       onPress: () => router.push({ pathname: '/spending/[month]', params: { month: m.key } }),
       accessibilityLabel: m.hasData
-        ? `${MONTHS[i]}: ${m.income > 0 ? `earned ${money(m.income)}, ` : ''}spent ${money(m.expenses)}${m.income > 0 ? `, saved ${money(saved)}` : ''}${m.invested > 0 ? `, invested ${money(m.invested)}` : ''}`
+        ? `${MONTHS[i]}: ${m.income > 0 ? `earned ${money(m.income)}, ` : ''}spent ${money(m.expenses)}${m.income > 0 ? `, saved ${money(saved)}` : ''}`
         : `${MONTHS[i]}: nothing entered`,
     };
   });
@@ -123,14 +116,12 @@ function SpendingScreen({ sample }: { sample?: boolean }) {
         cells: [
           ...(hasIncome ? [{ text: whole(summary.income) }] : []),
           { text: whole(summary.expenses) },
-          hasIncome ? signed(savedCash(earned)) : dash,
-          ...(hasInvested ? [{ text: whole(summary.invested) }] : []),
+          hasIncome ? signed(earned.net) : dash,
         ],
       }
     : undefined;
 
   const spendingTotals = categoryTotals(data, year, ['recurring', 'variable']);
-  const investTotals = categoryTotals(data, year, ['invest']);
   const incomeTotals = categoryTotals(data, year, ['income']);
 
   // The sample can be scrolled but not tapped.
@@ -181,7 +172,7 @@ function SpendingScreen({ sample }: { sample?: boolean }) {
         {hasIncome ? (
           <View style={styles.legend}>
             <Key color={c.bar} label="Spent" />
-            <Key color={c.barMuted} label={hasInvested ? 'Saved and invested' : 'Saved'} />
+            <Key color={c.barMuted} label="Saved" />
             {hasOver ? <Key color={c.down} label="Over income" /> : null}
           </View>
         ) : null}
@@ -192,14 +183,6 @@ function SpendingScreen({ sample }: { sample?: boolean }) {
           <Section header={`Where it went in ${year}`}>
             {spendingTotals.map((t) => (
               <ShareRow key={t.category.id} title={t.category.name} value={money(t.total)} share={t.share} color={c.bar} />
-            ))}
-          </Section>
-        ) : null}
-
-        {investTotals.length > 0 ? (
-          <Section header={`Invested in ${year}`}>
-            {investTotals.map((t) => (
-              <ShareRow key={t.category.id} title={t.category.name} value={money(t.total)} share={t.share} color={c.invest} />
             ))}
           </Section>
         ) : null}

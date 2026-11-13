@@ -100,7 +100,7 @@ test('export: net worth by month, every balance, and a sheet per year of spendin
   ];
   data.spend = {
     '2025-12': { rent: 1_200_00 },
-    '2026-01': { rent: 1_250_00, groceries: 300_00, investing: 100_00, 'paycheck-1': 2_000_00 },
+    '2026-01': { rent: 1_250_00, groceries: 300_00, 'paycheck-1': 2_000_00 },
   };
   const sheets = exportSheets(data, '2026-11-01');
   assert.deepEqual(
@@ -122,7 +122,7 @@ test('export: net worth by month, every balance, and a sheet per year of spendin
   assert.deepEqual(find(overview, 'Cash').slice(0, 3), ['Cash', 1_500, 1]);
   assert.deepEqual(find(overview, 'Credit Cards').slice(0, 2), ['Credit Cards', -250]);
   assert.deepEqual(find(overview, 'Net Worth').slice(0, 2), ['Net Worth', 1_250]);
-  assert.deepEqual(find(overview, '2026 (1 month)').slice(0, 5), ['2026 (1 month)', 2_000, 1_550, 100, 0.225]);
+  assert.deepEqual(find(overview, '2026 (1 month)').slice(0, 5), ['2026 (1 month)', 2_000, 1_550, 450, 0.225]);
 
   const nw = sheets[1].rows;
   assert.deepEqual(nw[0].map(value), ['Account', 'Category', 'Sep 2026', 'Oct 2026', 'Nov 2026']);
@@ -141,11 +141,9 @@ test('export: net worth by month, every balance, and a sheet per year of spendin
   const row = (name: string) => find(year, name);
   assert.deepEqual(row('Rent').slice(0, 3), ['Rent', 1_250, null]);
   assert.deepEqual(row('Rent').slice(-2), [1_250, 1_250]);
-  assert.deepEqual(row('Saved').slice(0, 2), ['Saved', 350]);
-  assert.equal(row('Savings Rate (Saved + Invested)')[1], 0.225);
-  // A year without investing has no Invested line in its summary.
-  const older = sheets[4].rows.map((r) => value(r[0]));
-  assert.ok(!older.slice(older.indexOf('Summary')).includes('Invested'));
+  assert.deepEqual(row('Saved').slice(0, 2), ['Saved', 450]);
+  assert.equal(row('Savings Rate')[1], 0.225);
+  assert.ok(!year.map((r) => value(r[0])).includes('Invested'));
 
   // Styled: a navy header, and the Overview prints on one page width without gridlines.
   const files = unzip(exportWorkbook(data, '2026-11-01'));

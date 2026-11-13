@@ -50,8 +50,8 @@ export interface Snapshot {
   source?: 'spot';
 }
 
-/** Invested money isn't spending: it's part of what you kept, tracked apart from plain savings. */
-export type SpendGroup = 'recurring' | 'variable' | 'invest' | 'income';
+/** Before data version 4 there was also an 'invest' group; money put into investing now just counts as saved. */
+export type SpendGroup = 'recurring' | 'variable' | 'income';
 
 export interface SpendCategory {
   id: ID;
@@ -108,7 +108,7 @@ export interface Outlook {
 
 /** Spending goals, judged over the whole year so one big month doesn't sink them. */
 export interface SpendingGoal {
-  /** Keep at least this share of what you earn (saved plus invested), e.g. 0.2. */
+  /** Keep at least this share of what you earn (income minus spending), e.g. 0.2. */
   keep?: number;
   /** Spend no more than this in an average month. */
   limit?: Cents;

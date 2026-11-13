@@ -162,7 +162,7 @@ export function spendHistory(data: SpendData, today: DateKey): SpendMonth[] {
 }
 
 export interface CreepMonth extends Month {
-  /** Spent in the month (not counting investing), or null when nothing was entered. */
+  /** Spent in the month, or null when nothing was entered. */
   spent: Cents | null;
   /** Earned in the month, or null when nothing was entered. */
   earned: Cents | null;
@@ -324,7 +324,7 @@ export interface YearGoals {
   months: number;
   /** Months still to come this year, counting the one going now. */
   left: number;
-  /** Share of income kept (saved or invested) so far this year; null without income. */
+  /** Share of income saved so far this year; null without income. */
   kept: number | null;
   /**
    * To end the year at the savings goal: the share of income to keep from here

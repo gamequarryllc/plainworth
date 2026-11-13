@@ -1,6 +1,6 @@
-import type { Account, Data, NWCategory } from '@/lib/types';
+import type { Account, Data, NWCategory, SpendCategory } from '@/lib/types';
 
-import { DATA_VERSION, defaultInvestCategories, defaultOutlook, defaultReminder, defaultSettings, emptyData } from './defaults';
+import { DATA_VERSION, defaultOutlook, defaultReminder, defaultSettings, emptyData } from './defaults';
 
 /** Fill in anything a stored copy from an older version might be missing. */
 export function migrate(raw: unknown): Data {
@@ -8,11 +8,8 @@ export function migrate(raw: unknown): Data {
   if (!raw || typeof raw !== 'object') return base;
   const d = raw as Partial<Data>;
   const version = typeof d.version === 'number' ? d.version : 1;
-  let spendCategories = d.spendCategories ?? base.spendCategories;
-  // Version 2 added the Invested group to each month.
-  if (version < 2 && !spendCategories.some((c) => c.group === 'invest')) {
-    spendCategories = [...spendCategories, ...defaultInvestCategories()];
-  }
+  // Version 4 dropped the Invested group: money put into investing just counts as saved.
+  const { spendCategories, spend } = dropInvested(d.spendCategories ?? base.spendCategories, d.spend ?? {});
   let nwCategories = d.nwCategories ?? base.nwCategories;
   let accounts = d.accounts ?? [];
   // Version 3 folded the Retirement category into Investments.
@@ -23,7 +20,7 @@ export function migrate(raw: unknown): Data {
     accounts,
     snapshots: d.snapshots ?? [],
     spendCategories,
-    spend: d.spend ?? {},
+    spend,
     monthNotes: d.monthNotes ?? {},
     settings: {
       ...defaultSettings(),
@@ -50,4 +47,23 @@ function foldRetirement(categories: NWCategory[], accounts: Account[]): { nwCate
     nwCategories: categories.filter((c) => c.id !== 'retirement'),
     accounts: accounts.map((a) => (a.categoryId === 'retirement' ? { ...a, categoryId: 'investments' } : a)),
   };
+}
+
+/**
+ * Remove the old Invested categories and their monthly amounts. Saved is income
+ * minus spending, and investing was never counted as spending, so every month's
+ * Saved already includes what went into investing and no total changes.
+ */
+export function dropInvested(
+  categories: SpendCategory[],
+  spend: Data['spend'],
+): { spendCategories: SpendCategory[]; spend: Data['spend'] } {
+  const invested = new Set(categories.filter((c) => (c.group as string) === 'invest').map((c) => c.id));
+  if (!invested.size) return { spendCategories: categories, spend };
+  const kept: Data['spend'] = {};
+  for (const [key, entries] of Object.entries(spend)) {
+    const rest = Object.fromEntries(Object.entries(entries).filter(([id]) => !invested.has(id)));
+    if (Object.keys(rest).length) kept[key] = rest;
+  }
+  return { spendCategories: categories.filter((c) => !invested.has(c.id)), spend: kept };
 }
