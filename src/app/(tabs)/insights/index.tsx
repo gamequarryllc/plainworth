@@ -1,5 +1,5 @@
 import { router } from "expo-router";
-import { Fragment, useState, type ReactElement } from "react";
+import { Fragment, useState, type ReactElement, type ReactNode } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
 
 import { BarChart } from "@/components/bar-chart";
@@ -16,8 +16,10 @@ import { IncomeSources } from "@/components/income-sources";
 import { InsightCard, RankRow } from "@/components/insight-card";
 import {
   InsightsUnlocked,
+  InsightsWaiting,
   PreviewFooter,
   useInsightsPreview,
+  useInsightsWaiting,
 } from "@/components/insights-preview";
 import { Row, Section } from "@/components/list";
 import { SampleBanner, SampleBody, SampleData } from "@/components/sample";
@@ -51,6 +53,7 @@ import {
   monthsToReach,
   project,
   ratePercent,
+  type Plan,
 } from "@/lib/outlook";
 import {
   compareYears,
@@ -163,14 +166,18 @@ function useCards(cards: (ReactElement | null)[]): ReactElement[] {
  * when tapped, and its sentence is a teaser instead of the answer.
  */
 function useLock() {
-  const locked = useInsightsPreview();
+  const preview = useInsightsPreview();
+  const waiting = useInsightsWaiting();
+  const locked = preview || waiting != null;
   const money = useMoney();
   return {
     locked,
     money: (locked ? () => MASK : money) as typeof money,
-    card: locked
+    card: preview
       ? { locked: true, onPress: () => openPaywall("insights") }
-      : {},
+      : waiting != null
+        ? { waiting }
+        : {},
     text: (answer: string, teaser: string) => (locked ? teaser : answer),
   };
 }
@@ -198,32 +205,12 @@ function NetWorth({ filled }: { filled?: boolean }) {
   const nwCategories = useStore((s) => s.nwCategories);
   const year = parseDateKey(today).y;
 
-  const monthly = useStore((s) => s.settings.outlook.monthly);
-
   const history = netWorthHistory({ accounts, snapshots, nwCategories }, today);
-  const pace = netWorthPace(history);
-  const soFar = netWorthSoFar(history, year);
-  const cards = useCards([
-    history.length && (pace || monthly != null) ? (
-      <HeadedCard
-        key="headed"
-        history={history}
-        pace={pace?.perMonth ?? null}
-        counted={pace?.months ?? 0}
-      />
-    ) : null,
-    lastIndex(soFar) >= 0 && history.length >= 2 ? (
-      <NetWorthYearCard
-        key="year"
-        year={year}
-        soFar={soFar}
-        lastYear={netWorthSoFar(history, year - 1)}
-      />
-    ) : null,
-    history.length ? <DistributionCard key="mix" /> : null,
-  ]);
+  const some = history.length > 0;
+  const compared =
+    history.length >= 2 && lastIndex(netWorthSoFar(history, year)) >= 0;
 
-  if (preview && !filled && cards.length < 3) {
+  if (preview && !filled && !compared) {
     return (
       <SampleData>
         <NetWorth filled />
@@ -231,33 +218,84 @@ function NetWorth({ filled }: { filled?: boolean }) {
     );
   }
 
-  if (!history.length) {
-    return (
-      <Section footer="No balances entered yet.">
-        {accounts.length === 0 ? (
-          <Row
-            title="Add an Account"
-            titleColor="tint"
-            chevron={false}
-            onPress={() => router.push("/account-form")}
-          />
-        ) : null}
-      </Section>
-    );
-  }
-  // In the first month there's the mix as it stands, and a word on what comes next.
-  if (history.length < 2 && !cards.some((x) => x.key === "headed")) {
-    return (
-      <>
-        {cards}
-        <InsightCard
-          label="More Coming"
-          sentence="More charts appear as you update each month."
-        />
-      </>
-    );
-  }
-  return <>{cards}</>;
+  // Every card shows from the start. One without the history it needs yet is
+  // drawn from the sample, blurred, with what it's waiting for.
+  return (
+    <>
+      {!some && !preview ? (
+        <Section footer="No balances entered yet.">
+          {accounts.length === 0 ? (
+            <Row
+              title="Add an Account"
+              titleColor="tint"
+              chevron={false}
+              onPress={() => router.push("/account-form")}
+            />
+          ) : null}
+        </Section>
+      ) : null}
+      <Waiting needs={some ? null : "Needs a balance"}>
+        <HeadedFromStore />
+      </Waiting>
+      <Waiting needs={compared ? null : "Needs 2 months of balances"}>
+        <YearFromStore />
+      </Waiting>
+      <Waiting needs={some ? null : "Needs a balance"}>
+        <DistributionCard />
+      </Waiting>
+    </>
+  );
+}
+
+/** The card inside as it is, or with `needs`, as a blurred example that says what it's waiting for. */
+function Waiting({
+  needs,
+  children,
+}: {
+  needs: string | null;
+  children: ReactNode;
+}) {
+  if (needs == null) return <>{children}</>;
+  return (
+    <SampleData>
+      <InsightsWaiting needs={needs}>{children}</InsightsWaiting>
+    </SampleData>
+  );
+}
+
+function useHistory() {
+  const today = useToday();
+  const accounts = useStore((s) => s.accounts);
+  const snapshots = useStore((s) => s.snapshots);
+  const nwCategories = useStore((s) => s.nwCategories);
+  return netWorthHistory({ accounts, snapshots, nwCategories }, today);
+}
+
+function HeadedFromStore() {
+  const history = useHistory();
+  const pace = netWorthPace(history);
+  if (!history.length) return null;
+  return (
+    <HeadedCard
+      history={history}
+      pace={pace?.perMonth ?? null}
+      counted={pace?.months ?? 0}
+    />
+  );
+}
+
+function YearFromStore() {
+  const year = parseDateKey(useToday()).y;
+  const history = useHistory();
+  const soFar = netWorthSoFar(history, year);
+  if (lastIndex(soFar) < 0 || history.length < 2) return null;
+  return (
+    <NetWorthYearCard
+      year={year}
+      soFar={soFar}
+      lastYear={netWorthSoFar(history, year - 1)}
+    />
+  );
 }
 
 const UNITS: { value: PeriodUnit; label: string }[] = [
@@ -419,8 +457,14 @@ function HeadedCard({
 
   const now = history[history.length - 1];
   const current = now.end;
-  const plan = makePlan(current, pace, outlook);
-  if (!plan) return null;
+  // Before there's a pace to go on, what you have now simply grows.
+  const early = pace == null && outlook.monthly == null;
+  const plan: Plan = makePlan(current, pace, outlook) ?? {
+    monthly: 0,
+    rate: monthlyRate(outlook.growth),
+    source: "pace",
+    earned: 0,
+  };
   const status = goal
     ? goalStatus(
         goal,
@@ -541,7 +585,8 @@ function HeadedCard({
             : "Holding steady.";
     if (away != null && away > 0 && away <= MAX_MONTHS) {
       const d = shift(now, away);
-      sentence = `${lead} ${milestone === 0 ? "Above zero" : whole(milestone)} by ${MONTHS_SHORT[d.month - 1]} ${d.year}.`.trim();
+      sentence =
+        `${lead} ${milestone === 0 ? "Above zero" : whole(milestone)} by ${MONTHS_SHORT[d.month - 1]} ${d.year}.`.trim();
     } else {
       sentence = lead || `About ${whole(projected)} ${inYears(ahead)}.`;
     }
@@ -556,7 +601,7 @@ function HeadedCard({
         : adds
           ? `Your pace: about ${adds} a month added (your last ${counted} months, less what your money earned), plus ${growth}.`
           : `Assumes ${growth}.`;
-  const note = `${assumes} In today’s money. A direction, not a promise.`;
+  const note = `${assumes}${early ? " Your own pace is added after two full months of balances." : ""} In today’s money. A direction, not a promise.`;
 
   const dueIndex =
     picked === "goal" && status?.due != null && !late
@@ -618,7 +663,7 @@ function HeadedCard({
       <TrendKey
         items={[
           { label: "Your net worth", color: c.up },
-          { label: "At your pace", color: c.up, dashed: true },
+          { label: early ? "With growth" : "At your pace", color: c.up, dashed: true },
           ...(showGoal
             ? [
                 {
@@ -1089,7 +1134,13 @@ function goalSentence(
   // The goal bars show where you stand; words only for what to do next.
   const keepOk = goal.keep != null && g.kept != null && g.kept >= goal.keep;
   const over = goal.limit != null && g.spent != null && g.spent > goal.limit;
-  if (goal.keep != null && g.kept != null && !keepOk && g.keepFromHere != null && g.keepFromHere <= 0.9)
+  if (
+    goal.keep != null &&
+    g.kept != null &&
+    !keepOk &&
+    g.keepFromHere != null &&
+    g.keepFromHere <= 0.9
+  )
     return `Keep ${wholePercent(g.keepFromHere)} from here to hit your goal.`;
   if (over && g.spendFromHere != null && g.spendFromHere > 0)
     return `Spend under ${whole(g.spendFromHere)} a month to get back on track.`;

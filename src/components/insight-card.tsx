@@ -21,6 +21,7 @@ export function InsightCard({
   children,
   onPress,
   locked,
+  waiting,
 }: {
   label: string;
   sentence: string;
@@ -30,10 +31,13 @@ export function InsightCard({
   onPress?: () => void;
   /** Part of Pro: a PRO badge by the label, and the chart is blurred behind an Unlock with Pro tag. */
   locked?: boolean;
+  /** Not enough history yet: the chart is an example, blurred behind a tag with these words ("Needs 2 months of balances"). */
+  waiting?: string;
 }) {
   const c = useColors();
   const dark = useColorScheme() === 'dark';
   const [open, setOpen] = useState(false);
+  const covered = locked || waiting != null;
   const frame = [styles.card, { backgroundColor: c.card, borderColor: c.separator }];
   const content = (
     <>
@@ -58,16 +62,16 @@ export function InsightCard({
         {sentence}
       </Text>
       {children ? (
-        <View style={styles.body} pointerEvents={locked ? 'none' : 'auto'}>
+        <View style={styles.body} pointerEvents={covered ? 'none' : 'auto'}>
           {children}
-          {locked ? (
+          {covered ? (
             <>
               <BlurView intensity={28} tint={dark ? 'dark' : 'light'} style={styles.blur} />
               <View style={styles.unlock}>
                 <View style={[styles.unlockTag, { backgroundColor: c.fillStrong }]}>
-                  <Icon name="lock.fill" size={12} weight="semibold" color={c.text} />
+                  <Icon name={locked ? 'lock.fill' : 'hourglass'} size={12} weight="semibold" color={c.text} />
                   <Text variant="subheadline" weight="600">
-                    Unlock with Pro
+                    {locked ? 'Unlock with Pro' : waiting}
                   </Text>
                 </View>
               </View>

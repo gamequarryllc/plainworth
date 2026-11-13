@@ -5,6 +5,7 @@ import { createContext, useContext, type ReactNode } from 'react';
 // be set again on every render of the stack, which never settles.
 const PreviewOn = createContext(false);
 const FooterContext = createContext<ReactNode>(null);
+const WaitingContext = createContext<string | null>(null);
 
 /**
  * Turns Insights into a preview: every screen inside shows only the last two
@@ -26,6 +27,20 @@ export function InsightsUnlocked({ children }: { children: ReactNode }) {
       <FooterContext.Provider value={null}>{children}</FooterContext.Provider>
     </PreviewOn.Provider>
   );
+}
+
+/**
+ * For a card there isn't enough history for yet: everything inside is drawn as
+ * an example (blurred, numbers hidden) with `needs` saying what brings it to
+ * life, like "Needs 2 months of balances".
+ */
+export function InsightsWaiting({ needs, children }: { needs: string; children: ReactNode }) {
+  return <WaitingContext.Provider value={needs}>{children}</WaitingContext.Provider>;
+}
+
+/** What the card is waiting for, or null when it has what it needs. */
+export function useInsightsWaiting(): string | null {
+  return useContext(WaitingContext);
 }
 
 /** True when Insights is showing the preview. */
