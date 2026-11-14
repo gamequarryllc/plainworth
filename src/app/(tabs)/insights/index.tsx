@@ -239,7 +239,6 @@ function NetWorth({ filled }: { filled?: boolean }) {
           ) : null}
         </Section>
       ) : null}
-      {fundHere && fund ? <EmergencyFundCard /> : null}
       <Waiting needs={some ? null : "Needs a balance"}>
         <HeadedFromStore />
       </Waiting>
@@ -249,7 +248,7 @@ function NetWorth({ filled }: { filled?: boolean }) {
       <Waiting needs={some ? null : "Needs a balance"}>
         <DistributionCard />
       </Waiting>
-      {fundHere && !fund ? <EmergencyFundCard /> : null}
+      {fundHere ? <EmergencyFundCard /> : null}
     </>
   );
 }
@@ -940,19 +939,18 @@ function Spending({ filled }: { filled?: boolean }) {
   if (!cards.length) {
     return (
       <>
-        {fundCard}
         <InsightCard
           label="This Year vs Last Year"
           sentence="Your year adds up here once a month is over."
         />
+        {fundCard}
       </>
     );
   }
   return (
     <>
-      {fund ? fundCard : null}
       {cards}
-      {fund ? null : fundCard}
+      {fundCard}
     </>
   );
 }
