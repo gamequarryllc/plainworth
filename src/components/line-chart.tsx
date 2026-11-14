@@ -7,6 +7,7 @@ import { haptics } from '@/lib/haptics';
 import type { SeriesPoint } from '@/lib/networth';
 import { layout, useColors } from '@/theme';
 
+import { ChartTip, type ChartTipContent } from './chart-tip';
 import { useScrollLock } from './screen';
 import { Text } from './text';
 
@@ -23,6 +24,8 @@ interface Props {
   /** Faint dashed gridlines, labeled on the left with this (leave out to show them unlabeled, e.g. when amounts are hidden). */
   grid?: boolean;
   formatTick?: (value: number) => string;
+  /** The date and value shown by the finger while dragging. */
+  tip?: (index: number) => ChartTipContent | null;
 }
 
 const PAD_Y = 10;
@@ -37,7 +40,7 @@ const HOLD_MS = 250;
 const UPDOWN = 8;
 
 /** A minimal line chart in the style of Stocks: no axes, drag to read values. */
-export function LineChart({ points, color, height = 160, baseline, onScrub, axis, grid, formatTick }: Props) {
+export function LineChart({ points, color, height = 160, baseline, onScrub, axis, grid, formatTick, tip }: Props) {
   const c = useColors();
   const gradientId = `fill${useId().replace(/[^a-zA-Z0-9]/g, '')}`;
   const [width, setWidth] = useState(0);
@@ -165,6 +168,7 @@ export function LineChart({ points, color, height = 160, baseline, onScrub, axis
   const activeY = active != null ? ys[active] : null;
   const activeDay = active != null ? points[active]?.day : undefined;
   const dim = active != null;
+  const tipContent = active != null && tip ? tip(active) : null;
   const labels =
     axis && points.length > 1
       ? timeAxis(points[0].day, points[points.length - 1].day, plotW).map((l) => ({ ...l, x: l.x + gutter }))
@@ -216,7 +220,15 @@ export function LineChart({ points, color, height = 160, baseline, onScrub, axis
             />
             {activeX != null && activeY != null ? (
               <>
-                <Line x1={activeX} x2={activeX} y1={0} y2={height} stroke={c.secondary} strokeWidth={1} />
+                <Line
+                  x1={activeX}
+                  x2={activeX}
+                  y1={0}
+                  y2={height}
+                  stroke={c.secondary}
+                  strokeWidth={1}
+                  strokeDasharray="2,3"
+                />
                 <Circle cx={activeX} cy={activeY} r={7} fill={color} opacity={0.25} />
                 <Circle cx={activeX} cy={activeY} r={4} fill={color} stroke={c.background} strokeWidth={1.5} />
               </>
@@ -237,6 +249,9 @@ export function LineChart({ points, color, height = 160, baseline, onScrub, axis
               </Text>
             ))}
           </View>
+        ) : null}
+        {activeX != null && activeY != null && tipContent ? (
+          <ChartTip content={tipContent} x={activeX} y={activeY} width={width} height={height} background={c.background} />
         ) : null}
       </View>
       {axis ? (

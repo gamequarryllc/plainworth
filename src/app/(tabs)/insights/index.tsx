@@ -459,7 +459,6 @@ function HeadedCard({
   const goal = useStore((s) => s.settings.goal);
   const birthYear = useStore((s) => s.settings.birthYear);
   const [horizon, setHorizon] = useState<Horizon>(goal ? "goal" : "60");
-  const [at, setAt] = useState<number | null>(null);
 
   const now = history[history.length - 1];
   const current = now.end;
@@ -613,22 +612,18 @@ function HeadedCard({
     picked === "goal" && status?.due != null && !late
       ? Math.min(status.due, ahead)
       : null;
-  const headline =
-    at != null
-      ? (actual[at] ?? forecast[at]!)
-      : dueIndex != null
-        ? path[dueIndex]
-        : projected;
+  const headline = dueIndex != null ? path[dueIndex] : projected;
   const unit =
-    at == null
-      ? dueIndex != null
-        ? `at your pace by ${status!.dueYear}`
-        : inYears(ahead)
-      : at === nowIndex
-        ? "today"
-        : at < nowIndex
-          ? `in ${shortMonth(shift(shown[0], at))}`
-          : `by ${shortMonth(shift(shown[0], at))}`;
+    dueIndex != null ? `at your pace by ${status!.dueYear}` : inYears(ahead);
+  // Dragging shows the month and amount by the finger; the big number stays.
+  const tip = (i: number) => {
+    const v = actual[i] ?? forecast[i];
+    if (v == null) return null;
+    return {
+      title: i === nowIndex ? "Today" : shortMonth(shift(shown[0], i)),
+      rows: [{ value: whole(v) }],
+    };
+  };
 
   return (
     <InsightCard
@@ -662,7 +657,7 @@ function HeadedCard({
       <Text
         variant="footnote"
         color="secondary"
-        style={[styles.todays, at != null && at <= nowIndex && styles.hidden]}
+        style={styles.todays}
       >
         In today’s money
       </Text>
@@ -704,7 +699,8 @@ function HeadedCard({
         ]}
         marker={marker}
         labels={labels}
-        onScrub={lock.locked ? undefined : setAt}
+        onScrub={lock.locked ? undefined : () => {}}
+        tip={tip}
       />
       {status && !late ? (
         <View style={styles.goal}>
@@ -806,7 +802,6 @@ function NetWorthYearCard({
   const { from, last, before, then } = compareYears(soFar, lastYear)!;
   const value = soFar[last]!;
   const hasBefore = lastIndex(before) >= 0;
-  const [at, setAt] = useState<number | null>(null);
   const signed = (cents: number) => money(cents, { signed: true, whole: true });
 
   const since = from > 0 ? `since ${MONTHS[from]}` : "this year";
@@ -835,26 +830,7 @@ function NetWorthYearCard({
       }
       {...lock.card}
     >
-      {at != null ? (
-        <Readout
-          title={MONTHS[at]}
-          items={[
-            {
-              label: String(year),
-              value: soFar[at] != null ? signed(soFar[at]!) : "—",
-              color: c.up,
-            },
-            ...(hasBefore
-              ? [
-                  {
-                    label: String(year - 1),
-                    value: before[at] != null ? signed(before[at]!) : "—",
-                  },
-                ]
-              : []),
-          ]}
-        />
-      ) : hasBefore ? (
+      {hasBefore ? (
         <TrendKey
           items={[
             { label: String(year), color: c.up },
@@ -870,7 +846,22 @@ function NetWorthYearCard({
           { values: soFar, color: c.up, endDot: true },
         ]}
         labels={MONTH_LABELS}
-        onScrub={lock.locked ? undefined : setAt}
+        onScrub={lock.locked ? undefined : () => {}}
+        tip={(i) =>
+          soFar[i] == null && before[i] == null
+            ? null
+            : {
+                title: MONTHS[i],
+                rows: [
+                  ...(soFar[i] != null
+                    ? [{ label: hasBefore ? String(year) : undefined, value: signed(soFar[i]!), color: c.up }]
+                    : []),
+                  ...(hasBefore && before[i] != null
+                    ? [{ label: String(year - 1), value: signed(before[i]!) }]
+                    : []),
+                ],
+              }
+        }
       />
     </InsightCard>
   );
@@ -1066,7 +1057,6 @@ function SpentYearCard({
   const { from, last, before, then } = compareYears(soFar, lastYear)!;
   const value = soFar[last]!;
   const hasBefore = lastIndex(before) >= 0;
-  const [at, setAt] = useState<number | null>(null);
   const editGoals = () => router.push("/spending-goal");
 
   // With last year to compare, the sentence is only the difference: each
@@ -1132,34 +1122,7 @@ function SpentYearCard({
       note="Counts each month once it’s over."
       {...lock.card}
     >
-      {at != null ? (
-        <Readout
-          title={`By the end of ${MONTHS[at]}`}
-          items={[
-            {
-              label: String(year),
-              value: soFar[at] != null ? whole(soFar[at]!) : "—",
-              color: c.bar,
-            },
-            ...(hasBefore
-              ? [
-                  {
-                    label: String(year - 1),
-                    value: before[at] != null ? whole(before[at]!) : "—",
-                  },
-                ]
-              : []),
-            ...(limitLine
-              ? [
-                  {
-                    label: "Limit",
-                    value: limitLine[at] != null ? whole(limitLine[at]!) : "—",
-                  },
-                ]
-              : []),
-          ]}
-        />
-      ) : keyItems.length > 1 ? (
+      {keyItems.length > 1 ? (
         <TrendKey items={keyItems} />
       ) : null}
       <TrendChart
@@ -1182,7 +1145,25 @@ function SpentYearCard({
         ]}
         labels={MONTH_LABELS}
         height={tagged ? 160 : undefined}
-        onScrub={lock.locked ? undefined : setAt}
+        onScrub={lock.locked ? undefined : () => {}}
+        tip={(i) =>
+          soFar[i] == null && before[i] == null
+            ? null
+            : {
+                title: `End of ${MONTHS[i]}`,
+                rows: [
+                  ...(soFar[i] != null
+                    ? [{ label: hasBefore || limitLine ? String(year) : undefined, value: whole(soFar[i]!), color: c.bar }]
+                    : []),
+                  ...(hasBefore && before[i] != null
+                    ? [{ label: String(year - 1), value: whole(before[i]!) }]
+                    : []),
+                  ...(limitLine && limitLine[i] != null
+                    ? [{ label: "Limit", value: whole(limitLine[i]!) }]
+                    : []),
+                ],
+              }
+        }
       />
       {goal ? (
         <View style={styles.goals}>
@@ -1712,9 +1693,6 @@ const styles = StyleSheet.create({
   todays: {
     marginTop: -6,
     marginBottom: 10,
-  },
-  hidden: {
-    opacity: 0,
   },
   goal: {
     marginTop: 16,

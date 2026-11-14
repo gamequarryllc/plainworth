@@ -35,10 +35,7 @@ export function TrendHeader({
   series: SeriesPoint[];
   /** For debts: a falling balance is shown in green. */
   invert?: boolean;
-  /**
-   * Leaves out the "+$X (Y%) Past Month" line under the value. While dragging
-   * the chart, only the date of the point is shown.
-   */
+  /** Leaves out the "+$X (Y%) Past Month" line under the value. */
   hideChange?: boolean;
 }) {
   const c = useColors();
@@ -69,18 +66,22 @@ export function TrendHeader({
   };
 
   const points = sliceSeries(series, range, today);
-  const scrubbed = scrub != null && !gated ? points[scrub] : undefined;
   const showHint = gated && (scrub != null || hint);
   const overall = seriesChange(points);
-  const shown = scrubbed ? seriesChange(points, scrub!) : overall;
   const good = invert ? overall.delta <= 0 : overall.delta >= 0;
-  const caption = scrubbed ? scrubLabel(scrubbed, today) : periodLabel(series, range, today);
+  // While dragging, the big number stays put and the point's date and value ride along
+  // with the finger (just the date on ranges that need Pro).
+  const tip = (i: number) => {
+    const p = points[i];
+    if (!p) return null;
+    return { title: scrubLabel(p, today), rows: gated ? [] : [{ value: money(p.value) }] };
+  };
 
   return (
     <>
       <Hero
         label={label}
-        value={money(scrubbed ? scrubbed.value : animated)}
+        value={money(animated)}
         caption={
           showHint ? (
             <Pressable
@@ -94,18 +95,12 @@ export function TrendHeader({
               </Text>
               <Icon name="chevron.right" size={11} weight="semibold" color={c.tertiary} />
             </Pressable>
-          ) : hideChange ? (
-            scrubbed ? (
-              <Text variant="subheadline" color="secondary" numberOfLines={1}>
-                {caption}
-              </Text>
-            ) : null
-          ) : points.length > 0 ? (
+          ) : hideChange ? null : points.length > 0 ? (
             <Change
-              delta={shown.delta}
-              ratio={shown.ratio}
+              delta={overall.delta}
+              ratio={overall.ratio}
               invert={invert}
-              suffix={caption}
+              suffix={periodLabel(series, range, today)}
             />
           ) : null
         }
@@ -117,6 +112,7 @@ export function TrendHeader({
           grid
           formatTick={hidden ? undefined : (v) => money(v, { compact: true, whole: true })}
           onScrub={onScrub}
+          tip={tip}
           axis
         />
       ) : null}

@@ -5,6 +5,7 @@ import Svg, { Circle, Line, Path } from 'react-native-svg';
 import { haptics } from '@/lib/haptics';
 import { useColors } from '@/theme';
 
+import { ChartTip, type ChartTipContent } from './chart-tip';
 import { useScrollLock } from './screen';
 import { Text } from './text';
 
@@ -56,6 +57,7 @@ export function TrendChart({
   zero,
   marker,
   onScrub,
+  tip,
 }: {
   count: number;
   series: TrendSeries[];
@@ -66,6 +68,8 @@ export function TrendChart({
   marker?: { index: number; value: number; color: string } | null;
   /** Drag across to read values: called with the slot under the finger, or null when released. */
   onScrub?: (index: number | null) => void;
+  /** The month and values shown by the finger while dragging. */
+  tip?: (index: number) => ChartTipContent | null;
 }) {
   const c = useColors();
   const [width, setWidth] = useState(0);
@@ -109,6 +113,11 @@ export function TrendChart({
     return d;
   };
 
+  const tipContent = active != null && tip ? tip(active) : null;
+  // Over the highest line at the finger.
+  const tipYs = active != null ? series.map((s) => s.values[active]).filter((v): v is number => v != null).map(y) : [];
+  const tipY = tipYs.length ? Math.min(...tipYs) : null;
+
   return (
     <View onLayout={onLayout} {...(onScrub ? touch : null)}>
       <View style={{ height }}>
@@ -151,7 +160,15 @@ export function TrendChart({
             })}
             {active != null ? (
               <>
-                <Line x1={x(active)} x2={x(active)} y1={0} y2={height} stroke={c.secondary} strokeWidth={1} />
+                <Line
+                  x1={x(active)}
+                  x2={x(active)}
+                  y1={0}
+                  y2={height}
+                  stroke={c.secondary}
+                  strokeWidth={1}
+                  strokeDasharray="2,3"
+                />
                 {series.map((s, k) => {
                   const v = s.values[active];
                   return v == null ? null : (
@@ -183,6 +200,9 @@ export function TrendChart({
               </Text>
             ))
           : null}
+        {width > 0 && tipContent && tipY != null ? (
+          <ChartTip content={tipContent} x={x(active!)} y={tipY} width={width} height={height} background={c.card} />
+        ) : null}
       </View>
       {labels.length ? (
         <View style={styles.axis} pointerEvents="none">
