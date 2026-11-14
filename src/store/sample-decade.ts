@@ -230,8 +230,6 @@ export function decadeSampleData(): Data {
   }
   data.accounts = accounts;
   data.snapshots = snapshots;
-  const savings = accounts.find((a) => a.name === 'High-Yield Savings' && !a.closed);
-  if (savings) data.settings.emergencyFund = { accounts: [{ id: savings.id }], situation: 'stake', months: 6 };
 
   // ---- Spending categories that came and went.
   const custom = (name: string, group: SpendGroup, hidden: boolean): SpendCategory => {

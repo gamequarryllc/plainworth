@@ -17,7 +17,6 @@ import { SortButton } from "@/components/sort-button";
 import { useTabButtons } from "@/components/tab-buttons";
 import { TrendHeader } from "@/components/trend-header";
 import { useMoney } from "@/hooks/use-money";
-import { useFundBadge } from "@/hooks/use-emergency-fund";
 import { useToday } from "@/hooks/use-today";
 import {
   monthlyInterest,
@@ -75,7 +74,6 @@ export default function NetWorthTab() {
 function NetWorthScreen({ sample }: { sample?: boolean }) {
   const money = useMoney();
   const tabButtons = useTabButtons();
-  const fundBadge = useFundBadge();
   const today = useToday();
   const accounts = useStore((s) => s.accounts);
   const snapshots = useStore((s) => s.snapshots);
@@ -270,7 +268,6 @@ function NetWorthScreen({ sample }: { sample?: boolean }) {
             summary={s}
             series={perAccount.get(s.account.id)}
             tag={s === target ? "Pay first" : undefined}
-            fund={fundBadge(s.account.id)}
             onPress={() => openAccount(s.account.id)}
           />
         ))}

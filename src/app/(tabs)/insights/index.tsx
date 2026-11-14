@@ -1,5 +1,5 @@
 import { router } from "expo-router";
-import { Fragment, useState, type ReactElement, type ReactNode } from "react";
+import { Fragment, useContext, useState, type ReactElement, type ReactNode } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
 
 import { BarChart } from "@/components/bar-chart";
@@ -74,10 +74,10 @@ import {
   type PeriodUnit,
   type YearGoals,
 } from "@/lib/trends";
-import { formatMonths, fundSide } from "@/lib/emergency";
+import { formatMonths, fundStatus, sampleFund } from "@/lib/emergency";
 import { categoryTotals } from "@/lib/spending";
 import type { SpendCategory, SpendingGoal } from "@/lib/types";
-import { useStore } from "@/store";
+import { SampleContext, useStore } from "@/store";
 import { useSampleOn } from "@/store/sample-hidden";
 import { openPaywall } from "@/store/pro";
 import { useColors } from "@/theme";
@@ -209,9 +209,6 @@ function NetWorth({ filled }: { filled?: boolean }) {
 
   const history = netWorthHistory({ accounts, snapshots, nwCategories }, today);
   const some = history.length > 0;
-  const fund = useStore((s) => s.settings.emergencyFund);
-  const spendAll = useStore((s) => s.spend);
-  const fundHere = fundSide(fund, { accounts, spend: spendAll }) === "networth";
   const compared =
     history.length >= 2 && lastIndex(netWorthSoFar(history, year)) >= 0;
 
@@ -248,7 +245,6 @@ function NetWorth({ filled }: { filled?: boolean }) {
       <Waiting needs={some ? null : "Needs a balance"}>
         <DistributionCard />
       </Waiting>
-      {fundHere ? <EmergencyFundCard /> : null}
     </>
   );
 }
@@ -885,9 +881,6 @@ function Spending({ filled }: { filled?: boolean }) {
   const history = spendHistory(data, today);
   const sp = spendingYear(data, year, today);
   const chartable = chartableCategories(data, today);
-  const fund = useStore((s) => s.settings.emergencyFund);
-  const accountsAll = useStore((s) => s.accounts);
-  const fundHere = fundSide(fund, { accounts: accountsAll, spend: data.spend }) === "spending";
   const cards = useCards([
     lastIndex(soFar) >= 0 ? (
       <SpentYearCard
@@ -926,7 +919,7 @@ function Spending({ filled }: { filled?: boolean }) {
       </Section>
     );
   }
-  const fundCard = fundHere ? <EmergencyFundCard /> : null;
+  const fundCard = <EmergencyFundCard />;
   if (!cards.length) {
     return (
       <>
@@ -955,7 +948,14 @@ function EmergencyFundCard() {
   const c = useColors();
   const lock = useLock();
   const whole = (cents: number) => lock.money(cents, { whole: true });
-  const { fund, status } = useEmergencyFund();
+  const today = useToday();
+  const sample = useContext(SampleContext);
+  const spend = useStore((s) => s.spend);
+  const spendCategories = useStore((s) => s.spendCategories);
+  const real = useEmergencyFund();
+  // Not set up yet: the Pro preview and the sample page show a made-up fund, like every other card.
+  const fund = real.fund ?? (lock.locked || sample ? sampleFund(today) : undefined);
+  const status = real.fund ? real.status : fund ? fundStatus(fund, { spend, spendCategories }, today) : null;
   const edit = () => router.push("/emergency-fund");
 
   if (!fund || !status) {
@@ -965,7 +965,7 @@ function EmergencyFundCard() {
         sentence={
           !fund
             ? "How many months could your savings cover?"
-            : fund.accounts.length || fund.saved != null
+            : fund.saved.length
               ? "Add what a month costs you."
               : "Add how much you’ve saved."
         }
@@ -1026,7 +1026,7 @@ function EmergencyFundCard() {
           labels={historyMonths.map((m, index) => ({ index, text: MONTHS_SHORT[m - 1][0] }))}
         />
       ) : null}
-      <GoalLink title="Edit" onPress={edit} />
+      <GoalLink title="Update" onPress={edit} />
     </InsightCard>
   );
 }

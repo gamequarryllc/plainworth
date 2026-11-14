@@ -1,4 +1,4 @@
-import { router, useLocalSearchParams } from 'expo-router';
+import { router } from 'expo-router';
 import { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
@@ -11,62 +11,37 @@ import { Text } from '@/components/text';
 import { useMoney } from '@/hooks/use-money';
 import { useToday } from '@/hooks/use-today';
 import { confirm } from '@/lib/dialogs';
-import { MONTH_OPTIONS, newFund, SITUATIONS, spendingAverage } from '@/lib/emergency';
-import { kindOf, seriesByAccount } from '@/lib/networth';
-import type { Cents, EmergencyFund, ID } from '@/lib/types';
+import { MONTH_OPTIONS, newFund, normalizeFund, savedNow, SITUATIONS, spendingAverage, withSaved } from '@/lib/emergency';
+import type { Cents, EmergencyFund } from '@/lib/types';
 import { useStore } from '@/store';
 import { useColors } from '@/theme';
 
 /**
- * Set up the emergency fund: which accounts hold it (or, without accounts,
- * how much is saved), what a month costs, and how many months it should
- * cover. Works with only Net Worth, only Spending, or both.
+ * Set up the emergency fund, part of Spending: how much is in it, what a
+ * month costs (the spending average unless typed in), and how many months
+ * it should cover.
  */
 export default function EmergencyFundScreen() {
   const c = useColors();
   const money = useMoney();
   const whole = (cents: number) => money(cents, { whole: true });
   const today = useToday();
-  const { account: preset } = useLocalSearchParams<{ account?: string }>();
-  const accounts = useStore((s) => s.accounts);
-  const snapshots = useStore((s) => s.snapshots);
-  const nwCategories = useStore((s) => s.nwCategories);
   const spend = useStore((s) => s.spend);
   const spendCategories = useStore((s) => s.spendCategories);
-  const saved = useStore((s) => s.settings.emergencyFund);
+  const stored = useStore((s) => s.settings.emergencyFund);
   const updateSettings = useStore((s) => s.updateSettings);
+  const saved = normalizeFund(stored, today);
 
-  const [fund, setFund] = useState<EmergencyFund>(() => {
-    const start = saved ?? newFund();
-    if (preset && !start.accounts.some((a) => a.id === preset)) {
-      return { ...start, accounts: [...start.accounts, { id: preset }], saved: undefined };
-    }
-    return start;
-  });
+  const [fund, setFund] = useState<EmergencyFund>(() => saved ?? newFund());
+  const [amount, setAmount] = useState<Cents | null>(() => (saved ? savedNow(saved) : null));
 
-  const categories = new Map(nwCategories.map((x) => [x.id, x]));
-  const assets = accounts.filter((a) => !a.closed && kindOf(a, categories) === 'asset');
-  const series = seriesByAccount(snapshots);
-  const balanceOf = (id: ID) => series.get(id)?.at(-1)?.value ?? null;
-  const picked = fund.accounts.filter((a) => assets.some((x) => x.id === a.id));
   const average = spendingAverage({ spend, spendCategories }, today);
   const monthly = fund.monthly ?? average?.amount ?? null;
   const check = <Icon name="checkmark" size={17} weight="semibold" color={c.tint} />;
 
-  const toggle = (id: ID) =>
-    setFund((f) => {
-      const on = f.accounts.some((a) => a.id === id);
-      return { ...f, accounts: on ? f.accounts.filter((a) => a.id !== id) : [...f.accounts, { id }] };
-    });
-  const setCap = (id: ID, cap: Cents | null) =>
-    setFund((f) => ({
-      ...f,
-      accounts: f.accounts.map((a) => (a.id === id ? (cap != null && cap > 0 ? { id, cap } : { id }) : a)),
-    }));
-
   const save = () => {
-    const next: EmergencyFund = { ...fund, accounts: picked };
-    if (picked.length) delete next.saved;
+    let next: EmergencyFund = { ...fund };
+    if (amount != null && amount !== savedNow(fund)) next = withSaved(next, Math.max(0, amount), today);
     if (next.monthly == null || next.monthly <= 0) delete next.monthly;
     updateSettings({ emergencyFund: next });
     router.back();
@@ -85,58 +60,12 @@ export default function EmergencyFundScreen() {
       title="Emergency Fund"
       left={[{ label: 'Cancel', icon: 'xmark', onPress: () => router.back() }]}
       right={[{ label: 'Save', icon: 'checkmark', variant: 'done', onPress: save }]}>
-      {assets.length ? (
-        <Section header="Held In" footer="Pick the accounts your emergency fund is in.">
-          {assets.map((a) => {
-            const b = balanceOf(a.id);
-            return (
-              <Row
-                key={a.id}
-                title={a.name}
-                subtitle={b != null ? money(b) : 'No balance yet'}
-                accessory={picked.some((p) => p.id === a.id) ? check : null}
-                chevron={false}
-                onPress={() => toggle(a.id)}
-              />
-            );
-          })}
-        </Section>
-      ) : null}
-
-      {picked.length ? (
-        <Section header="Only Part of It?" footer="Leave it empty to count the whole account.">
-          {picked.map((p) => (
-            <Row
-              key={p.id}
-              title={assets.find((a) => a.id === p.id)?.name ?? ''}
-              subtitle="Count up to"
-              accessory={
-                <AmountInput
-                  value={p.cap ?? null}
-                  onChange={(v) => setCap(p.id, v)}
-                  placeholder="All of it"
-                  accessibilityLabel="Amount that counts"
-                />
-              }
-            />
-          ))}
-        </Section>
-      ) : (
-        <Section
-          header="Saved So Far"
-          footer={assets.length ? 'Or pick an account above.' : 'Change it whenever it grows.'}>
-          <Row
-            title="Saved"
-            accessory={
-              <AmountInput
-                value={fund.saved ?? null}
-                onChange={(v) => setFund((f) => ({ ...f, saved: v ?? undefined }))}
-                accessibilityLabel="Amount saved"
-              />
-            }
-          />
-        </Section>
-      )}
+      <Section header="In the Fund" footer="Update it whenever it grows. Each change adds a point to the graph.">
+        <Row
+          title="Saved"
+          accessory={<AmountInput value={amount} onChange={setAmount} accessibilityLabel="Amount saved" />}
+        />
+      </Section>
 
       {average ? (
         <Section header="A Month Costs You" footer="Your average from Spending. Type a number to use that instead.">
@@ -218,7 +147,7 @@ export default function EmergencyFundScreen() {
         />
       </Section>
 
-      {saved ? (
+      {stored ? (
         <Section>
           <Row title="Remove Emergency Fund" titleColor="down" centered onPress={remove} />
         </Section>

@@ -9,7 +9,6 @@ import { useStore } from '@/store';
 import { layout, useColors } from '@/theme';
 
 import { Change } from './change';
-import { Icon } from './icon';
 import { Row } from './list';
 import { Sparkline, SPARKLINE_WIDTH } from './sparkline';
 import { Text } from './text';
@@ -40,7 +39,6 @@ export function TrendRow({
   invert,
   series,
   tag,
-  fund,
   onPress,
 }: {
   title: string;
@@ -48,8 +46,6 @@ export function TrendRow({
   value: string;
   /** A short label beside the name, like "Pay first". */
   tag?: string;
-  /** Marks the emergency fund: a green shield and this line ("Emergency · 5.1 of 6 mo") in place of the subtitle. */
-  fund?: string;
   change?: number | null;
   /** The change as a share of the earlier value, shown as a percent beside it. */
   changeRatio?: number | null;
@@ -96,18 +92,9 @@ export function TrendRow({
         )
       }
       subtitle={
-        fund ? (
-          <View style={styles.fundRow}>
-            <Icon name="shield.fill" size={11} color={c.up} />
-            <Text variant="footnote" numberOfLines={1} style={[styles.titleText, { color: c.up }]}>
-              {fund}
-            </Text>
-          </View>
-        ) : (
-          <Text variant="footnote" color="secondary" numberOfLines={1}>
-            {subtitle}
-          </Text>
-        )
+        <Text variant="footnote" color="secondary" numberOfLines={1}>
+          {subtitle}
+        </Text>
       }
       value={
         <Text variant="body" weight="600" tabular numberOfLines={1}>
@@ -125,13 +112,11 @@ export function AccountRow({
   summary,
   series,
   tag,
-  fund,
   onPress,
 }: {
   summary: AccountSummary;
   series?: SeriesPoint[];
   tag?: string;
-  fund?: string;
   onPress: () => void;
 }) {
   const money = useMoney();
@@ -162,7 +147,6 @@ export function AccountRow({
       invert={kind === 'liability'}
       series={series}
       tag={tag}
-      fund={fund}
       onPress={onPress}
     />
   );
@@ -173,11 +157,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-  },
-  fundRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
   },
   titleText: {
     flexShrink: 1,

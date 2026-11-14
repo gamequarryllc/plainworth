@@ -1,3 +1,4 @@
+import { normalizeFund } from '@/lib/emergency';
 import type { Account, Data, NWCategory, SpendCategory } from '@/lib/types';
 
 import { DATA_VERSION, defaultOutlook, defaultReminder, defaultSettings, emptyData } from './defaults';
@@ -17,6 +18,8 @@ export function migrate(raw: unknown): Data {
   // Version 5 turned Payoff Order on (Avalanche) by default. Before that it started
   // off and was saved that way, so an old "off" just means it was never chosen.
   const settings = { ...d.settings };
+  // The first TestFlight emergency fund could follow Net Worth accounts; now it's Spending's alone.
+  if (settings.emergencyFund) settings.emergencyFund = normalizeFund(settings.emergencyFund);
   if (version < 5 && settings.payoffOrder === 'off') settings.payoffOrder = 'avalanche';
   return {
     version: DATA_VERSION,

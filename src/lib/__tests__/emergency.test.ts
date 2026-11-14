@@ -1,17 +1,12 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { formatMonths, fundSide, fundStatus, spendingAverage } from '../emergency';
+import { formatMonths, fundStatus, normalizeFund, sampleFund, savedNow, spendingAverage, withSaved } from '../emergency';
 import { emptyData } from '../../store/defaults';
-import type { Data } from '../types';
+import type { Data, EmergencyFund } from '../types';
 
 function data(): Data {
   const d = emptyData();
-  d.accounts = [{ id: 'hys', name: 'HYS', categoryId: 'cash', createdAt: 0, closed: false }];
-  d.snapshots = [
-    { id: 's1', accountId: 'hys', date: '2026-06-15', value: 10_000_00, createdAt: 0 },
-    { id: 's2', accountId: 'hys', date: '2026-11-02', value: 19_800_00, createdAt: 0 },
-  ];
   for (const m of ['06', '07', '08', '09', '10']) d.spend[`2026-${m}`] = { rent: 2_000_00, groceries: 1_960_00, 'paycheck-1': 5_000_00 };
   d.spend['2026-11'] = { rent: 9_999_00 }; // the month still going doesn't count
   return d;
@@ -21,31 +16,61 @@ test('spending average uses finished months, without income', () => {
   assert.deepEqual(spendingAverage(data(), '2026-11-13'), { amount: 3_960_00, months: 5 });
 });
 
-test('months covered from a marked account, with a cap and a typed cost', () => {
-  const d = data();
-  const s = fundStatus({ accounts: [{ id: 'hys' }], months: 6 }, d, '2026-11-13')!;
+test('months covered from what was typed in, with a graph point per change', () => {
+  const fund: EmergencyFund = {
+    saved: [
+      { date: '2026-06-15', amount: 10_000_00 },
+      { date: '2026-11-02', amount: 19_800_00 },
+    ],
+    months: 6,
+  };
+  const s = fundStatus(fund, data(), '2026-11-13')!;
   assert.equal(formatMonths(s.covered), '5');
   assert.equal(s.toGo, 6 * 3_960_00 - 19_800_00);
   assert.equal(s.history.filter((v) => v != null).length, 6);
-  const capped = fundStatus({ accounts: [{ id: 'hys', cap: 15_000_00 }], months: 3, monthly: 5_000_00 }, d, '2026-11-13')!;
-  assert.equal(capped.covered, 3);
-  assert.equal(capped.toGo, 0);
+  assert.equal(s.history[11], 5);
+  assert.equal(s.history[10], 10_000_00 / 3_960_00);
+  const typed = fundStatus({ ...fund, months: 3, monthly: 6_600_00 }, data(), '2026-11-13')!;
+  assert.equal(typed.covered, 3);
+  assert.equal(typed.toGo, 0);
 });
 
-test('works with only Net Worth (typed cost) or only Spending (typed savings)', () => {
-  const nwOnly = data();
-  nwOnly.spend = {};
-  assert.equal(fundStatus({ accounts: [{ id: 'hys' }], months: 6 }, nwOnly, '2026-11-13'), null);
-  assert.equal(fundStatus({ accounts: [{ id: 'hys' }], months: 6, monthly: 3_300_00 }, nwOnly, '2026-11-13')!.covered, 6);
-  assert.equal(fundSide({ accounts: [{ id: 'hys' }], months: 6 }, nwOnly), 'networth');
+test('needs an amount and a monthly cost', () => {
+  const none = emptyData();
+  assert.equal(fundStatus({ saved: [{ date: '2026-11-01', amount: 5_000_00 }], months: 6 }, none, '2026-11-13'), null);
+  assert.equal(fundStatus({ saved: [], months: 6 }, data(), '2026-11-13'), null);
+});
 
-  const spendOnly = data();
-  spendOnly.accounts = [];
-  spendOnly.snapshots = [];
-  const fund = { accounts: [], saved: 7_920_00, months: 3 };
-  assert.equal(fundStatus(fund, spendOnly, '2026-11-13')!.covered, 2);
-  assert.equal(fundSide(fund, spendOnly), 'spending');
-  assert.equal(fundSide(undefined, spendOnly), 'spending');
+test('a same-day change replaces the earlier one', () => {
+  let f: EmergencyFund = { saved: [], months: 6 };
+  f = withSaved(f, 1_000_00, '2026-11-01');
+  f = withSaved(f, 2_000_00, '2026-11-13');
+  f = withSaved(f, 2_500_00, '2026-11-13');
+  assert.deepEqual(f.saved, [
+    { date: '2026-11-01', amount: 1_000_00 },
+    { date: '2026-11-13', amount: 2_500_00 },
+  ]);
+  assert.equal(savedNow(f), 2_500_00);
+});
+
+test('the first TestFlight shape becomes the Spending-only one', () => {
+  assert.deepEqual(normalizeFund({ accounts: [{ id: 'hys' }], situation: 'stake', months: 6 }, '2026-11-14'), {
+    saved: [],
+    situation: 'stake',
+    months: 6,
+  });
+  assert.deepEqual(normalizeFund({ accounts: [], saved: 9_000_00, months: 3, monthly: 3_000_00 }, '2026-11-14'), {
+    saved: [{ date: '2026-11-14', amount: 9_000_00 }],
+    months: 3,
+    monthly: 3_000_00,
+  });
+  assert.equal(normalizeFund(undefined), undefined);
+});
+
+test('sample fund grows to about 5 months', () => {
+  const f = sampleFund('2026-11-14', 12);
+  assert.equal(f.saved.length, 13);
+  assert.equal(savedNow(f), 19_000_00);
 });
 
 test('formatMonths', () => {
