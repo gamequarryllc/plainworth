@@ -356,15 +356,15 @@ function DistributionCard() {
   const total = totalAt(last);
   let sentence =
     d.categories.length > 1
-      ? `${whole(total)} across ${d.categories.length} categories.`
-      : `${whole(total)}, all in ${top.name}.`;
+      ? `${whole(total)} in assets across ${d.categories.length} categories.`
+      : `${whole(total)} in assets, all in ${top.name}.`;
   if (last > 0) {
     const diff = total - totalAt(0);
     const since = periodName(d.periods[0]);
     sentence =
       Math.abs(diff) < Math.max(totalAt(0) * 0.01, 100_00)
-        ? `${whole(total)}, about the same as ${since}.`
-        : `${whole(total)}, ${diff > 0 ? "up" : "down"} ${whole(Math.abs(diff))} since ${since}.`;
+        ? `${whole(total)} in assets, about the same as ${since}.`
+        : `${whole(total)} in assets, ${diff > 0 ? "up" : "down"} ${whole(Math.abs(diff))} since ${since}.`;
   }
 
   return (
