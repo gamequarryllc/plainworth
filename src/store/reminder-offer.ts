@@ -32,9 +32,11 @@ function offered(): boolean {
  * app ask for notifications only once, so Plainworth explains first and asks
  * iOS only after a yes. Yes means the 1st of each month at 9:00 AM, which can
  * be changed or turned off in Settings › Reminders.
+ *
+ * Returns true when the offer is about to show, so nothing else asks at the same time.
  */
-export function offerReminder() {
-  if (Platform.OS === 'web' || offered() || useStore.getState().settings.reminder.on) return;
+export function offerReminder(): boolean {
+  if (Platform.OS === 'web' || offered() || useStore.getState().settings.reminder.on) return false;
   // Wait for the sheet to finish closing.
   setTimeout(async () => {
     if (offered() || useStore.getState().settings.reminder.on) return;
@@ -52,4 +54,5 @@ export function offerReminder() {
     const { settings, updateSettings } = useStore.getState();
     updateSettings({ reminder: { ...settings.reminder, on: true } });
   }, 700);
+  return true;
 }

@@ -1,4 +1,4 @@
-import { router } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import { Fragment } from "react";
 import { StyleSheet } from "react-native";
 
@@ -26,6 +26,7 @@ import {
 } from "@/lib/debts";
 import { haptics } from "@/lib/haptics";
 import { liveCurrencySupported } from "@/lib/metals";
+import { STORE_SHOTS } from "@/lib/store-shots";
 import { netWorthTitle } from "@/lib/name";
 import { formatPercent } from "@/lib/money";
 import {
@@ -85,6 +86,9 @@ function NetWorthScreen({ sample }: { sample?: boolean }) {
   const sort = useStore((s) => s.settings.nwSort) ?? DEFAULT_NW_SORT;
   const title = netWorthTitle(useStore((s) => s.settings.name));
   const updateSettings = useStore((s) => s.updateSettings);
+  // App Store screenshot builds: plainworth:///?shot=debts opens at the debts.
+  const shot = useLocalSearchParams<{ shot?: string }>().shot;
+  const shotDebts = STORE_SHOTS && shot === "debts";
 
   const summaries = summarizeAccounts(accounts, snapshots, categories);
   const totals = totalsOf(summaries.values());
@@ -335,6 +339,7 @@ function NetWorthScreen({ sample }: { sample?: boolean }) {
       large
       left={tabButtons}
       right={sample ? [addButton] : right}
+      atEnd={shotDebts}
       onRefresh={
         hasLive && !sample
           ? () => refreshSpotPrices({ force: true })

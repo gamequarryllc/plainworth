@@ -1,4 +1,4 @@
-import { router } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import { Fragment, useContext, useState, type ReactElement, type ReactNode } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
 
@@ -45,6 +45,7 @@ import {
 import { MONTHS, MONTHS_SHORT, parseDateKey } from "@/lib/dates";
 import { firstYear, spendingYear, type Month } from "@/lib/insights";
 import { formatPercent, MASK } from "@/lib/money";
+import { STORE_SHOTS } from "@/lib/store-shots";
 import {
   goalStatus,
   goalYear,
@@ -122,6 +123,13 @@ function InsightsScreen({ sample }: { sample?: boolean }) {
   const spend = useStore((s) => s.spend);
   const [part, setPart] = useState<Part>("networth");
   const preview = useInsightsPreview();
+  // App Store screenshot builds: plainworth:///insights?shot=spending opens on Spending.
+  const shot = useLocalSearchParams<{ shot?: string }>().shot;
+  const [shotSeen, setShotSeen] = useState<string | undefined>(undefined);
+  if (STORE_SHOTS && shot !== shotSeen) {
+    setShotSeen(shot);
+    if (shot === "spending" || shot === "networth") setPart(shot);
+  }
   const Body = sample ? SampleBody : Fragment;
 
   if (!preview && firstYear({ snapshots, spend }) == null) {

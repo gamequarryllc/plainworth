@@ -17,6 +17,7 @@ import { centsToInput, formatTyping, parseAmount, parseNumber } from '@/lib/mone
 import { compareSnapshots } from '@/lib/networth';
 import { useStore } from '@/store';
 import { offerReminder } from '@/store/reminder-offer';
+import { balanceUpdateSaved } from '@/store/review-prompt';
 import { useSpotPrice } from '@/store/spot';
 import { type, useColors } from '@/theme';
 
@@ -77,7 +78,7 @@ export default function UpdateBalanceScreen() {
     ]);
     haptics.success();
     router.back();
-    offerReminder();
+    balanceUpdateSaved({ busy: offerReminder() });
   };
 
   const placeholder = latest ? formatTyping(centsToInput(latest.value)) : '0';

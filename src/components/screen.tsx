@@ -32,6 +32,8 @@ interface ScreenProps {
   onRefresh?: () => Promise<void>;
   /** The screen has text fields: make room for the keyboard and keep the field being typed in above it. */
   form?: boolean;
+  /** Open scrolled to the bottom (App Store screenshot builds). */
+  atEnd?: boolean;
 }
 
 const isWeb = Platform.OS === 'web';
@@ -46,7 +48,7 @@ export function useScrollLock() {
   return useContext(ScrollLock);
 }
 
-export function Screen({ title, large, left, right, children, scroll = true, onRefresh, form }: ScreenProps) {
+export function Screen({ title, large, left, right, children, scroll = true, onRefresh, form, atEnd }: ScreenProps) {
   const c = useColors();
   const [refreshing, setRefreshing] = useState(false);
   const [locked, setLocked] = useState(false);
@@ -62,6 +64,12 @@ export function Screen({ title, large, left, right, children, scroll = true, onR
       setRefreshing(false);
     }
   };
+  // A screen already open when asked to show its end (a second link to it) gets no new content size.
+  useEffect(() => {
+    if (!atEnd) return;
+    const t = setTimeout(() => scrollRef.current?.scrollToEnd({ animated: false }), 400);
+    return () => clearTimeout(t);
+  }, [atEnd]);
   const onScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
     scrollY.current = e.nativeEvent.contentOffset.y;
   };
@@ -84,6 +92,7 @@ export function Screen({ title, large, left, right, children, scroll = true, onR
             automaticallyAdjustKeyboardInsets={false}
             scrollToOverflowEnabled={form}
             onScroll={form ? onScroll : undefined}
+            onContentSizeChange={atEnd ? () => scrollRef.current?.scrollToEnd({ animated: false }) : undefined}
             scrollEventThrottle={form ? 16 : undefined}
             keyboardDismissMode="interactive"
             keyboardShouldPersistTaps="handled"

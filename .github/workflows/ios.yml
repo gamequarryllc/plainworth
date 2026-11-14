@@ -8,6 +8,12 @@ name: iOS build
 #               settings, and on request.
 #   testflight  Signs with the App Store Connect API key and uploads to TestFlight.
 #               Only ever started by hand (Actions > iOS build > Run workflow).
+#   screenshots The App Store screenshots, taken from the real app in the iOS Simulator
+#               (tools/store_shots.sh) and set under their captions
+#               (tools/store_shots_frame.cjs). Download them from the run's Artifacts.
+#   screenshots-upload  The same, then they replace the 6.9-inch iPhone screenshots of
+#               the version in App Store Connect (tools/asc_screenshots.mjs). Touches
+#               nothing else on the listing.
 #
 # Nothing here submits the app for review; that stays a manual step in App Store Connect.
 # Organization secrets: ASC_KEY_ID, ASC_ISSUER_ID, ASC_KEY_P8, APPLE_TEAM_ID
@@ -16,10 +22,10 @@ on:
   workflow_dispatch:
     inputs:
       mode:
-        description: "check = unsigned test build; testflight = sign and upload"
+        description: "check = unsigned test build; testflight = sign and upload; screenshots = App Store pictures"
         required: true
         type: choice
-        options: [check, testflight]
+        options: [check, testflight, screenshots, screenshots-upload]
         default: check
       version:
         description: "Version shown in TestFlight and on the App Store (blank = app.json's)"
@@ -68,6 +74,7 @@ jobs:
 
   build:
     needs: privacy
+    if: ${{ !startsWith(inputs.mode || 'check', 'screenshots') }}
     # To build on your own Mac later, change this line to: runs-on: [self-hosted, macOS]
     runs-on: macos-latest
     timeout-minutes: 75
@@ -125,3 +132,80 @@ jobs:
           name: ios-build-logs
           path: ${{ runner.temp }}/ios/logs
           retention-days: 7
+
+  shots:
+    needs: privacy
+    if: ${{ startsWith(inputs.mode || 'check', 'screenshots') }}
+    runs-on: macos-latest
+    timeout-minutes: 75
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Restore downloaded pods from cache
+        uses: actions/cache@v4
+        with:
+          path: ~/Library/Caches/CocoaPods
+          key: pods-${{ hashFiles('package-lock.json') }}-v1
+          restore-keys: |
+            pods-
+
+      - name: Use the newest released Xcode on the runner
+        run: |
+          set -euo pipefail
+          newest="$(ls -d /Applications/Xcode_*.app | grep -viE 'beta|candidate|_rc' | sort -V | tail -1)"
+          if [ -n "$newest" ]; then sudo xcode-select -s "$newest"; fi
+          xcodebuild -version
+
+      - name: Take the screenshots in the Simulator
+        env:
+          WORK: ${{ runner.temp }}/shots-work
+          EXPO_NO_TELEMETRY: "1"
+        run: bash tools/store_shots.sh "$RUNNER_TEMP/shots"
+
+      - name: Set them under their captions
+        run: |
+          set -euo pipefail
+          npm install --prefix "$RUNNER_TEMP/pw" --no-audit --no-fund --silent playwright@1.56.1
+          "$RUNNER_TEMP/pw/node_modules/.bin/playwright" install chromium > /dev/null
+          NODE_PATH="$RUNNER_TEMP/pw/node_modules" node tools/store_shots_frame.cjs "$RUNNER_TEMP/shots"
+
+      - name: Keep them on the run
+        uses: actions/upload-artifact@v4
+        with:
+          name: store-screenshots
+          path: ${{ runner.temp }}/shots
+          retention-days: 30
+
+  upload:
+    needs: shots
+    if: ${{ inputs.mode == 'screenshots-upload' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Get the screenshots
+        uses: actions/download-artifact@v4
+        with:
+          name: store-screenshots
+          path: shots
+
+      - name: Put them on the version in App Store Connect
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          [ -n "$VERSION" ] || VERSION="$(node -e 'console.log(require("./app.json").expo.version)')"
+          node tools/asc_screenshots.mjs "$ASC_APP_ID" "$VERSION" shots plan
+          node tools/asc_screenshots.mjs "$ASC_APP_ID" "$VERSION" shots apply

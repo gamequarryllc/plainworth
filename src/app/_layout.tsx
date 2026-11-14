@@ -10,8 +10,11 @@ import { configureReanimatedLogger, ReanimatedLogLevel } from 'react-native-rean
 import { LockGate } from '@/components/lock-gate';
 import { useStackOptions } from '@/components/stack-options';
 import { syncReminders, useReminderTaps } from '@/lib/notifications';
+import { STORE_SHOTS } from '@/lib/store-shots';
 import { flushSave, useStore } from '@/store';
 import { startPro } from '@/store/pro';
+import { hideSample } from '@/store/sample-hidden';
+import { noteLaunch } from '@/store/review-prompt';
 import { useSpotPriceRefresh } from '@/store/spot';
 import { startSync } from '@/store/sync';
 import { useColors } from '@/theme';
@@ -21,6 +24,12 @@ import { useColors } from '@/theme';
 // development. It's harmless, so keep warnings but turn the strict check off.
 configureReanimatedLogger({ level: ReanimatedLogLevel.warn, strict: false });
 
+// App Store screenshot builds open filled with the sample, as real data.
+if (STORE_SHOTS) {
+  useStore.getState().loadSampleData(36);
+  hideSample();
+}
+
 export default function RootLayout() {
   const scheme = useColorScheme();
   const c = useColors();
@@ -28,6 +37,7 @@ export default function RootLayout() {
   useSpotPriceRefresh();
 
   useEffect(() => {
+    noteLaunch();
     startPro();
     startSync();
   }, []);

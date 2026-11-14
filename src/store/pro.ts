@@ -7,6 +7,7 @@ import { haptics } from '@/lib/haptics';
 
 import type { ProFeature } from '@/lib/pro';
 import * as purchases from '@/lib/purchases';
+import { STORE_SHOTS } from '@/lib/store-shots';
 import { storage } from '@/lib/storage';
 
 /**
@@ -49,7 +50,8 @@ function sourceOf(s: Pick<ProState, 'owned' | 'test' | 'testStore' | 'testFree'>
 }
 
 const initialOwned = purchases.purchasesAvailable && readFlag(OWNED_KEY);
-const initialTest = __DEV__ && readFlag(TEST_KEY);
+// App Store screenshot builds show Pro, so no Unlock cards in the pictures.
+const initialTest = STORE_SHOTS || (__DEV__ && readFlag(TEST_KEY));
 const initialTestFree = purchases.purchasesAvailable && readFlag(TEST_FREE_KEY);
 
 /**

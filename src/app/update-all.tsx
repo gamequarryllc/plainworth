@@ -20,6 +20,7 @@ import { sortAccounts } from '@/lib/sort';
 import type { ID } from '@/lib/types';
 import { useStore, type NewSnapshot } from '@/store';
 import { offerReminder } from '@/store/reminder-offer';
+import { balanceUpdateSaved } from '@/store/review-prompt';
 
 /** Update several balances at once, e.g. after payday. Only changed accounts get a new entry. */
 export default function UpdateAllScreen() {
@@ -91,7 +92,7 @@ export default function UpdateAllScreen() {
     addSnapshots(entries);
     haptics.success();
     router.back();
-    offerReminder();
+    balanceUpdateSaved({ busy: offerReminder() });
   };
 
   let index = 0;
