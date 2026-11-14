@@ -66,6 +66,14 @@ print(ts[-1]["identifier"])')"
 echo "runtime $runtime, device $devtype"
 udid="$(xcrun simctl create "Plainworth shots" "$devtype" "$runtime")"
 trap 'xcrun simctl shutdown "$udid" >/dev/null 2>&1 || true; xcrun simctl delete "$udid" >/dev/null 2>&1 || true' EXIT
+# Approve plainworth:/// links ahead of time, or iOS asks "Open in Plainworth?" over every screen.
+python3 - "$HOME/Library/Developer/CoreSimulator/Devices/$udid/data/Library/Preferences" "$bundle" <<'PY'
+import os, plistlib, sys
+folder, bundle = sys.argv[1], sys.argv[2]
+os.makedirs(folder, exist_ok=True)
+with open(os.path.join(folder, "com.apple.launchservices.schemeapproval.plist"), "wb") as f:
+    plistlib.dump({"com.apple.CoreSimulator.CoreSimulatorBridge-->plainworth": bundle}, f)
+PY
 xcrun simctl boot "$udid"
 xcrun simctl bootstatus "$udid" -b > /dev/null
 xcrun simctl ui "$udid" appearance dark
