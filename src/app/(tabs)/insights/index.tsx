@@ -219,6 +219,10 @@ function NetWorth({ filled }: { filled?: boolean }) {
   const some = history.length > 0;
   const compared =
     history.length >= 2 && lastIndex(netWorthSoFar(history, year)) >= 0;
+  // Where You're Headed waits for a saving pace (two finished months), unless
+  // a monthly amount was typed in: growth alone looks discouragingly flat.
+  const ownMonthly = useStore((s) => s.settings.outlook.monthly);
+  const paced = netWorthPace(history) != null || ownMonthly != null;
 
   if (preview && !filled && !compared) {
     return (
@@ -244,7 +248,7 @@ function NetWorth({ filled }: { filled?: boolean }) {
           ) : null}
         </Section>
       ) : null}
-      <Waiting needs={some ? null : "Needs a balance"}>
+      <Waiting needs={paced ? null : "Needs 2 months of balances"}>
         <HeadedFromStore />
       </Waiting>
       <Waiting needs={compared ? null : "Needs 2 months of balances"}>
@@ -466,8 +470,6 @@ function HeadedCard({
 
   const now = history[history.length - 1];
   const current = now.end;
-  // Before there's a pace to go on, what you have now simply grows.
-  const early = pace == null && outlook.monthly == null;
   const plan: Plan = makePlan(current, pace, outlook) ?? {
     monthly: 0,
     rate: monthlyRate(outlook.growth),
@@ -610,7 +612,7 @@ function HeadedCard({
         : adds
           ? `Your pace: about ${adds} a month added (your last ${counted} months, less what your money earned), plus ${growth}.`
           : `Assumes ${growth}.`;
-  const note = `${assumes}${early ? " Your own pace is added after two full months of balances." : ""} In today’s money. A direction, not a promise.`;
+  const note = `${assumes} In today’s money. A direction, not a promise.`;
 
   const dueIndex =
     picked === "goal" && status?.due != null && !late
@@ -669,7 +671,7 @@ function HeadedCard({
         items={[
           { label: "Your net worth", color: c.up },
           {
-            label: early ? "With growth" : "At your pace",
+            label: "At your pace",
             color: c.up,
             dashed: true,
           },
