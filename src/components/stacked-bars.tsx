@@ -22,7 +22,8 @@ const RADIUS = 4;
 /**
  * Stacked columns, one per period, like the Health app's stacked activity
  * bars: the biggest category at the bottom, a hairline gap between pieces,
- * rounded tops. Tap a column to pick it; the others dim.
+ * rounded tops. Tap a column to pick it; the others dim. With `below`, each
+ * column also gets one piece under the line (debts), so the line is zero.
  */
 export function StackedBars({
   values,
@@ -30,6 +31,8 @@ export function StackedBars({
   labels,
   selected,
   onSelect,
+  below,
+  belowColor,
   height = 150,
 }: {
   /** values[column][piece], bottom piece first. */
@@ -38,12 +41,19 @@ export function StackedBars({
   labels: string[];
   selected: number;
   onSelect?: (index: number) => void;
+  /** below[column]: one amount drawn under the line, as a positive number. */
+  below?: number[];
+  belowColor?: string;
   height?: number;
 }) {
   const c = useColors();
   const [width, setWidth] = useState(0);
   const onLayout = (e: LayoutChangeEvent) => setWidth(e.nativeEvent.layout.width);
-  const max = Math.max(1, ...values.map((col) => col.reduce((s, v) => s + Math.max(v, 0), 0)));
+  const up = Math.max(0, ...values.map((col) => col.reduce((s, v) => s + Math.max(v, 0), 0)));
+  const down = Math.max(0, ...(below ?? []));
+  const max = Math.max(1, up + down);
+  // Where zero sits: the bottom, unless something hangs below it.
+  const zero = down > 0 ? (up / max) * height : height;
   const n = values.length;
   const slot = n ? width / n : 0;
   const barW = Math.min(36, slot * 0.56);
@@ -55,7 +65,7 @@ export function StackedBars({
           <Svg width={width} height={height} style={StyleSheet.absoluteFill} pointerEvents="none">
             {values.map((col, i) => {
               const x = i * slot + (slot - barW) / 2;
-              let top = height;
+              let top = zero;
               const pieces = col.flatMap((v, k) => (v > 0 ? [{ v, k }] : []));
               return pieces.map(({ v, k }, j) => {
                 const h = Math.max((v / max) * height - (j > 0 ? GAP : 0), 0.5);
@@ -71,6 +81,20 @@ export function StackedBars({
                 }
                 return <Rect key={`${i}-${k}`} x={x} y={y} width={barW} height={h} fill={fill} opacity={opacity} />;
               });
+            })}
+            {below?.map((v, i) => {
+              if (!(v > 0)) return null;
+              const x = i * slot + (slot - barW) / 2;
+              const y = zero + GAP;
+              const h = Math.max((v / max) * height - GAP, 0.5);
+              const opacity = i === selected ? 1 : 0.35;
+              const fill = belowColor ?? c.down;
+              if (h > RADIUS) {
+                const r = RADIUS;
+                const d = `M${x},${y}V${y + h - r}Q${x},${y + h} ${x + r},${y + h}H${x + barW - r}Q${x + barW},${y + h} ${x + barW},${y + h - r}V${y}Z`;
+                return <Path key={`below-${i}`} d={d} fill={fill} opacity={opacity} />;
+              }
+              return <Rect key={`below-${i}`} x={x} y={y} width={barW} height={h} fill={fill} opacity={opacity} />;
             })}
           </Svg>
         ) : null}
@@ -104,7 +128,7 @@ export function StackedBars({
           </Text>
         ))}
       </View>
-      <View style={[styles.base, { top: height, backgroundColor: c.chartGrid }]} />
+      <View style={[styles.base, { top: zero, backgroundColor: c.chartGrid }]} />
     </View>
   );
 }

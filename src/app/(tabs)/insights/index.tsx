@@ -334,6 +334,7 @@ const periodName = (p: Month & { unit: PeriodUnit }) =>
 /** What your assets are made of, period by period, as stacked columns. Tap one for its breakdown. */
 function DistributionCard() {
   const lock = useLock();
+  const c = useColors();
   const money = lock.money;
   const colors = useCategoryColors();
   const today = useToday();
@@ -346,25 +347,28 @@ function DistributionCard() {
   if (d.periods.length === 0 || d.categories.length === 0) return null;
   const last = d.periods.length - 1;
   const at = picked != null && picked <= last ? picked : last;
-  const totalAt = (i: number) => d.values[i].reduce((s, v) => s + v, 0);
+  const assetsAt = (i: number) => d.values[i].reduce((s, v) => s + v, 0);
+  // Debts come off, so the total is net worth.
+  const totalAt = (i: number) => assetsAt(i) - d.debts[i];
   const shareAt = (i: number, k: number) =>
-    totalAt(i) > 0 ? d.values[i][k] / totalAt(i) : 0;
+    assetsAt(i) > 0 ? d.values[i][k] / assetsAt(i) : 0;
   const top = d.categories[0];
 
   // What it all adds up to and how that moved, not the share the list below already shows.
   const whole = (cents: number) => money(cents, { whole: true });
   const total = totalAt(last);
+  const afterDebts = d.debts[last] > 0 ? ", after debts." : ".";
   let sentence =
     d.categories.length > 1
-      ? `${whole(total)} in assets across ${d.categories.length} categories.`
-      : `${whole(total)} in assets, all in ${top.name}.`;
+      ? `${whole(total)} across ${d.categories.length} categories${afterDebts}`
+      : `${whole(total)} in ${top.name}${afterDebts}`;
   if (last > 0) {
     const diff = total - totalAt(0);
     const since = periodName(d.periods[0]);
     sentence =
-      Math.abs(diff) < Math.max(totalAt(0) * 0.01, 100_00)
-        ? `${whole(total)} in assets, about the same as ${since}.`
-        : `${whole(total)} in assets, ${diff > 0 ? "up" : "down"} ${whole(Math.abs(diff))} since ${since}.`;
+      Math.abs(diff) < Math.max(Math.abs(totalAt(0)) * 0.01, 100_00)
+        ? `${whole(total)}, about the same as ${since}.`
+        : `${whole(total)}, ${diff > 0 ? "up" : "down"} ${whole(Math.abs(diff))} since ${since}.`;
   }
 
   return (
@@ -374,7 +378,7 @@ function DistributionCard() {
         sentence,
         "See how what you own is split across cash, investments and more, and how that mix has shifted.",
       )}
-      note="What you own, by category. Debts aren’t included."
+      note="What you own, by category, minus what you owe. It adds up to your net worth."
       {...lock.card}
     >
       <Segmented
@@ -392,6 +396,7 @@ function DistributionCard() {
         labels={d.periods.map(periodLabel)}
         selected={at}
         onSelect={lock.locked ? undefined : setPicked}
+        below={d.debts}
       />
       <View style={styles.mixList}>
         <Text variant="footnote" weight="600" color="secondary">
@@ -418,6 +423,17 @@ function DistributionCard() {
             </View>
           ) : null,
         )}
+        {d.debts[at] > 0 ? (
+          <View style={styles.mixRow}>
+            <View style={[styles.mixDot, { backgroundColor: c.down }]} />
+            <Text numberOfLines={1} style={styles.mixName}>
+              Debts
+            </Text>
+            <Text tabular style={styles.mixValue}>
+              {money(-d.debts[at], { whole: true })}
+            </Text>
+          </View>
+        ) : null}
       </View>
     </InsightCard>
   );

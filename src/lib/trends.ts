@@ -272,6 +272,8 @@ export interface Distribution {
   categories: NWCategory[];
   /** values[period][category]: what was in it at the end of the period, or today for the current one. */
   values: Cents[][];
+  /** debts[period]: everything owed at the end of the period, as a positive amount. */
+  debts: Cents[];
 }
 
 /**
@@ -295,7 +297,7 @@ export function distribution(data: NWData, today: DateKey, unit: PeriodUnit, cou
     return holdingsOn(data, Math.min(end, todayDay));
   });
   const first = rows.findIndex((h) => h.assets.length > 0);
-  if (first < 0) return { periods: [], categories: [], values: [] };
+  if (first < 0) return { periods: [], categories: [], values: [], debts: [] };
   const kept = rows.slice(first);
   const latest = new Map(kept[kept.length - 1].assets.map((a) => [a.category.id, a.total]));
   const seen = new Map<string, NWCategory>();
@@ -310,6 +312,7 @@ export function distribution(data: NWData, today: DateKey, unit: PeriodUnit, cou
       const totals = new Map(h.assets.map((a) => [a.category.id, a.total]));
       return categories.map((c) => totals.get(c.id) ?? 0);
     }),
+    debts: kept.map((h) => h.debtTotal),
   };
 }
 

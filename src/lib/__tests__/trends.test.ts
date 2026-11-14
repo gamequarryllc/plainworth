@@ -149,6 +149,8 @@ test('trends: what you own by category, period by period', () => {
   assert.deepEqual(d.categories.map((c) => c.id), ['inv', 'cash']);
   assert.deepEqual(d.values[0], [0, 1_200_00]);
   assert.deepEqual(d.values[5], [5_000_00, 1_700_00]);
+  // The loan is kept apart, to take off the total.
+  assert.deepEqual(d.debts, [500_00, 500_00, 500_00, 500_00, 300_00, 300_00]);
 
   const q = distribution(nw, '2026-05-20', 'quarter');
   // Q4 2025, Q1 2026, and Q2 so far.
