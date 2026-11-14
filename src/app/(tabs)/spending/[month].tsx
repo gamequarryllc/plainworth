@@ -13,6 +13,7 @@ import { StatTiles, type Tile } from '@/components/stat-tiles';
 import { SwipeGroup, SwipeRow } from '@/components/swipe-row';
 import { Text } from '@/components/text';
 import { useMoney } from '@/hooks/use-money';
+import { features } from '@/lib/features';
 import { currentMonthKey, formatMonth, MONTHS, parseMonthKey, shiftMonth } from '@/lib/dates';
 import { confirm } from '@/lib/dialogs';
 import { haptics } from '@/lib/haptics';
@@ -137,13 +138,15 @@ export default function MonthScreen() {
       <StatTiles tiles={tiles} />
 
       <Section>
-        <Row
-          title="Import Statement"
-          titleColor="tint"
-          leading={<Icon name="square.and.arrow.down" size={18} color={c.tint} />}
-          chevron={false}
-          onPress={() => router.push({ pathname: '/import', params: { month } })}
-        />
+        {features.statementImport ? (
+          <Row
+            title="Import Statement"
+            titleColor="tint"
+            leading={<Icon name="square.and.arrow.down" size={18} color={c.tint} />}
+            chevron={false}
+            onPress={() => router.push({ pathname: '/import', params: { month } })}
+          />
+        ) : null}
         {canFill ? (
           <Row
             title={`Copy Recurring from ${prevName}`}
@@ -155,7 +158,7 @@ export default function MonthScreen() {
             }}
           />
         ) : null}
-        {imported ? (
+        {features.statementImport && imported ? (
           <Row
             title={`Undo Import (${imported.count} ${imported.count === 1 ? 'line' : 'lines'})`}
             titleColor="down"

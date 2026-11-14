@@ -1,4 +1,4 @@
-import { router, useLocalSearchParams } from 'expo-router';
+import { Redirect, router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Switch, View } from 'react-native';
 import type { SFSymbol } from 'sf-symbols-typescript';
@@ -13,6 +13,7 @@ import { StatTiles } from '@/components/stat-tiles';
 import { Text } from '@/components/text';
 import { useMoney } from '@/hooks/use-money';
 import { currentMonthKey, formatDate, MONTHS, parseMonthKey } from '@/lib/dates';
+import { features } from '@/lib/features';
 import { haptics } from '@/lib/haptics';
 import { GROUPS } from '@/lib/spending';
 import {
@@ -48,7 +49,13 @@ type Step = 'pick' | 'reading' | 'review' | 'problem';
  * are read on the phone, the month's lines are sorted into the person's
  * categories, and nothing is added until they've looked the list over.
  */
-export default function ImportScreen() {
+export default function ImportRoute() {
+  // Switched off for this release: a link to /import goes back to Spending.
+  if (!features.statementImport) return <Redirect href="/spending" />;
+  return <ImportScreen />;
+}
+
+function ImportScreen() {
   const params = useLocalSearchParams<{ month: string }>();
   const month = /^\d{4}-\d{2}$/.test(params.month ?? '') ? params.month : currentMonthKey();
   const target = parseMonthKey(month);
