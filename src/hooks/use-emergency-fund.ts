@@ -11,6 +11,8 @@ export function useEmergencyFund(): { fund: EmergencyFund | undefined; status: F
   const fund = normalizeFund(useStore((s) => s.settings.emergencyFund), today);
   const spend = useStore((s) => s.spend);
   const spendCategories = useStore((s) => s.spendCategories);
-  const status = fund ? fundStatus(fund, { spend, spendCategories }, today) : null;
+  const accounts = useStore((s) => s.accounts);
+  const snapshots = useStore((s) => s.snapshots);
+  const status = fund ? fundStatus(fund, { spend, spendCategories, accounts, snapshots }, today) : null;
   return { fund, status };
 }

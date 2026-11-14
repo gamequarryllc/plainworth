@@ -75,7 +75,7 @@ import {
   type PeriodUnit,
   type YearGoals,
 } from "@/lib/trends";
-import { formatMonths, fundStatus, sampleFund } from "@/lib/emergency";
+import { formatMonths, fundBalance, fundStatus, sampleFund } from "@/lib/emergency";
 import { categoryTotals } from "@/lib/spending";
 import type { SpendCategory, SpendingGoal } from "@/lib/types";
 import { SampleContext, useStore } from "@/store";
@@ -960,10 +960,18 @@ function EmergencyFundCard() {
   const sample = useContext(SampleContext);
   const spend = useStore((s) => s.spend);
   const spendCategories = useStore((s) => s.spendCategories);
+  const accounts = useStore((s) => s.accounts);
+  const snapshots = useStore((s) => s.snapshots);
   const real = useEmergencyFund();
-  // Not set up yet: the Pro preview and the sample page show a made-up fund, like every other card.
-  const fund = real.fund ?? (lock.locked || sample ? sampleFund(today) : undefined);
-  const status = real.fund ? real.status : fund ? fundStatus(fund, { spend, spendCategories }, today) : null;
+  // The sample page and the Pro preview (before it's set up) show a made-up
+  // fund, like every other card. A real one can't be read against sample data.
+  const made = sample || (!real.fund && lock.locked);
+  const fund = made ? sampleFund(today) : real.fund;
+  const status = !made
+    ? real.status
+    : fund
+      ? fundStatus(fund, { spend, spendCategories, accounts, snapshots }, today)
+      : null;
   const edit = () => router.push("/emergency-fund");
 
   if (!fund || !status) {
@@ -973,7 +981,7 @@ function EmergencyFundCard() {
         sentence={
           !fund
             ? "How many months could your savings cover?"
-            : fund.saved.length
+            : fundBalance(fund, { accounts, snapshots }, today) != null
               ? "Add what a month costs you."
               : "Add how much you’ve saved."
         }
@@ -992,7 +1000,7 @@ function EmergencyFundCard() {
     );
   }
 
-  const { covered, goal, toGo, balance, target, monthly, history, historyMonths } = status;
+  const { covered, goal, toGo, balance, account, target, monthly, history, historyMonths } = status;
   const max = Math.max(goal * 1.12, covered);
   const shown = history.filter((v) => v != null).length;
   return (
@@ -1002,7 +1010,7 @@ function EmergencyFundCard() {
         `${formatMonths(covered)} of ${goal} months covered.`,
         "See how many months your savings would cover.",
       )}
-      note={`${whole(balance)} saved ÷ ${whole(monthly)} a month, ${
+      note={`${whole(balance)} ${account ? `in ${account.name}` : "saved"} ÷ ${whole(monthly)} a month, ${
         fund.monthly != null ? "the cost you typed in" : "your average spending over recent months"
       }. ${goal} months is ${whole(target)}.`}
       {...lock.card}

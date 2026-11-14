@@ -11,15 +11,28 @@ import { Text } from '@/components/text';
 import { useMoney } from '@/hooks/use-money';
 import { useToday } from '@/hooks/use-today';
 import { confirm } from '@/lib/dialogs';
-import { MONTH_OPTIONS, newFund, normalizeFund, savedNow, SITUATIONS, spendingAverage, withSaved } from '@/lib/emergency';
+import {
+  fundAccount,
+  fundBalance,
+  MONTH_OPTIONS,
+  newFund,
+  normalizeFund,
+  savedNow,
+  SITUATIONS,
+  spendingAverage,
+  withSaved,
+} from '@/lib/emergency';
+import { haptics } from '@/lib/haptics';
+import { summarizeAccounts } from '@/lib/networth';
+import { DEFAULT_NW_SORT, sortAccounts } from '@/lib/sort';
 import type { Cents, EmergencyFund } from '@/lib/types';
 import { useStore } from '@/store';
 import { useColors } from '@/theme';
 
 /**
- * Set up the emergency fund, part of Spending: how much is in it, what a
- * month costs (the spending average unless typed in), and how many months
- * it should cover.
+ * Set up the emergency fund, part of Spending: how much is in it (typed in,
+ * or one Net Worth account's balance), what a month costs (the spending
+ * average unless typed in), and how many months it should cover.
  */
 export default function EmergencyFundScreen() {
   const c = useColors();
@@ -28,12 +41,31 @@ export default function EmergencyFundScreen() {
   const today = useToday();
   const spend = useStore((s) => s.spend);
   const spendCategories = useStore((s) => s.spendCategories);
+  const accounts = useStore((s) => s.accounts);
+  const snapshots = useStore((s) => s.snapshots);
+  const categories = useStore((s) => s.nwCategories);
+  const sort = useStore((s) => s.settings.nwSort) ?? DEFAULT_NW_SORT;
   const stored = useStore((s) => s.settings.emergencyFund);
   const updateSettings = useStore((s) => s.updateSettings);
   const saved = normalizeFund(stored, today);
 
   const [fund, setFund] = useState<EmergencyFund>(() => saved ?? newFund());
   const [amount, setAmount] = useState<Cents | null>(() => (saved ? savedNow(saved) : null));
+  const [picking, setPicking] = useState(false);
+
+  // Any open asset account can hold the fund; it then follows that account's balance.
+  const summaries = summarizeAccounts(accounts, snapshots, categories);
+  const assets = sortAccounts(
+    accounts.filter((a) => !a.closed).map((a) => summaries.get(a.id)!).filter((x) => x.kind === 'asset'),
+    sort,
+  );
+  const linked = assets.some((x) => x.account.id === fund.account) ? fundAccount(fund, accounts) : undefined;
+  const linkedBalance = linked ? fundBalance(fund, { accounts, snapshots }, today) : null;
+  const pickAccount = (id: string | undefined) => {
+    haptics.selection();
+    setFund((f) => ({ ...f, account: id }));
+    setPicking(false);
+  };
 
   const average = spendingAverage({ spend, spendCategories }, today);
   const monthly = fund.monthly ?? average?.amount ?? null;
@@ -41,7 +73,11 @@ export default function EmergencyFundScreen() {
 
   const save = () => {
     let next: EmergencyFund = { ...fund };
-    if (amount != null && amount !== savedNow(fund)) next = withSaved(next, Math.max(0, amount), today);
+    // Amounts typed in are kept while an account is linked, for if it's unlinked later.
+    if (!linked) {
+      delete next.account;
+      if (amount != null && amount !== savedNow(fund)) next = withSaved(next, Math.max(0, amount), today);
+    }
     if (next.monthly == null || next.monthly <= 0) delete next.monthly;
     updateSettings({ emergencyFund: next });
     router.back();
@@ -60,11 +96,52 @@ export default function EmergencyFundScreen() {
       title="Emergency Fund"
       left={[{ label: 'Cancel', icon: 'xmark', onPress: () => router.back() }]}
       right={[{ label: 'Save', icon: 'checkmark', variant: 'done', onPress: save }]}>
-      <Section header="In the Fund" footer="Update it whenever it grows. Each change adds a point to the graph.">
-        <Row
-          title="Saved"
-          accessory={<AmountInput value={amount} onChange={setAmount} accessibilityLabel="Amount saved" />}
-        />
+      <Section
+        header="In the Fund"
+        footer={
+          linked
+            ? `Follows ${linked.name} on Net Worth.`
+            : 'Update it whenever it grows. Each change adds a point to the graph.'
+        }>
+        {linked ? (
+          <Row
+            title="Saved"
+            value={
+              <Text color="secondary" tabular>
+                {linkedBalance != null ? whole(linkedBalance) : '—'}
+              </Text>
+            }
+          />
+        ) : (
+          <Row
+            title="Saved"
+            accessory={<AmountInput value={amount} onChange={setAmount} accessibilityLabel="Amount saved" />}
+          />
+        )}
+        {assets.length ? (
+          <Row
+            title="From Account"
+            value={linked?.name ?? 'None'}
+            chevron={false}
+            accessory={<Icon name="chevron.up.chevron.down" size={14} color={c.tertiary} />}
+            onPress={() => setPicking((v) => !v)}
+          />
+        ) : null}
+        {picking ? (
+          <>
+            <Row title="None" subtitle="Type it in" chevron={false} accessory={linked ? null : check} onPress={() => pickAccount(undefined)} />
+            {assets.map((x) => (
+              <Row
+                key={x.account.id}
+                title={x.account.name}
+                value={whole(x.balance)}
+                chevron={false}
+                accessory={x.account.id === linked?.id ? check : null}
+                onPress={() => pickAccount(x.account.id)}
+              />
+            ))}
+          </>
+        ) : null}
       </Section>
 
       {average ? (

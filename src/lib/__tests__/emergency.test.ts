@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { formatMonths, fundStatus, normalizeFund, sampleFund, savedNow, spendingAverage, withSaved } from '../emergency';
+import { formatMonths, fundBalance, fundStatus, normalizeFund, sampleFund, savedNow, spendingAverage, withSaved } from '../emergency';
 import { emptyData } from '../../store/defaults';
 import type { Data, EmergencyFund } from '../types';
 
@@ -53,12 +53,14 @@ test('a same-day change replaces the earlier one', () => {
   assert.equal(savedNow(f), 2_500_00);
 });
 
-test('the first TestFlight shape becomes the Spending-only one', () => {
+test('the first TestFlight shape keeps its first account', () => {
   assert.deepEqual(normalizeFund({ accounts: [{ id: 'hys' }], situation: 'stake', months: 6 }, '2026-11-14'), {
     saved: [],
+    account: 'hys',
     situation: 'stake',
     months: 6,
   });
+  assert.deepEqual(normalizeFund({ saved: [], account: 'fid', months: 6 }), { saved: [], account: 'fid', months: 6 });
   assert.deepEqual(normalizeFund({ accounts: [], saved: 9_000_00, months: 3, monthly: 3_000_00 }, '2026-11-14'), {
     saved: [{ date: '2026-11-14', amount: 9_000_00 }],
     months: 3,
@@ -77,4 +79,30 @@ test('formatMonths', () => {
   assert.equal(formatMonths(5.14), '5.1');
   assert.equal(formatMonths(0.04), '0');
   assert.equal(formatMonths(12.7), '12');
+});
+
+test('a linked account gives the balance and the graph; spending still gives the monthly cost', () => {
+  const d = data();
+  d.accounts.push({ id: 'fid', name: 'Fidelity', categoryId: 'cash', createdAt: 0, closed: false });
+  d.snapshots.push(
+    { id: 's1', accountId: 'fid', date: '2026-08-10', value: 12_000_00, createdAt: 0 },
+    { id: 's2', accountId: 'fid', date: '2026-11-05', value: 15_840_00, createdAt: 0 },
+  );
+  // Typed amounts stay but don't count while the account is linked.
+  const fund: EmergencyFund = { saved: [{ date: '2026-06-01', amount: 1_00 }], account: 'fid', months: 6 };
+  const s = fundStatus(fund, d, '2026-11-13')!;
+  assert.equal(s.balance, 15_840_00);
+  assert.equal(s.account?.name, 'Fidelity');
+  assert.equal(s.covered, 4);
+  assert.equal(s.history.filter((v) => v != null).length, 4); // Aug, Sep, Oct, Nov
+  assert.equal(s.history[9], 12_000_00 / 3_960_00);
+  // Without spending there's no monthly cost, so no fund.
+  const noSpend = emptyData();
+  noSpend.accounts = d.accounts;
+  noSpend.snapshots = d.snapshots;
+  assert.equal(fundStatus(fund, noSpend, '2026-11-13'), null);
+  assert.equal(fundBalance(fund, noSpend, '2026-11-13'), 15_840_00);
+  // A closed account falls back to the amounts typed in.
+  d.accounts[d.accounts.length - 1] = { ...d.accounts[d.accounts.length - 1], closed: true };
+  assert.equal(fundStatus(fund, d, '2026-11-13')!.balance, 1_00);
 });
