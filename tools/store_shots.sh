@@ -103,4 +103,8 @@ for s in "${shots[@]}"; do
   echo "$file: $size"
 done
 
+# Every link must have changed the screen; identical pictures mean the links didn't open.
+dupes="$(md5 -q "$OUT"/raw/*.png | sort | uniq -d)"
+[ -z "$dupes" ] || { echo "Some screenshots are identical: a link didn't open its screen" >&2; exit 1; }
+
 say "OK: raw screenshots in $OUT/raw"
