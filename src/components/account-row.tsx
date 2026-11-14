@@ -92,7 +92,7 @@ export function TrendRow({
         )
       }
       subtitle={
-        <Text variant="footnote" color="secondary" numberOfLines={1}>
+        <Text variant="caption" color="secondary" numberOfLines={1}>
           {subtitle}
         </Text>
       }
