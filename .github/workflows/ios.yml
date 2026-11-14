@@ -137,6 +137,8 @@ jobs:
     needs: privacy
     if: ${{ startsWith(inputs.mode || 'check', 'screenshots') }}
     runs-on: macos-latest
+    permissions:
+      contents: write
     timeout-minutes: 75
     steps:
       - name: Check out
@@ -182,6 +184,28 @@ jobs:
           name: store-screenshots
           path: ${{ runner.temp }}/shots
           retention-days: 30
+
+      # So they can be looked at on GitHub (and kept with the code that drew them):
+      # store/screenshots/ on the branch the run was started from.
+      - name: Save them to the branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BRANCH: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          rm -rf store/screenshots && mkdir -p store/screenshots
+          cp "$RUNNER_TEMP"/shots/0*.png store/screenshots/
+          git config user.name "Game Quarry LLC"
+          git config user.email gamequarryllc@protonmail.com
+          git add store/screenshots
+          if git diff --cached --quiet; then echo "Screenshots unchanged"; exit 0; fi
+          git commit -q -m "Update the App Store screenshots"
+          for i in 1 2 3 4; do
+            git pull -q --rebase "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "$BRANCH" || true
+            git push -q "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "HEAD:$BRANCH" && exit 0
+            sleep $((i * 5))
+          done
+          echo "::warning::Couldn't save the screenshots to $BRANCH; they are still in the run's Artifacts"
 
   upload:
     needs: shots
