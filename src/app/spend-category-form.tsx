@@ -63,7 +63,7 @@ export default function SpendCategoryFormScreen() {
       title={existing ? 'Edit Category' : 'New Category'}
       left={[{ label: 'Cancel', icon: 'xmark', onPress: () => router.back() }]}
       right={[{ label: 'Save', icon: 'checkmark', variant: 'done', disabled: !valid, onPress: save }]}>
-      <Section footer={taken ? 'You already have a category with this name.' : undefined}>
+      <Section footer={taken ? 'You already have a category with this name.' : undefined} footerWarns>
         <Row
           title={
             <TextInput

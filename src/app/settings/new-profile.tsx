@@ -30,6 +30,7 @@ export default function NewProfileScreen() {
   return (
     <Screen title="New Profile" form right={[{ label: 'Add', variant: 'done', disabled: !ready, onPress: add }]}>
       <Section
+        footerWarns={taken}
         footer={
           taken
             ? 'You already have a profile with this name.'

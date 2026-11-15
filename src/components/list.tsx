@@ -22,6 +22,8 @@ interface SectionProps {
   /** Large header row, e.g. a category name with its total. */
   title?: ReactNode;
   footer?: ReactNode;
+  /** The footer says why the form can't be saved, so it's red instead of gray. */
+  footerWarns?: boolean;
   children?: ReactNode;
   style?: StyleProp<ViewStyle>;
   /** Separator inset from the left, to line up with row text. */
@@ -35,6 +37,7 @@ export function Section({
   headerAccessory,
   title,
   footer,
+  footerWarns,
   children,
   style,
   inset = layout.margin,
@@ -92,7 +95,7 @@ export function Section({
         </View>
       ) : null}
       {typeof footer === "string" ? (
-        <Text variant="footnote" color="secondary" style={styles.footer}>
+        <Text variant="footnote" color={footerWarns ? "down" : "secondary"} style={styles.footer}>
           {footer}
         </Text>
       ) : (
