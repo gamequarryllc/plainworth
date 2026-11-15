@@ -158,7 +158,7 @@ export function formatPercent(ratio: number, opts: { signed?: boolean } = {}): s
  * and simple sums like "120+45.50-10". Returns cents, or null when empty/invalid.
  */
 export function parseAmount(text: string): Cents | null {
-  const cleaned = text.replace(/[^0-9.+\-]/g, '');
+  const cleaned = text.replace(/−/g, '-').replace(/[^0-9.+\-]/g, '');
   if (!cleaned || !/\d/.test(cleaned)) return null;
   const terms = cleaned.match(/[+\-]?[^+\-]+/g);
   if (!terms) return null;
@@ -171,17 +171,6 @@ export function parseAmount(text: string): Cents | null {
   }
   return total;
 }
-
-/** A typed amount with its sign: the number pad has no minus key, so "below zero" is a switch beside the field. */
-export function signedAmount(cents: Cents | null, below: boolean): Cents | null {
-  if (cents == null) return null;
-  return below && cents !== 0 ? -Math.abs(cents) : cents;
-}
-
-/** The switch for a balance under zero: an overdrawn account, or a card that owes you money back. */
-export const belowZeroTitle = (kind: 'asset' | 'liability' | undefined) => (kind === 'liability' ? 'Credit Balance' : 'Below Zero');
-export const belowZeroNote = (kind: 'asset' | 'liability' | undefined) =>
-  kind === 'liability' ? 'You overpaid, so they owe you' : 'The account is overdrawn';
 
 /** A plain number (e.g. a quantity), or null when empty/invalid. */
 export function parseNumber(text: string): number | null {
@@ -216,6 +205,16 @@ export function formatTyping(raw: string, maxDecimals = 2): string {
   const intClean = int.replace(/^0+(?=\d)/, '').slice(0, MAX_DIGITS);
   const grouped = groupDigits(intClean);
   return frac !== undefined ? `${grouped || '0'}.${frac}` : grouped;
+}
+
+/**
+ * Typing over a balance that's below zero. The number pad has no minus key, so
+ * the only minus sign is the saved balance's own: it stays in front wherever
+ * the digits are typed (even before it), and deleting it makes the amount positive.
+ */
+export function formatSignedTyping(raw: string): string {
+  const body = formatTyping(raw);
+  return /[-−]/.test(raw) ? `${MINUS}${body}` : body;
 }
 
 /** The most digits an amount can have before the decimal point. */

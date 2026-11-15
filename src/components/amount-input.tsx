@@ -1,7 +1,7 @@
 import { useState, type Ref } from 'react';
 import { StyleSheet, TextInput, type StyleProp, type TextInputInstance, type TextStyle } from 'react-native';
 
-import { centsToInput, formatTyping, parseAmount } from '@/lib/money';
+import { centsToInput, formatSignedTyping, formatTyping, parseAmount } from '@/lib/money';
 import { useMoney } from '@/hooks/use-money';
 import { type, useColors } from '@/theme';
 
@@ -46,7 +46,7 @@ export function AmountInput({
     <TextInput
       ref={ref}
       value={editing ? text : value ? money(value) : ''}
-      placeholder={editing ? formatTyping(centsToInput(original ?? hint ?? 0)) || '0' : (placeholder ?? money(0, { whole: true, reveal: true }))}
+      placeholder={editing ? formatSignedTyping(centsToInput(original ?? hint ?? 0)) || '0' : (placeholder ?? money(0, { whole: true, reveal: true }))}
       placeholderTextColor={c.tertiary}
       keyboardType="decimal-pad"
       inputAccessoryViewID={inputAccessoryViewID}

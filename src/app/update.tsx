@@ -1,6 +1,6 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
-import { StyleSheet, Switch, TextInput, View } from 'react-native';
+import { StyleSheet, TextInput, View } from 'react-native';
 
 import { BigAmountInput } from '@/components/big-amount-input';
 import { Change } from '@/components/change';
@@ -13,7 +13,7 @@ import { useToday } from '@/hooks/use-today';
 import { relativeDate } from '@/lib/dates';
 import { haptics } from '@/lib/haptics';
 import { liveCurrencySupported, metalName } from '@/lib/metals';
-import { belowZeroNote, belowZeroTitle, centsToInput, formatTyping, parseAmount, parseNumber, signedAmount } from '@/lib/money';
+import { centsToInput, formatTyping, parseAmount, parseNumber } from '@/lib/money';
 import { compareSnapshots } from '@/lib/networth';
 import { useStore } from '@/store';
 import { offerReminder } from '@/store/reminder-offer';
@@ -47,8 +47,6 @@ export default function UpdateBalanceScreen() {
   const [date, setDate] = useState(today);
   const [note, setNote] = useState('');
   const [touched, setTouched] = useState(false);
-  // The number pad has no minus key, so an overdrawn account (or a card that owes you) is a switch.
-  const [below, setBelow] = useState((latest?.value ?? 0) < 0);
 
   if (!account) return <Screen title="Update Balance" />;
 
@@ -61,7 +59,7 @@ export default function UpdateBalanceScreen() {
     ? quantity != null && unitPrice != null
       ? Math.round(quantity * unitPrice)
       : null
-    : signedAmount(parseAmount(text), below);
+    : parseAmount(text);
   const changed = value != null && (!unit || touched);
   const delta = value != null && latest ? value - latest.value : null;
 
@@ -83,7 +81,8 @@ export default function UpdateBalanceScreen() {
     balanceUpdateSaved({ busy: offerReminder() });
   };
 
-  const placeholder = latest ? formatTyping(centsToInput(Math.abs(latest.value))) : '0';
+  // The hint is the last balance. One below zero can't be typed here, so it isn't hinted: the line under the field shows it.
+  const placeholder = latest && latest.value > 0 ? formatTyping(centsToInput(latest.value)) : '0';
 
   return (
     <Screen
@@ -94,7 +93,7 @@ export default function UpdateBalanceScreen() {
       {unit ? (
         <BigAmountInput text={value != null ? formatTyping(centsToInput(value)) : ''} placeholder={placeholder} readOnly />
       ) : (
-        <BigAmountInput text={text} onChangeText={setText} placeholder={placeholder} autoFocus negative={below} />
+        <BigAmountInput text={text} onChangeText={setText} placeholder={placeholder} autoFocus />
       )}
 
       <View style={styles.status}>
@@ -154,13 +153,6 @@ export default function UpdateBalanceScreen() {
 
       <Section>
         {!live ? <Row title="Date" accessory={<DateField value={date} onChange={setDate} maximum={today} />} /> : null}
-        {!unit ? (
-          <Row
-            title={belowZeroTitle(kind)}
-            subtitle={belowZeroNote(kind)}
-            accessory={<Switch value={below} onValueChange={setBelow} accessibilityLabel={belowZeroTitle(kind)} />}
-          />
-        ) : null}
         <Row
           title={
             <TextInput

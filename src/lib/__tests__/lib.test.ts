@@ -3,7 +3,7 @@ import { test } from 'node:test';
 
 import { valueTicks } from '../axis';
 import { addMonths, dayNumber, keyFromDayNumber, shiftMonth } from '../dates';
-import { fitMoney, formatMoney, formatTyping, MAX_DIGITS, parseAmount, roundsToZero, signedAmount, tickLabels } from '../money';
+import { centsToInput, fitMoney, formatMoney, formatSignedTyping, formatTyping, MAX_DIGITS, parseAmount, roundsToZero, tickLabels } from '../money';
 import { buildSeries, seriesByAccount, sliceSeries, seriesChange, summarizeAccounts, totalsOf, updatesByAccount } from '../networth';
 import { DATA_VERSION, emptyData } from '../../store/defaults';
 import { migrate } from '../../store/migrate';
@@ -66,10 +66,22 @@ test('money: nothing that shows as zero gets a sign', () => {
 });
 
 test('money: a balance below zero', () => {
-  assert.equal(signedAmount(125_00, false), 125_00);
-  assert.equal(signedAmount(125_00, true), -125_00);
-  assert.equal(signedAmount(0, true), 0);
-  assert.equal(signedAmount(null, true), null);
+  // A saved balance below zero opens with its minus sign and keeps it while the digits change.
+  assert.equal(formatSignedTyping(centsToInput(-125_00)), '−125');
+  assert.equal(formatSignedTyping(centsToInput(-1234_56)), '−1,234.56');
+  assert.equal(formatSignedTyping('−1,2345'), '−12,345');
+  assert.equal(parseAmount('−1,234.56'), -1234_56);
+  assert.equal(parseAmount(formatSignedTyping(centsToInput(-125_00))), -125_00);
+  // A digit or the decimal key typed in front of the minus doesn't lose it.
+  assert.equal(formatSignedTyping('1−200'), '−1,200');
+  assert.equal(parseAmount(formatSignedTyping('5−200.50')), -5200_50);
+  assert.equal(formatSignedTyping('.−200'), '−0.20');
+  // Deleting the minus makes it positive.
+  assert.equal(formatSignedTyping('125'), '125');
+  assert.equal(formatSignedTyping(centsToInput(125_00)), '125');
+  // A minus alone isn't an amount yet, and zero has no sign.
+  assert.equal(parseAmount(formatSignedTyping('−')), null);
+  assert.equal(Object.is(parseAmount('−0'), -0), false);
 });
 
 test('money: chart labels never repeat, and big amounts fit their column', () => {

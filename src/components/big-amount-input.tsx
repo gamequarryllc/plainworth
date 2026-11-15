@@ -15,8 +15,6 @@ interface Props {
   autoFocus?: boolean;
   /** Show a computed value that can't be typed into. */
   readOnly?: boolean;
-  /** The amount is below zero (an overdrawn account): a minus sign goes before the symbol. */
-  negative?: boolean;
 }
 
 /** The amount's size, and the smallest it shrinks to when it's long. */
@@ -46,13 +44,13 @@ const GAP = 2;
  * keep the caret in view, and when a comma appears it can stay scrolled and cut
  * off the first digit. The symbol sits just left of the measured number.
  */
-export function BigAmountInput({ text, onChangeText, placeholder, autoFocus, readOnly, negative }: Props) {
+export function BigAmountInput({ text, onChangeText, placeholder, autoFocus, readOnly }: Props) {
   const c = useColors();
   const currency = useStore((s) => s.settings.currency);
   const { width } = useWindowDimensions();
   const input = useRef<TextInputInstance>(null);
   const empty = text === '';
-  const symbol = `${negative ? '−' : ''}${currencySymbol(currency)}`;
+  const symbol = currencySymbol(currency);
   const shown = text || placeholder;
   const size = Math.max(MIN_SIZE, Math.min(SIZE, Math.floor((width * 0.84) / ems(shown, symbol))));
   const symbolSize = Math.round(size * SYMBOL_SCALE);
@@ -90,7 +88,7 @@ export function BigAmountInput({ text, onChangeText, placeholder, autoFocus, rea
           autoFocus={autoFocus}
           editable={!readOnly}
           style={[styles.input, styles.field, { fontSize: size, paddingLeft: pad, color: c.text }]}
-          accessibilityLabel={negative ? 'Amount below zero' : 'Amount'}
+          accessibilityLabel="Amount"
         />
         <View pointerEvents="none" style={[styles.symbolBox, { left: Math.max(0, numberLeft - GAP - symW) }]}>
           {/* Its own line height: Text's default (body) one would clip the top of a glyph this big on iOS. */}

@@ -1,6 +1,6 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
-import { StyleSheet, Switch, TextInput } from 'react-native';
+import { StyleSheet, TextInput } from 'react-native';
 
 import { DateField } from '@/components/date-field';
 import { Row, Section } from '@/components/list';
@@ -9,7 +9,7 @@ import { useMoney } from '@/hooks/use-money';
 import { useToday } from '@/hooks/use-today';
 import { formatDate } from '@/lib/dates';
 import { confirm } from '@/lib/dialogs';
-import { belowZeroNote, belowZeroTitle, centsToInput, formatTyping, parseAmount, parseNumber, signedAmount } from '@/lib/money';
+import { centsToInput, formatSignedTyping, formatTyping, parseAmount, parseNumber } from '@/lib/money';
 import { compareSnapshots } from '@/lib/networth';
 import { useStore } from '@/store';
 import { type, useColors } from '@/theme';
@@ -27,9 +27,9 @@ export default function EntryScreen() {
   const deleteSnapshot = useStore((s) => s.deleteSnapshot);
 
   const byQuantity = !!account?.unit && snap?.quantity != null;
-  const [text, setText] = useState(snap ? formatTyping(centsToInput(Math.abs(snap.value))) : '');
-  const [below, setBelow] = useState((snap?.value ?? 0) < 0);
-  const kind = useStore((s) => s.nwCategories.find((x) => x.id === account?.categoryId)?.kind);
+  // An entry that's below zero keeps its minus sign in the field, so saving a new date or note doesn't flip it.
+  // Any other entry can't get one, typed or pasted.
+  const [text, setText] = useState(snap ? formatSignedTyping(centsToInput(snap.value)) : '');
   const [qty, setQty] = useState(snap?.quantity != null ? formatTyping(String(snap.quantity), 6) : '');
   const [price, setPrice] = useState(snap?.unitPrice != null ? formatTyping(centsToInput(snap.unitPrice)) : '');
   const [date, setDate] = useState(snap?.date ?? today);
@@ -61,7 +61,7 @@ export default function EntryScreen() {
     ? quantity != null && unitPrice != null
       ? Math.round(quantity * unitPrice)
       : null
-    : signedAmount(parseAmount(text), below);
+    : parseAmount(text);
 
   const save = () => {
     if (value == null) return;
@@ -132,7 +132,7 @@ export default function EntryScreen() {
             accessory={
               <TextInput
                 value={text}
-                onChangeText={(t) => setText(formatTyping(t))}
+                onChangeText={(t) => setText(snap.value < 0 ? formatSignedTyping(t) : formatTyping(t))}
                 keyboardType="decimal-pad"
                 accessibilityLabel="Balance"
                 style={numeric}
@@ -141,13 +141,6 @@ export default function EntryScreen() {
           />
         ) : null}
         <Row title="Date" accessory={<DateField value={date} onChange={setDate} maximum={latestDay} />} />
-        {!byQuantity ? (
-          <Row
-            title={belowZeroTitle(kind)}
-            subtitle={belowZeroNote(kind)}
-            accessory={<Switch value={below} onValueChange={setBelow} accessibilityLabel={belowZeroTitle(kind)} />}
-          />
-        ) : null}
         <Row
           title={
             <TextInput
