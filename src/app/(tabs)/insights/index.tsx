@@ -1621,7 +1621,7 @@ function WhereItWentCard({ year }: { year: number }) {
       )}
       note={
         canCompare
-          ? `Next to each bar is how much more or less you spent a month than in ${year - 1}.`
+          ? `Under each is how much more or less that is a month than in ${year - 1}.`
           : null
       }
       onPress={() =>
@@ -1649,8 +1649,8 @@ function WhereItWentCard({ year }: { year: number }) {
                 : change == null
                   ? formatPercent(x.share)
                   : roundsToZero(change)
-                    ? "Same"
-                    : signed(change)
+                    ? `Same as ${year - 1}`
+                    : `${signed(change)} vs ${year - 1}`
             }
             // Spending more is the bad direction.
             noteColor={
