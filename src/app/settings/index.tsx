@@ -18,7 +18,7 @@ import { FEEDBACK_EMAIL, feedbackMailto } from '@/lib/feedback';
 import { haptics } from '@/lib/haptics';
 import { CURRENCIES } from '@/lib/money';
 import { cleanName, NAME_MAX, netWorthTitle, possessive } from '@/lib/name';
-import { profileLabel } from '@/lib/profiles';
+import { profileLabel, PROFILE_MAX } from '@/lib/profiles';
 import { askForReminders, reminderPermission, type ReminderPermission } from '@/lib/notifications';
 import { pickTextFile } from '@/lib/pick-file';
 import { firstWeekday, formatReminder, MONTH_DAYS, monthDayName, reminderTimes, WEEKDAYS } from '@/lib/reminders';
@@ -32,6 +32,7 @@ import { openPaywall, restorePurchases, setTestFree, setTestPro, useProStore } f
 import { markReminderOffered, resetReminderOffer } from '@/store/reminder-offer';
 import { resetSample } from '@/store/sample-hidden';
 import { useSync } from '@/store/sync';
+import { loadTestProfile, TEST_SETS } from '@/store/test-data';
 import { layout, type, useColors } from '@/theme';
 
 const DEVICE = Platform.OS === 'android' ? 'phone' : 'iPhone';
@@ -155,6 +156,23 @@ export default function SettingsScreen() {
     if (i != null) loadSampleData([4, 36, 120][i]);
   };
 
+  /** TestFlight only: made-up numbers in a profile of their own, so real ones are never touched. */
+  const onTestData = async () => {
+    const i = await choose({
+      title: 'Load test data?',
+      message: 'Made-up numbers open in a profile of their own. Yours stay as they are.',
+      options: TEST_SETS.map((t) => ({ label: t.label })),
+    });
+    if (i == null) return;
+    const name = loadTestProfile(i);
+    if (!name) {
+      notify('That’s the most profiles', `Plainworth keeps up to ${PROFILE_MAX}. Delete one to add another.`);
+      return;
+    }
+    haptics.success();
+    notify(`${name} is open`, 'Switch back to your own numbers with the person button. Delete the test profile in Settings › Profiles.');
+  };
+
   const currencyName = CURRENCIES.find((x) => x.code === settings.currency)?.name ?? settings.currency;
 
   return (
@@ -258,8 +276,11 @@ export default function SettingsScreen() {
       </Section>
 
       {testStore ? (
-        <Section header="TestFlight" footer="Only in TestFlight. Hides your test purchase so you can see Plainworth as a free user. Turn off to get Pro back.">
+        <Section
+          header="TestFlight"
+          footer="Only in TestFlight. Test as Free hides your test purchase so you can see Plainworth as a free user. Load Test Data opens 3 months, 3 years or 10 years of made-up numbers in their own profile.">
           <Row title="Test as Free" accessory={<Switch value={testFree} onValueChange={setTestFree} />} />
+          <Row title="Load Test Data" titleColor="tint" chevron={false} onPress={onTestData} />
         </Section>
       ) : null}
 
@@ -276,6 +297,13 @@ export default function SettingsScreen() {
             titleColor="tint"
             onPress={onSample}
             chevron={false}
+          />
+          <Row
+            title="Load Test Data"
+            subtitle="In a profile of its own, as TestFlight has it"
+            titleColor="tint"
+            chevron={false}
+            onPress={onTestData}
           />
           <Row
             title="Show Sample Previews Again"

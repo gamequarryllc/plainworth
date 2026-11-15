@@ -24,7 +24,7 @@ export const monthlyRate = (yearly: number) => Math.pow(1 + yearly, 1 / 12) - 1;
 
 /** How much of what you own grows. */
 export interface Mix {
-  /** What's in the categories that grow (Investments, unless changed), today. */
+  /** What's in the categories that grow (see `grows`), today. */
   invested: number;
   /** That as a share of everything you own, 0 to 1. What you add is split the same way. */
   share: number;
@@ -33,9 +33,18 @@ export interface Mix {
 /** Nothing invested: no growth. */
 export const NO_MIX: Mix = { invested: 0, share: 0 };
 
-/** Does this category grow in the look ahead? Investments does; any other asset category can be switched on. */
-export const grows = (c: Pick<NWCategory, 'id' | 'kind' | 'grows'>) =>
-  c.kind === 'asset' && (c.grows ?? c.id === 'investments');
+/** What people call a category of investments when they make their own: "Retirement", "Stocks", "401(k)", "Roth IRA". */
+const INVESTED =
+  /\b(?:(?:invest\w*|retire\w*|stocks?|brokerage|iras?|roth|pension|etfs?|shares|equities|(?:index|mutual) funds?)\b|401\s?\(?k|403\s?\(?b)/i;
+
+/**
+ * Does this category grow in the look ahead? Worked out, never asked: the
+ * built-in Investments category does, and so does an asset category someone
+ * made and named like one. Cash, a home, metals, crypto and the rest hold
+ * their value.
+ */
+export const grows = (c: Pick<NWCategory, 'id' | 'kind' | 'name'>) =>
+  c.kind === 'asset' && (c.id === 'investments' || INVESTED.test(c.name));
 
 export interface Growth extends Mix {
   /** Monthly growth on top of inflation, earned on what's invested. */

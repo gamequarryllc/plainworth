@@ -1,12 +1,11 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
-import { StyleSheet, Switch, TextInput } from 'react-native';
+import { StyleSheet, TextInput } from 'react-native';
 
 import { Row, Section } from '@/components/list';
 import { Screen } from '@/components/screen';
 import { Segmented } from '@/components/segmented';
 import { confirm, notify } from '@/lib/dialogs';
-import { grows as growsByDefault } from '@/lib/outlook';
 import type { CategoryKind } from '@/lib/types';
 import { useStore } from '@/store';
 import { type, useColors } from '@/theme';
@@ -22,8 +21,6 @@ export default function CategoryFormScreen() {
   const deleteNWCategory = useStore((s) => s.deleteNWCategory);
   const [name, setName] = useState(existing?.name ?? '');
   const [kind, setKind] = useState<CategoryKind>(existing?.kind ?? params.kind ?? 'asset');
-  // Only Investments grows in the look ahead, unless another asset category is switched on.
-  const [grows, setGrows] = useState(existing ? growsByDefault(existing) : false);
   const taken = useStore((s) =>
     s.nwCategories.some(
       (x) => x.id !== params.id && x.kind === kind && x.name.trim().toLowerCase() === name.trim().toLowerCase(),
@@ -33,9 +30,8 @@ export default function CategoryFormScreen() {
 
   const save = () => {
     if (!valid) return;
-    const growing = kind === 'asset' && grows;
-    if (existing) updateNWCategory(existing.id, { name: name.trim(), kind, grows: growing });
-    else addNWCategory({ name, kind, grows: growing });
+    if (existing) updateNWCategory(existing.id, { name: name.trim(), kind });
+    else addNWCategory({ name, kind });
     router.back();
   };
 
@@ -96,14 +92,6 @@ export default function CategoryFormScreen() {
           }
         />
       </Section>
-      {kind === 'asset' ? (
-        <Section footer="Your goal and Where You’re Headed count growth on these, like Investments. Everything else holds its value.">
-          <Row
-            title="Grows Like Investments"
-            accessory={<Switch value={grows} onValueChange={setGrows} accessibilityLabel="Grows like investments" />}
-          />
-        </Section>
-      ) : null}
       {existing ? (
         <Section>
           <Row title="Delete Category" titleColor="down" centered onPress={remove} />

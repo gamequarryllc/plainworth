@@ -116,16 +116,17 @@ test('insights: balances below zero keep assets minus debts equal to net worth',
 });
 
 test('insights: how much of what is owned is invested', () => {
-  // Only the Investments category counts unless another is switched on: here it's called "stocks".
-  assert.deepEqual(growingMix(nw, dayNumber('2026-03-31')), { invested: 0, share: 0 });
-  const on = { ...nw, nwCategories: nwCategories.map((c) => (c.id === 'stocks' ? { ...c, grows: true } : c)) };
-  const mix = growingMix(on, dayNumber('2026-03-31'));
+  // A category someone made and named "Investments" counts, like the built-in one.
+  const mix = growingMix(nw, dayNumber('2026-03-31'));
   assert.equal(mix.invested, 10_500_00);
   assert.ok(Math.abs(mix.share - 10_500 / 11_700) < 1e-9);
-  // The built-in Investments category grows without being asked.
+  // Called something that isn't investing, it holds its value like cash.
+  const plain = { ...nw, nwCategories: nwCategories.map((c) => (c.id === 'stocks' ? { ...c, name: 'Collectibles' } : c)) };
+  assert.deepEqual(growingMix(plain, dayNumber('2026-03-31')), { invested: 0, share: 0 });
+  // The built-in Investments category grows whatever it's renamed to.
   const builtIn = {
-    ...nw,
-    nwCategories: nwCategories.map((c) => (c.id === 'stocks' ? { ...c, id: 'investments' } : c)),
+    ...plain,
+    nwCategories: plain.nwCategories.map((c) => (c.id === 'stocks' ? { ...c, id: 'investments' } : c)),
     accounts: accounts.map((a) => (a.categoryId === 'stocks' ? { ...a, categoryId: 'investments' } : a)),
   };
   assert.equal(growingMix(builtIn, dayNumber('2026-03-31')).invested, 10_500_00);

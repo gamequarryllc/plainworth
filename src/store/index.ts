@@ -57,8 +57,8 @@ interface Actions {
   /** Bring metal accounts to fresh prices (per troy ounce). Returns how many entries changed. */
   applySpotPrices(prices: Partial<Record<Metal, Cents>>, today: DateKey): number;
 
-  addNWCategory(input: Pick<NWCategory, 'name' | 'kind' | 'grows'>): ID;
-  updateNWCategory(id: ID, patch: Partial<Pick<NWCategory, 'name' | 'kind' | 'grows'>>): void;
+  addNWCategory(input: Pick<NWCategory, 'name' | 'kind'>): ID;
+  updateNWCategory(id: ID, patch: Partial<Pick<NWCategory, 'name' | 'kind'>>): void;
   deleteNWCategory(id: ID): void;
   moveNWCategory(id: ID, direction: -1 | 1): void;
 
@@ -281,18 +281,12 @@ const realStore = create<Store>()((set, get) => ({
     return updates.length;
   },
 
-  addNWCategory({ name, kind, grows }) {
+  addNWCategory({ name, kind }) {
     const id = newId();
     set((s) => ({
       nwCategories: [
         ...s.nwCategories,
-        {
-          id,
-          name: name.trim(),
-          kind,
-          order: Math.max(-1, ...s.nwCategories.map((c) => c.order)) + 1,
-          ...(grows && kind === 'asset' ? { grows } : null),
-        },
+        { id, name: name.trim(), kind, order: Math.max(-1, ...s.nwCategories.map((c) => c.order)) + 1 },
       ],
     }));
     return id;
