@@ -21,7 +21,7 @@ import type {
   SpendCategory,
 } from '@/lib/types';
 
-import { DATA_VERSION, emptyData } from './defaults';
+import { DATA_VERSION, defaultOutlook, emptyData } from './defaults';
 import { migrate } from './migrate';
 import { activeProfile, dataKey } from './profile-list';
 import { sampleData } from './sample';
@@ -446,7 +446,7 @@ const realStore = create<Store>()((set, get) => ({
           goal: undefined,
           birthYear: undefined,
           name: '',
-          outlook: { ...settings.outlook, monthly: undefined },
+          outlook: defaultOutlook(),
           spendingGoal: undefined,
           emergencyFund: undefined,
         },

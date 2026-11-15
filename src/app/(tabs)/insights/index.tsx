@@ -1635,7 +1635,8 @@ function WhereItWentCard() {
   // Only drawn when some year has spending, and `year` is one of those.
   const top = sp?.categories[0];
   if (!sp || !top) return null;
-  const canCompare = !!spBefore && sp.months >= 2 && spBefore.months >= 2;
+  // The year before needs spending of its own: with only income entered, everything would read as new.
+  const canCompare = !!spBefore?.categories.length && sp.months >= 2 && spBefore.months >= 2;
   const when = year === thisYear ? "this year" : `in ${year}`;
   const lastYearMonthly = new Map(
     spBefore?.categories.map((x) => [x.category.id, x.monthly]) ?? [],

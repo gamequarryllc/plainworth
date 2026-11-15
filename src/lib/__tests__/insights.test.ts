@@ -301,6 +301,11 @@ test('insights: the years Where It Went and Income can show', () => {
   assert.deepEqual(spendingYears({ ...data, spend: { '2025-08': { rent: 900_00 } } }, '2026-01-10'), [2025]);
   assert.deepEqual(spendingYears({ spendCategories: cats, spend: {} }, '2026-01-10'), []);
 
+  // A year with only income is no year to compare spending against: it has months, but nothing spent.
+  const incomeOnly = spendingYear(data, 2023, '2026-11-14')!;
+  assert.equal(incomeOnly.months, 1);
+  assert.equal(incomeOnly.categories.length, 0);
+
   // The year shown: the one picked while it's on offer, otherwise the newest, otherwise this year.
   assert.equal(shownYear([2026, 2024, 2022], null, 2026), 2026);
   assert.equal(shownYear([2026, 2024, 2022], 2024, 2026), 2024);

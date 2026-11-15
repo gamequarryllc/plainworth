@@ -113,7 +113,12 @@ export default function GoalScreen() {
   };
 
   const remove = async () => {
-    const ok = await confirm({ title: 'Remove your goal?', confirmLabel: 'Remove Goal', destructive: true });
+    const ok = await confirm({
+      title: 'Remove your goal?',
+      message: 'Growth, inflation and your monthly pace go back to where they started.',
+      confirmLabel: 'Remove Goal',
+      destructive: true,
+    });
     if (!ok) return;
     // Removing the goal starts over: the next one begins from the usual growth, inflation and pace.
     updateSettings({ goal: undefined, outlook: defaultOutlook() });

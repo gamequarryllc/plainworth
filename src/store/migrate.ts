@@ -47,10 +47,15 @@ export function migrate(raw: unknown): Data {
  */
 function outlookOf(saved: (Partial<Outlook> & { growth?: unknown }) | undefined): Outlook {
   const { growth, ...rest } = saved ?? {};
-  const outlook = { ...defaultOutlook(), ...rest };
-  if (rest.yearlyGrowth == null && typeof growth === 'number' && Number.isFinite(growth)) {
-    outlook.yearlyGrowth = growth + outlook.inflation;
-  }
+  // From a damaged file, anything that isn't a number counts as missing.
+  const number = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
+  const fresh = defaultOutlook();
+  const outlook: Outlook = {
+    inflation: number(rest.inflation) ? rest.inflation : fresh.inflation,
+    yearlyGrowth: number(rest.yearlyGrowth) ? rest.yearlyGrowth : fresh.yearlyGrowth,
+    ...(number(rest.monthly) ? { monthly: rest.monthly } : null),
+  };
+  if (!number(rest.yearlyGrowth) && number(growth)) outlook.yearlyGrowth = growth + outlook.inflation;
   // Kept to what the goal sheet can show, so its steppers never show one number while another is used.
   outlook.yearlyGrowth = snapRate(outlook.yearlyGrowth, GROWTH_MAX);
   outlook.inflation = snapRate(outlook.inflation, INFLATION_MAX);

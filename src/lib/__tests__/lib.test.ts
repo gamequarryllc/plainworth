@@ -382,9 +382,17 @@ test('migrate: growth saved as "on top of inflation" becomes the full yearly fig
   assert.deepEqual(migrate({ version: 5 }).settings.outlook, { inflation: 0.03, yearlyGrowth: 0.07 });
   // The old top of the stepper, 10% on top of 3%, is 13%: inside what the stepper shows now.
   assert.equal(migrate({ version: 5, settings: { outlook: { inflation: 0.03, growth: 0.1 } } }).settings.outlook.yearlyGrowth, 0.13);
+  // The most the old steppers could save, 10% on top of 10%, still converts exactly.
+  assert.equal(migrate({ version: 5, settings: { outlook: { inflation: 0.1, growth: 0.1 } } }).settings.outlook.yearlyGrowth, 0.2);
   // Past the top, it stops at the top; anything odd lands on a half percent.
-  assert.equal(migrate({ version: 5, settings: { outlook: { inflation: 0.1, growth: 0.1 } } }).settings.outlook.yearlyGrowth, 0.15);
-  assert.equal(migrate({ version: 5, settings: { outlook: { inflation: 0.03, yearlyGrowth: 0.4 } } }).settings.outlook.yearlyGrowth, 0.15);
+  assert.equal(migrate({ version: 5, settings: { outlook: { inflation: 0.03, yearlyGrowth: 0.4 } } }).settings.outlook.yearlyGrowth, 0.2);
+  // From a damaged file, a rate that isn't a number counts as missing, and so does a pace that isn't one.
+  const odd = (outlook: unknown) => migrate({ version: 5, settings: { outlook } }).settings.outlook;
+  assert.deepEqual(odd({ inflation: 0.03, yearlyGrowth: null }), { inflation: 0.03, yearlyGrowth: 0.07 });
+  assert.deepEqual(odd({ inflation: null, yearlyGrowth: 0.09 }), { inflation: 0.03, yearlyGrowth: 0.09 });
+  assert.deepEqual(odd({ inflation: '0.03', growth: 0.04 }), { inflation: 0.03, yearlyGrowth: 0.07 });
+  assert.deepEqual(odd({ yearlyGrowth: 'x', growth: 0.05, monthly: '500' }), { inflation: 0.03, yearlyGrowth: 0.08 });
+  assert.deepEqual(odd('nonsense'), { inflation: 0.03, yearlyGrowth: 0.07 });
   assert.equal(migrate({ version: 5, settings: { outlook: { inflation: 0.031, yearlyGrowth: 0.0712 } } }).settings.outlook.yearlyGrowth, 0.07);
   assert.equal(migrate({ version: 5, settings: { outlook: { inflation: 0.031, yearlyGrowth: 0.07 } } }).settings.outlook.inflation, 0.03);
   // Converting twice changes nothing more.

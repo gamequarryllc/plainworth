@@ -45,7 +45,8 @@ export default function WhereItWentScreen() {
   const months = preview ? recentMonths(today) : null;
   const sp = months ? spendingMonths(data, months) : spendingYear(data, year, today);
   const spBefore = months ? null : spendingYear(data, year - 1, today);
-  const canCompare = !!sp && !!spBefore && sp.months >= 2 && spBefore.months >= 2;
+  // The year before needs spending of its own: with only income entered, everything would read as new.
+  const canCompare = !!sp && !!spBefore?.categories.length && sp.months >= 2 && spBefore.months >= 2;
   const lastYearMonthly = new Map(spBefore?.categories.map((x) => [x.category.id, x.monthly]) ?? []);
   const when = months ? `in ${monthsLabel(months)}` : year === now.y ? 'this year' : `in ${year}`;
 
