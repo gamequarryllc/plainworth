@@ -11,7 +11,7 @@ import { useMoney } from '@/hooks/use-money';
 import { useToday } from '@/hooks/use-today';
 import { parseDateKey } from '@/lib/dates';
 import { monthsLabel, recentMonths, spendingMonths, spendingYear } from '@/lib/insights';
-import { formatPercent } from '@/lib/money';
+import { formatPercent, roundsToZero } from '@/lib/money';
 import { categoryTotals, groupTitle } from '@/lib/spending';
 import type { SpendGroup } from '@/lib/types';
 import { useStore } from '@/store';
@@ -72,6 +72,8 @@ export default function WhereItWentScreen() {
             sentence={`${whole(Math.round(total / sp.months))} a month ${when}, ${formatPercent(share)} of your spending.`}>
             {list.map((x) => {
               const change = canCompare ? x.monthly - (lastYearMonthly.get(x.category.id) ?? 0) : null;
+              // Under 50 cents either way shows as $0, so it's the same: no sign, no color.
+              const same = change != null && roundsToZero(change);
               return (
                 <RankRow
                   key={x.category.id}
@@ -79,8 +81,8 @@ export default function WhereItWentScreen() {
                   value={`${whole(x.monthly)}/mo`}
                   share={x.share / top}
                   color={c.bar}
-                  note={change == null ? formatPercent(x.share) : change === 0 ? 'Same' : signed(change)}
-                  noteColor={change == null || change === 0 ? 'secondary' : change > 0 ? 'down' : 'up'}
+                  note={change == null ? formatPercent(x.share) : same ? `Same as ${year - 1}` : `${signed(change)} vs ${year - 1}`}
+                  noteColor={change == null || same ? 'secondary' : change > 0 ? 'down' : 'up'}
                   onPress={preview ? undefined : () => openCategory(x.category.id)}
                 />
               );
@@ -91,7 +93,7 @@ export default function WhereItWentScreen() {
       <Text variant="footnote" color="secondary" style={styles.footer}>
         {`Amounts are a month, on average over ${counted}.${preview ? '' : ' Tap one to see it month by month.'}`}
         {canCompare
-          ? ` Next to each bar is how much more or less you spent a month than in ${year - 1}.`
+          ? ` Under each is how much more or less that is a month than in ${year - 1}.`
           : ' Next to each bar is its share of your spending.'}
       </Text>
       {preview ? null : (
