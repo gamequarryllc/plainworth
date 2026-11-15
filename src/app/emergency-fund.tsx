@@ -160,7 +160,6 @@ export default function EmergencyFundScreen() {
               <AmountInput
                 value={fund.monthly ?? null}
                 onChange={(v) => setFund((f) => ({ ...f, monthly: v ?? undefined }))}
-                placeholder="$0"
                 accessibilityLabel="Monthly costs"
               />
             }

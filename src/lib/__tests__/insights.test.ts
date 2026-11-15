@@ -5,6 +5,7 @@ import {
   categoryChangesBetween,
   debtBetween,
   firstYear,
+  growingMix,
   holdingsOn,
   monthsLabel,
   monthsSpan,
@@ -93,6 +94,43 @@ test('insights: what was owned and owed on a day', () => {
     holdingsOn(nw, dayNumber('2026-01-31')).assets.map((x) => x.category.id),
     ['cash'],
   );
+});
+
+test('insights: balances below zero keep assets minus debts equal to net worth', () => {
+  const data = {
+    nwCategories,
+    accounts,
+    snapshots: [
+      // Overdrawn by $200, $10,000 invested, and a loan overpaid by $50.
+      snap('a', '2026-06-01', -200_00),
+      snap('b', '2026-06-01', 10_000_00),
+      snap('c', '2026-06-01', -50_00),
+    ],
+  };
+  const h = holdingsOn(data, dayNumber('2026-06-30'));
+  assert.deepEqual(h.assets.map((x) => x.category.id), ['stocks']);
+  assert.equal(h.assetTotal, 10_000_00);
+  // The overdraft is owed; the overpayment comes off what's owed.
+  assert.equal(h.debtTotal, 200_00 - 50_00);
+  assert.equal(h.assetTotal - h.debtTotal, -200_00 + 10_000_00 + 50_00);
+});
+
+test('insights: how much of what is owned is invested', () => {
+  // Only the Investments category counts unless another is switched on: here it's called "stocks".
+  assert.deepEqual(growingMix(nw, dayNumber('2026-03-31')), { invested: 0, share: 0 });
+  const on = { ...nw, nwCategories: nwCategories.map((c) => (c.id === 'stocks' ? { ...c, grows: true } : c)) };
+  const mix = growingMix(on, dayNumber('2026-03-31'));
+  assert.equal(mix.invested, 10_500_00);
+  assert.ok(Math.abs(mix.share - 10_500 / 11_700) < 1e-9);
+  // The built-in Investments category grows without being asked.
+  const builtIn = {
+    ...nw,
+    nwCategories: nwCategories.map((c) => (c.id === 'stocks' ? { ...c, id: 'investments' } : c)),
+    accounts: accounts.map((a) => (a.categoryId === 'stocks' ? { ...a, categoryId: 'investments' } : a)),
+  };
+  assert.equal(growingMix(builtIn, dayNumber('2026-03-31')).invested, 10_500_00);
+  // Nothing owned yet.
+  assert.deepEqual(growingMix(nw, dayNumber('2025-01-01')), { invested: 0, share: 0 });
 });
 
 const spendCategories: SpendCategory[] = [

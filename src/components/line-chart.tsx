@@ -24,6 +24,8 @@ interface Props {
   /** Faint dashed gridlines, labeled on the left with this (leave out to show them unlabeled, e.g. when amounts are hidden). */
   grid?: boolean;
   formatTick?: (value: number) => string;
+  /** Labels for all the gridlines at once, when they need to be told apart from each other. Wins over `formatTick`. */
+  formatTicks?: (values: number[]) => string[];
   /** The date and value shown by the finger while dragging. */
   tip?: (index: number) => ChartTipContent | null;
 }
@@ -40,7 +42,7 @@ const HOLD_MS = 250;
 const UPDOWN = 8;
 
 /** A minimal line chart in the style of Stocks: no axes, drag to read values. */
-export function LineChart({ points, color, height = 160, baseline, onScrub, axis, grid, formatTick, tip }: Props) {
+export function LineChart({ points, color, height = 160, baseline, onScrub, axis, grid, formatTick, formatTicks, tip }: Props) {
   const c = useColors();
   const gradientId = `fill${useId().replace(/[^a-zA-Z0-9]/g, '')}`;
   const [width, setWidth] = useState(0);
@@ -84,7 +86,7 @@ export function LineChart({ points, color, height = 160, baseline, onScrub, axis
     min = ticks[0];
     max = ticks[ticks.length - 1];
   }
-  const tickLabels = formatTick ? ticks.map(formatTick) : [];
+  const tickLabels = formatTicks ? formatTicks(ticks) : formatTick ? ticks.map(formatTick) : [];
   // Room on the left for the labels, which line up with the page's text.
   const gutter = tickLabels.length
     ? layout.margin + Math.max(...tickLabels.map((t) => t.length)) * TICK_CHAR + 6

@@ -12,7 +12,7 @@ import { useTabButtons } from '@/components/tab-buttons';
 import { Text } from '@/components/text';
 import { useMoney } from '@/hooks/use-money';
 import { currentMonthKey, MONTHS, MONTHS_SHORT, parseMonthKey } from '@/lib/dates';
-import { formatPercent } from '@/lib/money';
+import { fitMoney, formatPercent, MASK, roundsToZero } from '@/lib/money';
 import { earnedTotals, yearSummary } from '@/lib/spending';
 import { useStore } from '@/store';
 import { useSampleOn } from '@/store/sample-hidden';
@@ -39,6 +39,7 @@ function SpendingScreen({ sample }: { sample?: boolean }) {
   const spend = useStore((s) => s.spend);
   const spendCategories = useStore((s) => s.spendCategories);
   const hidden = useStore((s) => s.settings.hideAmounts);
+  const currency = useStore((s) => s.settings.currency);
   const now = parseMonthKey(currentMonthKey());
   const [pickedYear, setYear] = useState(now.year);
   // Up to this year, or further only if something was already entered for a later year:
@@ -83,7 +84,13 @@ function SpendingScreen({ sample }: { sample?: boolean }) {
   const shown = summary.months.map((m, i) => ({ m, i }));
 
   const dash: TableCell = { text: '—', color: 'tertiary' };
-  const signed = (v: number): TableCell => ({ text: whole(v), color: v > 0 ? 'up' : v < 0 ? 'down' : undefined });
+  // The columns are narrow: an amount in the millions is shortened ("$1.47M") instead of being cut off.
+  const cell = (v: number) => (hidden ? MASK : fitMoney(v, currency, 9));
+  // A few cents either way shows as $0, with no color.
+  const signed = (v: number): TableCell => ({
+    text: cell(v),
+    color: roundsToZero(v) ? undefined : v > 0 ? 'up' : 'down',
+  });
   // Income first: what came in, then where it went (spent, saved).
   const columns = [...(hasIncome ? ['Income'] : []), 'Spent', 'Saved'];
   const rows: TableRow[] = shown.map(({ m, i }) => {
@@ -94,8 +101,8 @@ function SpendingScreen({ sample }: { sample?: boolean }) {
       muted: !m.hasData && isFuture(i),
       cells: m.hasData
         ? [
-            ...(hasIncome ? [m.income > 0 ? { text: whole(m.income) } : dash] : []),
-            { text: whole(m.expenses) },
+            ...(hasIncome ? [m.income > 0 ? { text: cell(m.income) } : dash] : []),
+            { text: cell(m.expenses) },
             m.income > 0 ? signed(saved) : dash,
           ]
         : [...(hasIncome ? [null] : []), isFuture(i) ? null : dash, null],
@@ -110,8 +117,8 @@ function SpendingScreen({ sample }: { sample?: boolean }) {
         key: 'total',
         name: 'Total',
         cells: [
-          ...(hasIncome ? [{ text: whole(summary.income) }] : []),
-          { text: whole(summary.expenses) },
+          ...(hasIncome ? [{ text: cell(summary.income) }] : []),
+          { text: cell(summary.expenses) },
           hasIncome ? signed(earned.net) : dash,
         ],
       }

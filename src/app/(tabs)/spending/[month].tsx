@@ -17,7 +17,7 @@ import { features } from '@/lib/features';
 import { currentMonthKey, formatMonth, MONTHS, parseMonthKey, shiftMonth } from '@/lib/dates';
 import { confirm } from '@/lib/dialogs';
 import { haptics } from '@/lib/haptics';
-import { formatPercent } from '@/lib/money';
+import { formatPercent, roundsToZero } from '@/lib/money';
 import { categoriesForMonth, GROUPS, monthTotals, type MonthTotals } from '@/lib/spending';
 import type { SpendCategory } from '@/lib/types';
 import { useStore } from '@/store';
@@ -71,9 +71,10 @@ export default function MonthScreen() {
   );
 
   const vsPrev = (now: number, before: number): string | undefined => {
-    if (!prevTotals.hasData) return undefined;
+    // Nothing entered on this side yet: there's nothing to compare.
+    if (!prevTotals.hasData || now === 0) return undefined;
     const d = now - before;
-    if (d === 0) return `Same as ${prevName.slice(0, 3)}`;
+    if (roundsToZero(d)) return `Same as ${prevName.slice(0, 3)}`;
     return `${money(d, { signed: true, whole: true })} vs ${prevName.slice(0, 3)}`;
   };
   const tiles: Tile[] = [

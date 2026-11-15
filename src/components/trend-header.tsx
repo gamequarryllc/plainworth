@@ -3,6 +3,7 @@ import { Pressable, StyleSheet } from 'react-native';
 
 import { dayNumber, formatDate, formatTime, keyFromDayNumber, parseDateKey } from '@/lib/dates';
 import { rangeCaption, rangeStart, seriesChange, sliceSeries, type SeriesPoint } from '@/lib/networth';
+import { tickLabels } from '@/lib/money';
 import type { DateKey, RangeKey } from '@/lib/types';
 import { useAnimatedNumber } from '@/hooks/use-animated-number';
 import { useMoney } from '@/hooks/use-money';
@@ -44,6 +45,7 @@ export function TrendHeader({
   const range = useStore((s) => s.settings.nwRange);
   const updateSettings = useStore((s) => s.updateSettings);
   const hidden = useStore((s) => s.settings.hideAmounts);
+  const currency = useStore((s) => s.settings.currency);
   const [scrub, setScrub] = useState<number | null>(null);
   const animated = useAnimatedNumber(current);
   // Without Pro, dragging reads exact values only on All. Other ranges show a
@@ -110,7 +112,7 @@ export function TrendHeader({
           points={points}
           color={good ? c.up : c.down}
           grid
-          formatTick={hidden ? undefined : (v) => money(v, { compact: true, whole: true })}
+          formatTicks={hidden ? undefined : (values) => tickLabels(values, currency)}
           onScrub={onScrub}
           tip={tip}
           axis

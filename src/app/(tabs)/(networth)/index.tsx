@@ -84,7 +84,9 @@ function NetWorthScreen({ sample }: { sample?: boolean }) {
   const currency = useStore((s) => s.settings.currency);
   const payoffOrder = useStore((s) => s.settings.payoffOrder);
   const sort = useStore((s) => s.settings.nwSort) ?? DEFAULT_NW_SORT;
-  const title = netWorthTitle(useStore((s) => s.settings.name));
+  const name = useStore((s) => s.settings.name);
+  // The made-up sample isn't anyone's: it never goes under a person's or a profile's name.
+  const title = sample ? "Net Worth" : netWorthTitle(name);
   const updateSettings = useStore((s) => s.updateSettings);
   // App Store screenshot builds: plainworth:///?shot=debts opens at the debts.
   const shot = useLocalSearchParams<{ shot?: string }>().shot;

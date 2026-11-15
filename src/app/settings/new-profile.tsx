@@ -6,6 +6,8 @@ import { Row, Section } from '@/components/list';
 import { Screen } from '@/components/screen';
 import { haptics } from '@/lib/haptics';
 import { cleanName, NAME_MAX } from '@/lib/name';
+import { profileLabel } from '@/lib/profiles';
+import { useProfiles } from '@/store/profile-list';
 import { addProfile, switchProfile } from '@/store/profiles';
 import { type, useColors } from '@/theme';
 
@@ -13,7 +15,10 @@ import { type, useColors } from '@/theme';
 export default function NewProfileScreen() {
   const c = useColors();
   const [name, setName] = useState('');
-  const ready = cleanName(name).length > 0;
+  const list = useProfiles((s) => s.list);
+  // Two profiles with one name can't be told apart in the switcher.
+  const taken = list.some((p) => profileLabel(p, list).toLowerCase() === cleanName(name).toLowerCase());
+  const ready = cleanName(name).length > 0 && !taken;
 
   const add = () => {
     if (!ready) return;
@@ -24,7 +29,12 @@ export default function NewProfileScreen() {
 
   return (
     <Screen title="New Profile" form right={[{ label: 'Add', variant: 'done', disabled: !ready, onPress: add }]}>
-      <Section footer="It starts empty and opens right away. Your other profiles stay as they are.">
+      <Section
+        footer={
+          taken
+            ? 'You already have a profile with this name.'
+            : 'It starts empty and opens right away. Your other profiles stay as they are.'
+        }>
         <Row
           title="Name"
           accessory={

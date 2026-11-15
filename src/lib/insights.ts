@@ -1,5 +1,6 @@
 import { dayNumber, monthKey, MONTHS, parseDateKey, parseMonthKey } from './dates';
 import { kindOf, seriesByAccount, type SeriesPoint } from './networth';
+import { grows, type Mix } from './outlook';
 import { earnedTotals, monthTotals, savingsRate, yearSummary, type MonthTotals } from './spending';
 import type { Account, Cents, Data, DateKey, ID, MonthKey, NWCategory, SpendCategory, SpendGroup } from './types';
 
@@ -137,7 +138,7 @@ function accountSigns(accounts: Account[], categories: NWCategory[]): Map<ID, nu
 export interface Holding {
   category: NWCategory;
   total: Cents;
-  /** Share of all assets (or of all debts). */
+  /** Share of the assets (or debts) listed. */
   share: number;
 }
 
@@ -170,7 +171,26 @@ export function holdingsOn(
   };
   const assets = rows('asset');
   const debts = rows('liability');
-  return { assets: assets.list, debts: debts.list, assetTotal: assets.sum, debtTotal: debts.sum };
+  // A category under zero isn't listed, but it still counts: an overdrawn
+  // account is money owed, and a card with a credit takes away from what's
+  // owed. That keeps assets minus debts equal to net worth.
+  const under = (kind: NWCategory['kind']) =>
+    data.nwCategories
+      .filter((c) => c.kind === kind)
+      .reduce((s, c) => s + Math.min(totals.get(c.id) ?? 0, 0), 0);
+  return {
+    assets: assets.list,
+    debts: debts.list,
+    assetTotal: assets.sum,
+    debtTotal: debts.sum - under('asset') + under('liability'),
+  };
+}
+
+/** How much of what's owned on a day is invested (in a category that grows), for the look ahead. */
+export function growingMix(data: Pick<Data, 'accounts' | 'snapshots' | 'nwCategories'>, day: number): Mix {
+  const held = holdingsOn(data, day);
+  const invested = held.assets.reduce((s, r) => (grows(r.category) ? s + r.total : s), 0);
+  return { invested, share: held.assetTotal > 0 ? invested / held.assetTotal : 0 };
 }
 
 export interface CategoryChange {

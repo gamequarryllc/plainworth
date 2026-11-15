@@ -51,18 +51,66 @@ export interface MoneyOptions {
 }
 
 export function formatMoney(cents: Cents, currency: string, opts: MoneyOptions = {}): string {
-  const negative = cents < 0;
-  let body: string;
-  if (opts.compact && Math.abs(cents) >= 100_000) {
-    body = currencySymbol(currency) + compactNumber(Math.abs(cents) / 100);
-  } else {
-    body = formatAbs(cents, currency, opts.whole ? 0 : currencyDecimals(currency));
-  }
-  if (opts.signed) return `${negative ? MINUS : '+'}${body}`;
-  return negative ? `${MINUS}${body}` : body;
+  const compact = !!opts.compact && Math.abs(cents) >= 100_000;
+  const decimals = opts.whole ? 0 : currencyDecimals(currency);
+  const body = compact
+    ? currencySymbol(currency) + compactNumber(Math.abs(cents) / 100)
+    : formatAbs(cents, currency, decimals);
+  // An amount that shows as zero gets no sign: 40 cents over is "$0", not "−$0".
+  if (!compact && showsAsZero(cents, decimals)) return body;
+  if (opts.signed) return `${cents < 0 ? MINUS : '+'}${body}`;
+  return cents < 0 ? `${MINUS}${body}` : body;
 }
 
-function compactNumber(value: number): string {
+/** True when an amount rounds to zero at the digits it's shown with, e.g. 40 cents shown in whole dollars. */
+export function showsAsZero(cents: Cents, decimals: number): boolean {
+  return Math.round((Math.abs(cents) / 100) * 10 ** decimals) === 0;
+}
+
+/** Whether a whole-dollar change is worth a sign and a color: under 50 cents either way it isn't. */
+export const roundsToZero = (cents: Cents) => showsAsZero(cents, 0);
+
+/**
+ * An amount for a narrow column: whole, unless that runs past `maxChars`, then
+ * shortened ("$1.47M") so it's never cut off.
+ */
+export function fitMoney(cents: Cents, currency: string, maxChars: number, opts: { signed?: boolean } = {}): string {
+  const full = formatMoney(cents, currency, { whole: true, signed: opts.signed });
+  if (full.length <= maxChars || Math.abs(cents) < 100_000) return full;
+  const sign = cents < 0 ? MINUS : opts.signed ? '+' : '';
+  for (const digits of [2, 1, 0]) {
+    const short = `${sign}${currencySymbol(currency)}${compactNumber(Math.abs(cents) / 100, digits)}`;
+    if (short.length <= maxChars || digits === 0) return short;
+  }
+  return full;
+}
+
+/**
+ * Labels for a chart's gridlines. Short ("$10K") when that tells them apart;
+ * when the lines are close together ($10,000 to $10,030) it adds digits until
+ * no two read the same.
+ */
+export function tickLabels(values: Cents[], currency: string): string[] {
+  const symbol = currencySymbol(currency);
+  const short = (digits: number) => (v: Cents) =>
+    Math.abs(v) >= 100_000
+      ? `${v < 0 ? MINUS : ''}${symbol}${compactNumber(Math.abs(v) / 100, digits)}`
+      : formatMoney(v, currency, { whole: true });
+  const tries: ((v: Cents) => string)[] = [
+    short(1),
+    short(2),
+    (v) => formatMoney(v, currency, { whole: true }),
+    (v) => formatMoney(v, currency),
+  ];
+  let labels: string[] = [];
+  for (const format of tries) {
+    labels = values.map(format);
+    if (new Set(labels).size === labels.length) break;
+  }
+  return labels;
+}
+
+function compactNumber(value: number, digits = 1): string {
   const units: [number, string][] = [
     [1e12, 'T'],
     [1e9, 'B'],
@@ -72,7 +120,9 @@ function compactNumber(value: number): string {
   for (const [size, suffix] of units) {
     if (value >= size) {
       const n = value / size;
-      return `${n >= 100 ? Math.round(n) : n.toFixed(1).replace(/\.0$/, '')}${suffix}`;
+      // One decimal by default, and none from 100 up ("$150K"); more only when asked for.
+      const shown = digits === 1 && n >= 100 ? String(Math.round(n)) : String(parseFloat(n.toFixed(digits)));
+      return `${shown}${suffix}`;
     }
   }
   return String(Math.round(value));
@@ -122,6 +172,17 @@ export function parseAmount(text: string): Cents | null {
   return total;
 }
 
+/** A typed amount with its sign: the number pad has no minus key, so "below zero" is a switch beside the field. */
+export function signedAmount(cents: Cents | null, below: boolean): Cents | null {
+  if (cents == null) return null;
+  return below && cents !== 0 ? -Math.abs(cents) : cents;
+}
+
+/** The switch for a balance under zero: an overdrawn account, or a card that owes you money back. */
+export const belowZeroTitle = (kind: 'asset' | 'liability' | undefined) => (kind === 'liability' ? 'Credit Balance' : 'Below Zero');
+export const belowZeroNote = (kind: 'asset' | 'liability' | undefined) =>
+  kind === 'liability' ? 'You overpaid, so they owe you' : 'The account is overdrawn';
+
 /** A plain number (e.g. a quantity), or null when empty/invalid. */
 export function parseNumber(text: string): number | null {
   const cleaned = text.replace(/[^0-9.]/g, '');
@@ -142,14 +203,23 @@ export function centsToInput(cents: Cents | null | undefined): string {
  * decimals, thousands separators added as you type.
  */
 export function formatTyping(raw: string, maxDecimals = 2): string {
-  let s = raw.replace(/[^0-9.]/g, '');
+  // In much of the world the number pad's decimal key is a comma. The field
+  // groups thousands with commas itself, so a comma just typed is the one at
+  // the very end: that one is the decimal point.
+  let typed = raw;
+  if (maxDecimals > 0 && typed.endsWith(',') && !typed.includes('.')) typed = `${typed.slice(0, -1)}.`;
+  let s = typed.replace(/[^0-9.]/g, '');
   const dot = s.indexOf('.');
   if (dot !== -1) s = s.slice(0, dot + 1) + s.slice(dot + 1).replace(/\./g, '').slice(0, maxDecimals);
   const [int, frac] = s.split('.');
-  const intClean = int.replace(/^0+(?=\d)/, '');
+  // Past 12 digits (a trillion) it's a held key, not a balance: the extra digits are dropped.
+  const intClean = int.replace(/^0+(?=\d)/, '').slice(0, MAX_DIGITS);
   const grouped = groupDigits(intClean);
   return frac !== undefined ? `${grouped || '0'}.${frac}` : grouped;
 }
+
+/** The most digits an amount can have before the decimal point. */
+export const MAX_DIGITS = 12;
 
 export const MASK = '••••••';
 

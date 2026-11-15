@@ -45,7 +45,7 @@ interface Props {
 }
 
 /** Room on the right for the gridline labels. */
-const AXIS = 40;
+const AXIS = 44;
 /** Space above the top gridline so its label isn't cut off. */
 const TOP = 8;
 const RADIUS = 4;

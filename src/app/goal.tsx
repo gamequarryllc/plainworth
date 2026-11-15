@@ -11,10 +11,11 @@ import { Segmented } from '@/components/segmented';
 import { Text } from '@/components/text';
 import { useMoney } from '@/hooks/use-money';
 import { useToday } from '@/hooks/use-today';
-import { parseDateKey } from '@/lib/dates';
+import { dayNumber, parseDateKey } from '@/lib/dates';
 import { confirm } from '@/lib/dialogs';
 import { centsToInput, formatTyping, parseAmount } from '@/lib/money';
-import { goalStatus, inFutureMoney, makePlan, monthlyRate, ratePercent, type Plan } from '@/lib/outlook';
+import { growingMix } from '@/lib/insights';
+import { goalStatus, growthOf, inFutureMoney, makePlan, ratePercent, type Mix, type Plan } from '@/lib/outlook';
 import { netWorthHistory, netWorthPace, shift } from '@/lib/trends';
 import type { NetWorthGoal, Outlook } from '@/lib/types';
 import { useStore } from '@/store';
@@ -80,10 +81,11 @@ export default function GoalScreen() {
   const current = now?.end ?? 0;
   const pace = netWorthPace(history)?.perMonth ?? null;
   const draftOutlook: Outlook = { inflation, growth, ...(monthly != null ? { monthly } : null) };
-  const plan = makePlan(current, pace, draftOutlook);
-  const estimate = makePlan(current, pace, { inflation, growth });
+  const mix = growingMix({ accounts, snapshots, nwCategories }, dayNumber(today));
+  const plan = makePlan(current, pace, draftOutlook, mix);
+  const estimate = makePlan(current, pace, { inflation, growth }, mix);
   const birth = when === 'age' && bornOk ? bornNum : undefined;
-  const status = draft && now ? goalStatus(draft, birth, current, plan, monthlyRate(growth), now.year, now.month) : null;
+  const status = draft && now ? goalStatus(draft, birth, current, plan, growthOf({ growth }, mix), now.year, now.month) : null;
 
   const save = () => {
     if (!canSave) return;
@@ -186,7 +188,7 @@ export default function GoalScreen() {
         </Section>
       ) : null}
 
-      <Section header="Assumptions" footer={assumptionsNote(growth, inflation, estimate)}>
+      <Section header="Assumptions" footer={assumptionsNote(growth, inflation, estimate, mix)}>
         <Row
           title="You Add Each Month"
           subtitle={monthly != null ? 'Your number' : estimate ? 'Worked out from your pace' : 'Enter what you save'}
@@ -194,7 +196,7 @@ export default function GoalScreen() {
             <AmountInput
               value={monthly}
               onChange={setMonthly}
-              placeholder={estimate ? whole(roughly(estimate.monthly)) : '$0'}
+              placeholder={estimate ? whole(roughly(estimate.monthly)) : undefined}
               accessibilityLabel="What you add each month"
             />
           }
@@ -204,7 +206,7 @@ export default function GoalScreen() {
         ) : null}
         <Row
           title="Growth"
-          subtitle="On top of inflation"
+          subtitle="Investments only"
           accessory={
             <MiniStepper value={growth} options={RATES} onChange={setGrowth} format={ratePercent} accessibilityLabel="growth" />
           }
@@ -235,11 +237,13 @@ export default function GoalScreen() {
   );
 }
 
-function assumptionsNote(growth: number, inflation: number, estimate: Plan | null): string {
+function assumptionsNote(growth: number, inflation: number, estimate: Plan | null, mix: Mix): string {
   const before = Math.round(((1 + growth) * (1 + inflation) - 1) * 100);
   return (
-    `${ratePercent(growth)} growth on top of ${ratePercent(inflation)} inflation is about ${before}% a year before inflation. ` +
-    'Lower it if much of what you own is cash or a home. ' +
+    `Only what’s in Investments grows: ${ratePercent(growth)} on top of ${ratePercent(inflation)} inflation, about ${before}% a year before inflation. ` +
+    (mix.invested > 0
+      ? 'Cash, a home and everything else hold their value. '
+      : 'Nothing is in Investments yet, so no growth is counted. ') +
     (estimate
       ? 'What you add each month is worked out from your pace: what your net worth went up in an average month, less what your money would have earned. Type your own if you know it.'
       : 'Once you’ve updated your balances for a couple of months, Plainworth can work this out from your pace.')

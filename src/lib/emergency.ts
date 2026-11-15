@@ -181,6 +181,8 @@ export function fundStatus(fund: EmergencyFund, data: FundData, today: DateKey):
 
 /** "5.1": one decimal under 10 months, whole months after. */
 export function formatMonths(n: number): string {
+  // Tiny costs against real savings: "1,100,000 months" says nothing more than this.
+  if (n >= 1000) return '999+';
   if (n >= 10) return String(Math.floor(n));
   return (Math.floor(n * 10) / 10).toFixed(1).replace(/\.0$/, '');
 }

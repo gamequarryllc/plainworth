@@ -25,7 +25,14 @@ export default function SpendCategoryFormScreen() {
   const [name, setName] = useState(existing?.name ?? '');
   const [group, setGroup] = useState<SpendGroup>(existing?.group ?? params.group ?? 'variable');
   const [hidden, setHidden] = useState(existing?.hidden ?? false);
-  const valid = name.trim().length > 0;
+  // Two categories with one name in the same list can't be told apart.
+  const taken = useStore((s) =>
+    s.spendCategories.some(
+      (x) =>
+        x.id !== params.id && !x.hidden && x.group === group && x.name.trim().toLowerCase() === name.trim().toLowerCase(),
+    ),
+  );
+  const valid = name.trim().length > 0 && !taken;
 
   const save = () => {
     if (!valid) return;
@@ -56,7 +63,7 @@ export default function SpendCategoryFormScreen() {
       title={existing ? 'Edit Category' : 'New Category'}
       left={[{ label: 'Cancel', icon: 'xmark', onPress: () => router.back() }]}
       right={[{ label: 'Save', icon: 'checkmark', variant: 'done', disabled: !valid, onPress: save }]}>
-      <Section>
+      <Section footer={taken ? 'You already have a category with this name.' : undefined}>
         <Row
           title={
             <TextInput

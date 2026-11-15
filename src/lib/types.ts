@@ -16,6 +16,11 @@ export interface NWCategory {
   name: string;
   kind: CategoryKind;
   order: number;
+  /**
+   * Counts as invested in the look ahead, so it grows. Unset means the default:
+   * Investments grows, everything else holds its value. Assets only.
+   */
+  grows?: boolean;
 }
 
 export interface Account {

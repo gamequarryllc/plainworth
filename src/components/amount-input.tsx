@@ -27,7 +27,7 @@ interface Props {
 export function AmountInput({
   value,
   onChange,
-  placeholder = '$0',
+  placeholder,
   hint,
   style,
   ref,
@@ -46,7 +46,7 @@ export function AmountInput({
     <TextInput
       ref={ref}
       value={editing ? text : value ? money(value) : ''}
-      placeholder={editing ? formatTyping(centsToInput(original ?? hint ?? 0)) || '0' : placeholder}
+      placeholder={editing ? formatTyping(centsToInput(original ?? hint ?? 0)) || '0' : (placeholder ?? money(0, { whole: true, reveal: true }))}
       placeholderTextColor={c.tertiary}
       keyboardType="decimal-pad"
       inputAccessoryViewID={inputAccessoryViewID}

@@ -1,6 +1,6 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
-import { StyleSheet, TextInput } from 'react-native';
+import { StyleSheet, Switch, TextInput } from 'react-native';
 
 import { DateField } from '@/components/date-field';
 import { Row, Section } from '@/components/list';
@@ -9,7 +9,8 @@ import { useMoney } from '@/hooks/use-money';
 import { useToday } from '@/hooks/use-today';
 import { formatDate } from '@/lib/dates';
 import { confirm } from '@/lib/dialogs';
-import { centsToInput, formatTyping, parseAmount, parseNumber } from '@/lib/money';
+import { belowZeroNote, belowZeroTitle, centsToInput, formatTyping, parseAmount, parseNumber, signedAmount } from '@/lib/money';
+import { compareSnapshots } from '@/lib/networth';
 import { useStore } from '@/store';
 import { type, useColors } from '@/theme';
 
@@ -21,11 +22,14 @@ export default function EntryScreen() {
   const today = useToday();
   const snap = useStore((s) => s.snapshots.find((x) => x.id === id));
   const account = useStore((s) => s.accounts.find((a) => a.id === snap?.accountId));
+  const snapshots = useStore((s) => s.snapshots);
   const updateSnapshot = useStore((s) => s.updateSnapshot);
   const deleteSnapshot = useStore((s) => s.deleteSnapshot);
 
   const byQuantity = !!account?.unit && snap?.quantity != null;
-  const [text, setText] = useState(snap ? formatTyping(centsToInput(snap.value)) : '');
+  const [text, setText] = useState(snap ? formatTyping(centsToInput(Math.abs(snap.value))) : '');
+  const [below, setBelow] = useState((snap?.value ?? 0) < 0);
+  const kind = useStore((s) => s.nwCategories.find((x) => x.id === account?.categoryId)?.kind);
   const [qty, setQty] = useState(snap?.quantity != null ? formatTyping(String(snap.quantity), 6) : '');
   const [price, setPrice] = useState(snap?.unitPrice != null ? formatTyping(centsToInput(snap.unitPrice)) : '');
   const [date, setDate] = useState(snap?.date ?? today);
@@ -33,13 +37,31 @@ export default function EntryScreen() {
 
   if (!snap || !account) return <Screen title="Entry" />;
 
+  // A closed account counts as $0 from its last entry on. Changing or deleting
+  // that entry, or dating another one after it, would bring the balance back
+  // while the account stays hidden, so those wait until it's reopened.
+  const closing = account.closed
+    ? snapshots.filter((x) => x.accountId === account.id).sort(compareSnapshots).at(-1)
+    : undefined;
+  if (closing?.id === snap.id) {
+    return (
+      <Screen form title={account.name} left={[{ label: 'Close', icon: 'xmark', onPress: () => router.back() }]}>
+        <Section footer="This entry closed the account, so it stays as it is. To change it, reopen the account first.">
+          <Row title="Balance" value={money(snap.value)} />
+          <Row title="Date" value={formatDate(snap.date)} />
+        </Section>
+      </Screen>
+    );
+  }
+  const latestDay = closing && closing.date < today ? closing.date : today;
+
   const quantity = parseNumber(qty);
   const unitPrice = parseAmount(price);
   const value = byQuantity
     ? quantity != null && unitPrice != null
       ? Math.round(quantity * unitPrice)
       : null
-    : parseAmount(text);
+    : signedAmount(parseAmount(text), below);
 
   const save = () => {
     if (value == null) return;
@@ -118,7 +140,14 @@ export default function EntryScreen() {
             }
           />
         ) : null}
-        <Row title="Date" accessory={<DateField value={date} onChange={setDate} maximum={today} />} />
+        <Row title="Date" accessory={<DateField value={date} onChange={setDate} maximum={latestDay} />} />
+        {!byQuantity ? (
+          <Row
+            title={belowZeroTitle(kind)}
+            subtitle={belowZeroNote(kind)}
+            accessory={<Switch value={below} onValueChange={setBelow} accessibilityLabel={belowZeroTitle(kind)} />}
+          />
+        ) : null}
         <Row
           title={
             <TextInput

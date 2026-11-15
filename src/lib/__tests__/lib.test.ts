@@ -3,7 +3,7 @@ import { test } from 'node:test';
 
 import { valueTicks } from '../axis';
 import { addMonths, dayNumber, keyFromDayNumber, shiftMonth } from '../dates';
-import { formatMoney, formatTyping, parseAmount } from '../money';
+import { fitMoney, formatMoney, formatTyping, MAX_DIGITS, parseAmount, roundsToZero, signedAmount, tickLabels } from '../money';
 import { buildSeries, seriesByAccount, sliceSeries, seriesChange, summarizeAccounts, totalsOf, updatesByAccount } from '../networth';
 import { DATA_VERSION, emptyData } from '../../store/defaults';
 import { migrate } from '../../store/migrate';
@@ -34,6 +34,51 @@ test('money parse/format', () => {
   assert.equal(formatTyping('.5'), '0.5');
   assert.equal(formatTyping('007'), '7');
   assert.equal(formatTyping('1,000.'), '1,000.');
+});
+
+test('money: a comma on the keypad is the decimal point', () => {
+  // The number pad shows a comma in much of Europe and Latin America.
+  assert.equal(formatTyping('12,'), '12.');
+  assert.equal(formatTyping(formatTyping('12,') + '5'), '12.5');
+  assert.equal(formatTyping('1,250,'), '1,250.');
+  // The commas we put in ourselves are still just grouping.
+  assert.equal(formatTyping('1,2345'), '12,345');
+  // Already has a decimal point: a comma adds nothing.
+  assert.equal(formatTyping('12.5,'), '12.5');
+  // Currencies without cents have no decimal point to type.
+  assert.equal(formatTyping('1500,', 0), '1,500');
+});
+
+test('money: amounts stop at twelve digits', () => {
+  assert.equal(MAX_DIGITS, 12);
+  assert.equal(formatTyping('9'.repeat(17)), '999,999,999,999');
+  assert.equal(formatTyping('9'.repeat(17) + '.99'), '999,999,999,999.99');
+});
+
+test('money: nothing that shows as zero gets a sign', () => {
+  assert.equal(formatMoney(-40, 'USD', { whole: true }), '$0');
+  assert.equal(formatMoney(-40, 'USD', { whole: true, signed: true }), '$0');
+  assert.equal(formatMoney(40, 'USD', { whole: true, signed: true }), '$0');
+  assert.equal(formatMoney(-40, 'USD'), '−$0.40');
+  assert.equal(formatMoney(-60, 'USD', { whole: true }), '−$1');
+  assert.equal(roundsToZero(-49), true);
+  assert.equal(roundsToZero(50), false);
+});
+
+test('money: a balance below zero', () => {
+  assert.equal(signedAmount(125_00, false), 125_00);
+  assert.equal(signedAmount(125_00, true), -125_00);
+  assert.equal(signedAmount(0, true), 0);
+  assert.equal(signedAmount(null, true), null);
+});
+
+test('money: chart labels never repeat, and big amounts fit their column', () => {
+  assert.deepEqual(tickLabels([10_000_00, 10_010_00, 10_020_00, 10_030_00], 'USD'), ['$10K', '$10.01K', '$10.02K', '$10.03K']);
+  assert.deepEqual(tickLabels([0, 50_000_00, 100_000_00], 'USD'), ['$0', '$50K', '$100K']);
+  assert.equal(new Set(tickLabels([1_000_00, 1_000_50, 1_001_00], 'USD')).size, 3);
+  assert.equal(fitMoney(1_250_00, 'USD', 9), '$1,250');
+  assert.equal(fitMoney(1_469_120_00, 'USD', 9), '$1.47M');
+  assert.equal(fitMoney(-1_469_120_00, 'USD', 9), '−$1.47M');
 });
 
 const cats: NWCategory[] = [

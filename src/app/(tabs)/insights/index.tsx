@@ -42,19 +42,25 @@ import {
   chartableCategories,
   recentCategoryMonths,
 } from "@/lib/category-trend";
-import { MONTHS, MONTHS_SHORT, parseDateKey } from "@/lib/dates";
-import { firstYear, spendingYear, type Month } from "@/lib/insights";
-import { formatPercent, MASK } from "@/lib/money";
+import { dayNumber, MONTHS, MONTHS_SHORT, parseDateKey } from "@/lib/dates";
+import {
+  firstYear,
+  growingMix,
+  spendingYear,
+  type Month,
+} from "@/lib/insights";
+import { formatPercent, MASK, roundsToZero } from "@/lib/money";
 import { STORE_SHOTS } from "@/lib/store-shots";
 import {
   goalStatus,
+  growthOf,
   goalYear,
   makePlan,
   MAX_MONTHS,
-  monthlyRate,
   monthsToReach,
   project,
   ratePercent,
+  type Mix,
   type Plan,
 } from "@/lib/outlook";
 import {
@@ -287,6 +293,10 @@ function useHistory() {
 
 function HeadedFromStore() {
   const history = useHistory();
+  const today = useToday();
+  const accounts = useStore((s) => s.accounts);
+  const snapshots = useStore((s) => s.snapshots);
+  const nwCategories = useStore((s) => s.nwCategories);
   const pace = netWorthPace(history);
   if (!history.length) return null;
   return (
@@ -294,6 +304,7 @@ function HeadedFromStore() {
       history={history}
       pace={pace?.perMonth ?? null}
       counted={pace?.months ?? 0}
+      mix={growingMix({ accounts, snapshots, nwCategories }, dayNumber(today))}
     />
   );
 }
@@ -467,10 +478,13 @@ function HeadedCard({
   history,
   pace,
   counted,
+  mix,
 }: {
   history: NetWorthMonth[];
   pace: number | null;
   counted: number;
+  /** How much of what's owned is invested: only that part grows. */
+  mix: Mix;
 }) {
   const c = useColors();
   const lock = useLock();
@@ -486,22 +500,15 @@ function HeadedCard({
 
   const now = history[history.length - 1];
   const current = now.end;
-  const plan: Plan = makePlan(current, pace, outlook) ?? {
+  const base = growthOf(outlook, mix);
+  const plan: Plan = makePlan(current, pace, outlook, mix) ?? {
+    ...base,
     monthly: 0,
-    rate: monthlyRate(outlook.growth),
     source: "pace",
     earned: 0,
   };
   const status = goal
-    ? goalStatus(
-        goal,
-        birthYear,
-        current,
-        plan,
-        monthlyRate(outlook.growth),
-        now.year,
-        now.month,
-      )
+    ? goalStatus(goal, birthYear, current, plan, base, now.year, now.month)
     : null;
   const dueYear = goal ? goalYear(goal, birthYear) : null;
   const late = dueYear != null && dueYear < now.year;
@@ -513,7 +520,10 @@ function HeadedCard({
       : "60";
   const reach =
     status?.reachIn != null && status.reachIn > 0 ? status.reachIn : null;
-  const span = status ? Math.max(status.due ?? 0, reach ?? 0) || 360 : 0;
+  // Already there with no date to run to: a year ahead is plenty.
+  const span = status
+    ? Math.max(status.due ?? 0, reach ?? 0) || (status.progress >= 1 ? 6 : 360)
+    : 0;
   const ahead =
     picked === "goal"
       ? Math.min(MAX_MONTHS, Math.max(12, Math.ceil((span + 6) / 12) * 12))
@@ -619,7 +629,11 @@ function HeadedCard({
     }
   }
 
-  const growth = `${ratePercent(outlook.growth)} growth a year after ${ratePercent(outlook.inflation)} inflation`;
+  // Only what's invested grows; with nothing invested there's no growth to mention.
+  const growth =
+    mix.invested > 0
+      ? `investments growing ${ratePercent(outlook.growth)} a year after ${ratePercent(outlook.inflation)} inflation`
+      : "no growth, since nothing is in Investments";
   const assumes =
     plan.source === "falling"
       ? `Assumes it keeps falling as it has the last ${counted} months.`
@@ -1266,6 +1280,8 @@ function goalSentence(
     return `Keep ${wholePercent(g.keepFromHere)} from here to hit your goal.`;
   if (over && g.spendFromHere != null && g.spendFromHere > 0)
     return `Spend under ${whole(g.spendFromHere)} a month to get back on track.`;
+  // Too far over to make up this year: say so, instead of leaving only the comparison.
+  if (over) return "Over your limit for the year.";
   return null;
 }
 
@@ -1595,7 +1611,7 @@ function WhereItWentCard({ year }: { year: number }) {
     <InsightCard
       label="Where It Went"
       sentence={lock.text(
-        `${top.category.name} took ${formatPercent(top.share)} of your spending.`,
+        `${top.category.name} took ${formatPercent(top.share)} of your spending this year.`,
         "See every category a month on average, and how each compares with last year.",
       )}
       note={
@@ -1627,13 +1643,13 @@ function WhereItWentCard({ year }: { year: number }) {
                 ? MASK
                 : change == null
                   ? formatPercent(x.share)
-                  : change === 0
+                  : roundsToZero(change)
                     ? "Same"
                     : signed(change)
             }
             // Spending more is the bad direction.
             noteColor={
-              lock.locked || change == null || change === 0
+              lock.locked || change == null || roundsToZero(change)
                 ? "secondary"
                 : change > 0
                   ? "down"

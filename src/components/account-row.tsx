@@ -132,10 +132,11 @@ export function AccountRow({
         ? `${money(latest.unitPrice)}/${account.unit}`
         : subtitle;
     subtitle = `${formatQuantity(latest.quantity)} ${account.unit} · ${detail}`;
-  } else if (kind === 'liability' && summary.balance > 0) {
-    // A debt shows what it costs: "24.99% · $46/mo interest", or "0% APR" with no rate set.
+  } else if (kind === 'liability' && summary.balance > 0 && account.apr != null) {
+    // A debt with a rate shows what it costs: "24.99% · $46/mo interest", or "0% APR" for an interest-free one.
+    // With no rate entered it shows when it was last updated, like any account.
     const interest = monthlyInterest(summary.balance, account.apr);
-    subtitle = `${formatRate(account.apr ?? 0)}${interest > 0 ? ` · ${money(interest, { whole: true })}/mo interest` : ' APR'}`;
+    subtitle = `${formatRate(account.apr)}${interest > 0 ? ` · ${money(interest, { whole: true })}/mo interest` : ' APR'}`;
   }
   return (
     <TrendRow
