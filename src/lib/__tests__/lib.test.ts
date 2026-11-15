@@ -380,4 +380,14 @@ test('migrate: growth saved as "on top of inflation" becomes the full yearly fig
   );
   // Nothing saved: the defaults.
   assert.deepEqual(migrate({ version: 5 }).settings.outlook, { inflation: 0.03, yearlyGrowth: 0.07 });
+  // The old top of the stepper, 10% on top of 3%, is 13%: inside what the stepper shows now.
+  assert.equal(migrate({ version: 5, settings: { outlook: { inflation: 0.03, growth: 0.1 } } }).settings.outlook.yearlyGrowth, 0.13);
+  // Past the top, it stops at the top; anything odd lands on a half percent.
+  assert.equal(migrate({ version: 5, settings: { outlook: { inflation: 0.1, growth: 0.1 } } }).settings.outlook.yearlyGrowth, 0.15);
+  assert.equal(migrate({ version: 5, settings: { outlook: { inflation: 0.03, yearlyGrowth: 0.4 } } }).settings.outlook.yearlyGrowth, 0.15);
+  assert.equal(migrate({ version: 5, settings: { outlook: { inflation: 0.031, yearlyGrowth: 0.0712 } } }).settings.outlook.yearlyGrowth, 0.07);
+  assert.equal(migrate({ version: 5, settings: { outlook: { inflation: 0.031, yearlyGrowth: 0.07 } } }).settings.outlook.inflation, 0.03);
+  // Converting twice changes nothing more.
+  const once = migrate({ version: 5, settings: { outlook: { inflation: 0.03, growth: 0.04 } } });
+  assert.deepEqual(migrate(JSON.parse(JSON.stringify(once))).settings.outlook, once.settings.outlook);
 });

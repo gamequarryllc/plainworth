@@ -20,6 +20,20 @@ export const MAX_MONTHS = 600;
 /** 0.03 → "3%", 0.045 → "4.5%". */
 export const ratePercent = (r: number) => `${Math.round(r * 1000) / 10}%`;
 
+/** The most the goal sheet's Growth and Inflation go up to. */
+export const GROWTH_MAX = 0.15;
+export const INFLATION_MAX = 0.1;
+
+/**
+ * A yearly rate as the goal sheet can show it: between 0 and `max`, on a half
+ * percent. Anything saved outside that (an old 10% on top of inflation comes
+ * to 13%) is brought in, so the number shown is always the number used.
+ */
+export function snapRate(rate: number, max: number): number {
+  if (!Number.isFinite(rate)) return 0;
+  return Math.round(Math.min(Math.max(rate, 0), max) * 200) / 200;
+}
+
 /** The monthly rate that compounds to a yearly one. */
 export const monthlyRate = (yearly: number) => Math.pow(1 + yearly, 1 / 12) - 1;
 

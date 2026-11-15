@@ -14,6 +14,7 @@ import {
   neededMonthly,
   project,
   realGrowth,
+  snapRate,
 } from '../outlook';
 import type { Outlook } from '../types';
 
@@ -192,4 +193,17 @@ test('outlook: goals by year or by age', () => {
   // A date that has passed counts as no date.
   const past = goalStatus({ amount: 1_700_000_00, year: 2025 }, undefined, 120_000_00, plan, r, 2026, 11);
   assert.equal(past.due, null);
+});
+
+test('outlook: a saved rate is kept to what the goal sheet can show', () => {
+  assert.equal(snapRate(0.07, 0.15), 0.07);
+  assert.equal(snapRate(0.13, 0.15), 0.13);
+  assert.equal(snapRate(0.2, 0.15), 0.15);
+  assert.equal(snapRate(-0.01, 0.15), 0);
+  assert.equal(snapRate(0.0712, 0.15), 0.07);
+  assert.equal(snapRate(0.0749, 0.15), 0.075);
+  assert.equal(snapRate(NaN, 0.15), 0);
+  // Every result is one of the stepper's own steps, so it is found in the list.
+  const steps = Array.from({ length: 31 }, (_, k) => Math.round(k * 0.005 * 10000) / 10000);
+  for (let r = 0; r <= 0.15; r += 0.0013) assert.ok(steps.includes(snapRate(r, 0.15)), String(r));
 });

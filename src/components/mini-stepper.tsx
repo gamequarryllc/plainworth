@@ -24,7 +24,8 @@ export function MiniStepper<T>({
   accessibilityLabel: string;
 }) {
   const c = useColors();
-  const i = Math.max(0, options.indexOf(value));
+  // A value that isn't one of the steps is still shown as it is, and steps from the nearest one.
+  const i = nearestIndex(options, value);
   const button = (icon: 'minus' | 'plus', to: number, label: string) => {
     const enabled = to >= 0 && to < options.length;
     return (
@@ -46,7 +47,7 @@ export function MiniStepper<T>({
   return (
     <View style={styles.row}>
       <Text tabular color="secondary" style={styles.value}>
-        {format(options.includes(value) ? value : options[i])}
+        {format(value)}
       </Text>
       <View style={[styles.pill, { backgroundColor: c.fill }]}>
         {button('minus', i - 1, 'Less')}
@@ -55,6 +56,16 @@ export function MiniStepper<T>({
       </View>
     </View>
   );
+}
+
+function nearestIndex<T>(options: readonly T[], value: T): number {
+  const at = options.indexOf(value);
+  if (at >= 0 || typeof value !== 'number') return Math.max(0, at);
+  let best = 0;
+  options.forEach((o, k) => {
+    if (typeof o === 'number' && Math.abs(o - value) < Math.abs((options[best] as number) - value)) best = k;
+  });
+  return best;
 }
 
 /** 0%, 0.5%, … up to `max`, as fractions. */

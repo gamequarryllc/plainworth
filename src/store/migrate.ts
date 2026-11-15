@@ -1,4 +1,5 @@
 import { normalizeFund } from '@/lib/emergency';
+import { GROWTH_MAX, INFLATION_MAX, snapRate } from '@/lib/outlook';
 import type { Account, Data, NWCategory, Outlook, SpendCategory } from '@/lib/types';
 
 import { DATA_VERSION, defaultOutlook, defaultReminder, defaultSettings, emptyData } from './defaults';
@@ -48,8 +49,11 @@ function outlookOf(saved: (Partial<Outlook> & { growth?: unknown }) | undefined)
   const { growth, ...rest } = saved ?? {};
   const outlook = { ...defaultOutlook(), ...rest };
   if (rest.yearlyGrowth == null && typeof growth === 'number' && Number.isFinite(growth)) {
-    outlook.yearlyGrowth = Math.round((growth + outlook.inflation) * 1000) / 1000;
+    outlook.yearlyGrowth = growth + outlook.inflation;
   }
+  // Kept to what the goal sheet can show, so its steppers never show one number while another is used.
+  outlook.yearlyGrowth = snapRate(outlook.yearlyGrowth, GROWTH_MAX);
+  outlook.inflation = snapRate(outlook.inflation, INFLATION_MAX);
   return outlook;
 }
 

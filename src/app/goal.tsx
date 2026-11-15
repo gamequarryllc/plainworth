@@ -15,10 +15,23 @@ import { dayNumber, parseDateKey } from '@/lib/dates';
 import { confirm } from '@/lib/dialogs';
 import { centsToInput, formatTyping, parseAmount } from '@/lib/money';
 import { growingMix } from '@/lib/insights';
-import { goalStatus, growthOf, inFutureMoney, makePlan, ratePercent, realGrowth, type Mix, type Plan } from '@/lib/outlook';
+import {
+  goalStatus,
+  GROWTH_MAX,
+  growthOf,
+  inFutureMoney,
+  INFLATION_MAX,
+  makePlan,
+  ratePercent,
+  realGrowth,
+  snapRate,
+  type Mix,
+  type Plan,
+} from '@/lib/outlook';
 import { netWorthHistory, netWorthPace, shift } from '@/lib/trends';
 import type { NetWorthGoal, Outlook } from '@/lib/types';
 import { useStore } from '@/store';
+import { defaultOutlook } from '@/store/defaults';
 import { type, useColors } from '@/theme';
 
 type When = 'none' | 'year' | 'age';
@@ -27,7 +40,8 @@ const WHEN: { value: When; label: string }[] = [
   { value: 'year', label: 'By a Year' },
   { value: 'age', label: 'By an Age' },
 ];
-const RATES = percentSteps(0.1);
+const GROWTH_RATES = percentSteps(GROWTH_MAX);
+const INFLATION_RATES = percentSteps(INFLATION_MAX);
 
 /** Nearest $10, for amounts that are estimates anyway. */
 const roughly = (cents: number) => Math.round(cents / 1000) * 1000;
@@ -57,8 +71,9 @@ export default function GoalScreen() {
   const [year, setYear] = useState(String(saved?.year ?? thisYear + 10));
   const [age, setAge] = useState(saved?.age != null ? String(saved.age) : '');
   const [born, setBorn] = useState(savedBirthYear != null ? String(savedBirthYear) : '');
-  const [inflation, setInflation] = useState(outlook.inflation);
-  const [growth, setGrowth] = useState(outlook.yearlyGrowth);
+  // Snapped to a step the steppers have, so what they show is what the numbers above use.
+  const [inflation, setInflation] = useState(() => snapRate(outlook.inflation, INFLATION_MAX));
+  const [growth, setGrowth] = useState(() => snapRate(outlook.yearlyGrowth, GROWTH_MAX));
   const [monthly, setMonthly] = useState<number | null>(outlook.monthly ?? null);
 
   const target = parseAmount(amount) ?? 0;
@@ -100,7 +115,8 @@ export default function GoalScreen() {
   const remove = async () => {
     const ok = await confirm({ title: 'Remove your goal?', confirmLabel: 'Remove Goal', destructive: true });
     if (!ok) return;
-    updateSettings({ goal: undefined });
+    // Removing the goal starts over: the next one begins from the usual growth, inflation and pace.
+    updateSettings({ goal: undefined, outlook: defaultOutlook() });
     router.back();
   };
 
@@ -208,7 +224,13 @@ export default function GoalScreen() {
           title="Growth"
           subtitle="Investments only"
           accessory={
-            <MiniStepper value={growth} options={RATES} onChange={setGrowth} format={ratePercent} accessibilityLabel="growth" />
+            <MiniStepper
+              value={growth}
+              options={GROWTH_RATES}
+              onChange={setGrowth}
+              format={ratePercent}
+              accessibilityLabel="growth"
+            />
           }
         />
         <Row
@@ -216,7 +238,7 @@ export default function GoalScreen() {
           accessory={
             <MiniStepper
               value={inflation}
-              options={RATES}
+              options={INFLATION_RATES}
               onChange={setInflation}
               format={ratePercent}
               accessibilityLabel="inflation"
