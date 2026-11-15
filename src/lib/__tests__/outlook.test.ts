@@ -63,20 +63,18 @@ test('outlook: what you add comes from your pace, less what your money earned', 
   assert.equal(makePlan(50_000_00, null, o, none), null);
 });
 
-test('outlook: what grows is worked out, never asked', () => {
+test('outlook: only the Investments category grows', () => {
   const asset = (id: string, name: string) => ({ id, name, kind: 'asset' as const });
   assert.equal(grows(asset('investments', 'Investments')), true);
   // Still the built-in one after a rename.
   assert.equal(grows(asset('investments', 'Portfolio')), true);
-  for (const name of ['Cash', 'Real Estate', 'Precious Metals', 'Crypto', 'Vehicles', 'Other Assets', 'Emergency Fund', 'Miranda’s Savings']) {
+  // Deleted and made again under the same name.
+  assert.equal(grows(asset('x', 'investments ')), true);
+  // Nothing is guessed from a name: an account grows by being put in Investments.
+  for (const name of ['Cash', 'Real Estate', 'Precious Metals', 'Crypto', 'Retirement', 'Stocks', 'Roth IRA', 'My Investments']) {
     assert.equal(grows(asset('x', name)), false, name);
   }
-  // A category someone made for their investments, whatever they called it.
-  for (const name of ['Retirement', 'Stocks', 'My 401(k)', '401k', 'Roth IRA', 'IRAs', 'Brokerage', 'Index Funds', 'ETFs', 'Investing', 'Pension']) {
-    assert.equal(grows(asset('x', name)), true, name);
-  }
-  // A debt never grows, whatever it's called.
-  assert.equal(grows({ id: 'x', name: '401k Loan', kind: 'liability' }), false);
+  assert.equal(grows({ id: 'investments', name: 'Investments', kind: 'liability' }), false);
 });
 
 test('outlook: projection compounds, in today’s money', () => {

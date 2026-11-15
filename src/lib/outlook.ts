@@ -33,18 +33,15 @@ export interface Mix {
 /** Nothing invested: no growth. */
 export const NO_MIX: Mix = { invested: 0, share: 0 };
 
-/** What people call a category of investments when they make their own: "Retirement", "Stocks", "401(k)", "Roth IRA". */
-const INVESTED =
-  /\b(?:(?:invest\w*|retire\w*|stocks?|brokerage|iras?|roth|pension|etfs?|shares|equities|(?:index|mutual) funds?)\b|401\s?\(?k|403\s?\(?b)/i;
-
 /**
- * Does this category grow in the look ahead? Worked out, never asked: the
- * built-in Investments category does, and so does an asset category someone
- * made and named like one. Cash, a home, metals, crypto and the rest hold
- * their value.
+ * Does this category grow in the look ahead? Only Investments does: the
+ * built-in category (whatever it's renamed to), or one made again under that
+ * name after the built-in one was deleted. Cash, a home, metals, crypto and
+ * the rest hold their value. Nothing to set and nothing guessed: an account
+ * grows by being put in Investments.
  */
 export const grows = (c: Pick<NWCategory, 'id' | 'kind' | 'name'>) =>
-  c.kind === 'asset' && (c.id === 'investments' || INVESTED.test(c.name));
+  c.kind === 'asset' && (c.id === 'investments' || c.name.trim().toLowerCase() === 'investments');
 
 export interface Growth extends Mix {
   /** Monthly growth on top of inflation, earned on what's invested. */
