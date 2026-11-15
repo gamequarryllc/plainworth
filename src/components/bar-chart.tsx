@@ -54,7 +54,7 @@ const LABEL_BOX = 48;
 /**
  * A year of months as bars, drawn like the charts in Health and Settings › Battery:
  * one color, rounded at the top and square on the baseline, with light gridlines
- * labeled on the right. Tap a bar to select it.
+ * labeled on the right. Tap a bar to select it, or drag across them to look.
  */
 export function BarChart({
   bars,
@@ -258,8 +258,9 @@ const UPDOWN = 8;
 
 /**
  * Tap a bar to select it (tap it again to let go), or drag across the bars
- * to move the selection, like the charts in Health. The last bar under the
- * finger stays selected. Sideways drags keep the page still.
+ * or hold one to look, like the charts in Health. A drag or a hold is a look,
+ * not a choice: when the finger lifts the selection clears, so there's no thin
+ * bar to find and tap to get the chart back. Sideways drags keep the page still.
  */
 function useBarScrub(
   count: number,
@@ -272,6 +273,8 @@ function useBarScrub(
     x: 0,
     y: 0,
     locked: false,
+    /** Dragged or held, not just tapped: the finger was there to look. */
+    looked: false,
     moved: false,
     current: null as number | null,
     before: null as number | null,
@@ -283,6 +286,7 @@ function useBarScrub(
   };
   const lock = () => {
     stopTimer();
+    state.current.looked = true;
     if (state.current.locked) return;
     state.current.locked = true;
     lockScroll(true);
@@ -312,6 +316,7 @@ function useBarScrub(
       s.x = e.nativeEvent.pageX;
       s.y = e.nativeEvent.pageY;
       s.moved = false;
+      s.looked = false;
       s.before = selected;
       s.current = selected;
       stopTimer();
@@ -327,15 +332,15 @@ function useBarScrub(
         else if (dy > UPDOWN) stopTimer();
       }
       const i = at(e);
-      if (i !== s.current) s.moved = true;
+      if (i !== s.current) s.moved = s.looked = true;
       pick(i);
     },
     onResponderRelease: () => {
       const s = state.current;
       unlock();
-      // A tap on the bar that was already selected lets it go.
-      if (!s.moved && s.current === s.before && s.current != null) {
-        haptics.selection();
+      // Lifting after a drag or a hold clears it, and so does a tap on the bar that was already selected.
+      if (s.current != null && (s.looked || s.current === s.before)) {
+        if (!s.looked) haptics.selection();
         onSelect?.(null);
       }
       s.current = null;
