@@ -14,7 +14,7 @@ import { Sparkline } from '@/components/sparkline';
 import { Text } from '@/components/text';
 import { useToday } from '@/hooks/use-today';
 import { notify } from '@/lib/dialogs';
-import { formatMoney, formatPercent } from '@/lib/money';
+import { formatMoney, formatPercent, roundsToZero } from '@/lib/money';
 import {
   buildSeries,
   rangeCaption,
@@ -194,7 +194,7 @@ export default function ShareScreen() {
                   </View>
                   <View style={styles.rowValue}>
                     <Text weight="600" tabular numberOfLines={1}>
-                      {amounts ? `${debt ? '−' : ''}${compact(s.balance)}` : formatPercent(ch.ratio, { signed: true })}
+                      {amounts ? `${debt && !roundsToZero(s.balance) ? '−' : ''}${compact(s.balance)}` : formatPercent(ch.ratio, { signed: true })}
                     </Text>
                     <Text variant="footnote" weight="500" tabular color={tone} numberOfLines={1}>
                       {amounts ? `${formatPercent(ch.ratio, { signed: true })} · ${signed(ch.delta)}` : debt ? 'Debt' : ' '}
