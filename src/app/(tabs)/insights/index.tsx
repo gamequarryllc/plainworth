@@ -471,7 +471,7 @@ const roughly = (cents: number) => Math.round(cents / 1000) * 1000;
 
 /**
  * Net worth so far, then a dotted line ahead like a forecast, in today's
- * money: what you add each month plus growth on what you have. With a goal,
+ * money: the monthly pace plus growth on what's invested. With a goal,
  * its line runs to the goal's date and a bar shows how far along you are.
  */
 function HeadedCard({
@@ -604,7 +604,7 @@ function HeadedCard({
     } else if (status.due != null && status.onTrack) {
       sentence = `On track for ${target} ${byWhen}.`;
     } else if (status.due != null) {
-      sentence = `Add about ${needed} a month to hit ${target} ${byWhen}.`;
+      sentence = `It takes about ${needed} a month to hit ${target} ${byWhen}.`;
     } else {
       sentence =
         reached != null
@@ -629,19 +629,24 @@ function HeadedCard({
     }
   }
 
-  // Only what's invested grows; with nothing invested there's no growth to mention.
+  // Only what's invested grows; with nothing invested, say so instead.
   const growth =
     mix.invested > 0
-      ? `investments growing ${ratePercent(outlook.growth)} a year after ${ratePercent(outlook.inflation)} inflation`
-      : "no growth, since nothing is in Investments";
+      ? `plus investments growing ${ratePercent(outlook.growth)} a year after ${ratePercent(outlook.inflation)} inflation.`
+      : "No growth is counted, since nothing is in Investments.";
+  const then = mix.invested > 0 ? ", " : ". ";
+  // The monthly amount is a pace, not a deposit: it's how much net worth has
+  // been going up, by saving, paying down debt or anything else.
   const assumes =
     plan.source === "falling"
       ? `Assumes it keeps falling as it has the last ${counted} months.`
       : plan.source === "yours"
-        ? `Assumes you add ${whole(plan.monthly)} a month and ${growth}.`
+        ? `Assumes a pace of ${whole(plan.monthly)} a month${then}${growth}`
         : adds
-          ? `Your pace: about ${adds} a month added (your last ${counted} months, less what your money earned), plus ${growth}.`
-          : `Assumes ${growth}.`;
+          ? `Your pace: up about ${adds} a month over your last ${counted} months${mix.invested > 0 ? ", not counting growth, " : ". "}${growth}`
+          : mix.invested > 0
+            ? `Assumes investments growing ${ratePercent(outlook.growth)} a year after ${ratePercent(outlook.inflation)} inflation.`
+            : growth;
   const note = `${assumes} In today’s money. A direction, not a promise.`;
 
   const dueIndex =

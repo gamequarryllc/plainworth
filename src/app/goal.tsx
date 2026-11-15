@@ -35,7 +35,7 @@ const roughly = (cents: number) => Math.round(cents / 1000) * 1000;
 /**
  * Set a net worth goal, in today's money, with or without a date (a year, or
  * an age), and the assumptions Where You're Headed uses: inflation, growth on
- * top of it, and what you add each month. A summary shows where you stand as
+ * top of it, and the monthly pace. A summary shows where you stand as
  * you type.
  */
 export default function GoalScreen() {
@@ -182,7 +182,7 @@ export default function GoalScreen() {
             <Row
               title={when === 'age' ? `To Make It by Age ${ageNum}` : `To Make It by ${dueYear}`}
               value={`${whole(roughly(status.needed))}/mo`}
-              detail={plan && plan.monthly > 0 ? `You add about ${whole(roughly(plan.monthly))}` : undefined}
+              detail={plan && plan.monthly > 0 ? `Your pace is about ${whole(roughly(plan.monthly))}` : undefined}
             />
           ) : null}
         </Section>
@@ -190,14 +190,14 @@ export default function GoalScreen() {
 
       <Section header="Assumptions" footer={assumptionsNote(growth, inflation, estimate, mix)}>
         <Row
-          title="You Add Each Month"
-          subtitle={monthly != null ? 'Your number' : estimate ? 'Worked out from your pace' : 'Enter what you save'}
+          title="Monthly Pace"
+          subtitle={monthly != null ? 'Your number' : estimate ? 'Your pace, not counting growth' : 'Enter a monthly amount'}
           accessory={
             <AmountInput
               value={monthly}
               onChange={setMonthly}
               placeholder={estimate ? whole(roughly(estimate.monthly)) : undefined}
-              accessibilityLabel="What you add each month"
+              accessibilityLabel="Monthly pace"
             />
           }
         />
@@ -245,7 +245,7 @@ function assumptionsNote(growth: number, inflation: number, estimate: Plan | nul
       ? 'Cash, a home and everything else hold their value. '
       : 'Nothing is in Investments yet, so no growth is counted. ') +
     (estimate
-      ? 'What you add each month is worked out from your pace: what your net worth went up in an average month, less what your money would have earned. Type your own if you know it.'
+      ? 'Monthly Pace is how much your net worth went up in an average month, less that growth. It isn’t only money you put in. Type your own if you know it.'
       : 'Once you’ve updated your balances for a couple of months, Plainworth can work this out from your pace.')
   );
 }
