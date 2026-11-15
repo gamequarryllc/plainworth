@@ -6,8 +6,9 @@ import type { NetWorthGoal, NWCategory, Outlook } from './types';
  * buys by then.
  *
  * The plan: start from what you have and add the same amount each month
- * (rising with prices). Only what's invested grows, at a steady rate on top of
- * inflation; cash, a home and everything else hold their value. What you add
+ * (rising with prices). Only what's invested grows, at a steady yearly rate
+ * with inflation taken off (7% growth and 3% inflation is about 4% in today's
+ * money); cash, a home and everything else hold their value. What you add
  * is split the way your money is split today, so the invested part of it grows
  * too. It's worked out from your pace unless you set it: the pace is saving
  * plus growth, so what your money would have earned anyway comes off it.
@@ -43,12 +44,18 @@ export const NO_MIX: Mix = { invested: 0, share: 0 };
 export const grows = (c: Pick<NWCategory, 'id' | 'kind' | 'name'>) =>
   c.kind === 'asset' && (c.id === 'investments' || c.name.trim().toLowerCase() === 'investments');
 
+/** Yearly growth in today's money: what's left of it once prices have risen. 7% with 3% inflation → about 3.9%. */
+export const realGrowth = (o: Pick<Outlook, 'yearlyGrowth' | 'inflation'>) => (1 + o.yearlyGrowth) / (1 + o.inflation) - 1;
+
 export interface Growth extends Mix {
-  /** Monthly growth on top of inflation, earned on what's invested. */
+  /** Monthly growth in today's money, earned on what's invested. Below zero when inflation outruns growth. */
   rate: number;
 }
 
-export const growthOf = (o: Pick<Outlook, 'growth'>, mix: Mix): Growth => ({ ...mix, rate: monthlyRate(o.growth) });
+export const growthOf = (o: Pick<Outlook, 'yearlyGrowth' | 'inflation'>, mix: Mix): Growth => ({
+  ...mix,
+  rate: monthlyRate(realGrowth(o)),
+});
 
 export interface Plan extends Growth {
   /** Added each month, in today's money. */
@@ -73,9 +80,8 @@ export function makePlan(current: number, pace: number | null, o: Outlook, mix: 
     // Going down lately: carry that on, with inflation eating into what's left.
     return { ...base, rate: 0, monthly: pace - have * inflation, source: 'falling', earned: 0 };
   }
-  // In dollars of the day, investments went up by growth and inflation, and the rest by inflation alone.
-  const earned =
-    mix.invested * ((1 + inflation) * (1 + base.rate) - 1) + Math.max(have - mix.invested, 0) * inflation;
+  // In dollars of the day, investments went up by their yearly growth, and the rest by inflation alone.
+  const earned = mix.invested * monthlyRate(o.yearlyGrowth) + Math.max(have - mix.invested, 0) * inflation;
   return { ...base, monthly: Math.max(0, pace - earned), source: 'pace', earned };
 }
 
@@ -134,6 +140,8 @@ export function neededMonthly(current: number, growth: Growth, target: number, m
   if (end(0) >= target) return 0;
   let lo = 0;
   let hi = Math.max(target - current, 1);
+  // When inflation outruns growth, it takes more than the gap itself.
+  for (let k = 0; k < 40 && end(hi) < target; k++) hi *= 2;
   for (let k = 0; k < 60; k++) {
     const mid = (lo + hi) / 2;
     if (end(mid) >= target) hi = mid;

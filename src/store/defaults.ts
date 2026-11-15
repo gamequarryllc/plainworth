@@ -62,12 +62,12 @@ export const defaultReminder = (): Reminder => ({
 });
 
 /**
- * 3% inflation is about the long-run US average. 4% growth on top of it (about
- * 7% before inflation) is a common long-run assumption for investments.
+ * 7% growth a year is the usual long-run assumption for investments, and 3%
+ * inflation is about the long-run US average: about 4% a year in today's money.
  */
 export const defaultOutlook = (): Outlook => ({
   inflation: 0.03,
-  growth: 0.04,
+  yearlyGrowth: 0.07,
 });
 
 export const defaultSettings = (): Settings => ({

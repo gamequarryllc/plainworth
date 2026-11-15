@@ -361,3 +361,23 @@ test('gridlines on round values that cover the line', () => {
   const flat = valueTicks(5_000_00, 5_000_00);
   assert.ok(flat[0] < 5_000_00 && flat[flat.length - 1] > 5_000_00);
 });
+
+test('migrate: growth saved as "on top of inflation" becomes the full yearly figure', () => {
+  // The old default, 4% on top of 3% inflation, is the new default: 7% a year.
+  assert.deepEqual(migrate({ version: 5, settings: { outlook: { inflation: 0.03, growth: 0.04 } } }).settings.outlook, {
+    inflation: 0.03,
+    yearlyGrowth: 0.07,
+  });
+  // A changed one has its own inflation added back, and a typed monthly amount is kept.
+  assert.deepEqual(
+    migrate({ version: 5, settings: { outlook: { inflation: 0.025, growth: 0.05, monthly: 2_000_00 } } }).settings.outlook,
+    { inflation: 0.025, yearlyGrowth: 0.075, monthly: 2_000_00 },
+  );
+  // Already the new kind: left alone, even if an older version wrote its own `growth` beside it.
+  assert.deepEqual(
+    migrate({ version: 5, settings: { outlook: { inflation: 0.03, yearlyGrowth: 0.09, growth: 0.04 } } }).settings.outlook,
+    { inflation: 0.03, yearlyGrowth: 0.09 },
+  );
+  // Nothing saved: the defaults.
+  assert.deepEqual(migrate({ version: 5 }).settings.outlook, { inflation: 0.03, yearlyGrowth: 0.07 });
+});

@@ -100,8 +100,11 @@ export interface NetWorthGoal {
 export interface Outlook {
   /** Prices rise this much a year, e.g. 0.03. */
   inflation: number;
-  /** What you have grows this much a year on top of inflation, e.g. 0.04. */
-  growth: number;
+  /**
+   * What's invested grows this much a year, before inflation, e.g. 0.07. The
+   * look ahead is in today's money, so inflation comes off it there.
+   */
+  yearlyGrowth: number;
   /** What you add each month, in today's money. Left out, it's worked out from your pace. */
   monthly?: Cents;
 }

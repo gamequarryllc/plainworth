@@ -13,10 +13,11 @@ import {
   monthsToYearEnd,
   neededMonthly,
   project,
+  realGrowth,
 } from '../outlook';
 import type { Outlook } from '../types';
 
-const o: Outlook = { inflation: 0.03, growth: 0.04 };
+const o: Outlook = { inflation: 0.03, yearlyGrowth: 0.07 };
 /** Everything owned is invested: the whole amount grows, and so does everything added. */
 const all = (invested: number) => ({ invested, share: 1 });
 const none = { invested: 0, share: 0 };
@@ -27,17 +28,33 @@ test('outlook: rates compound to the yearly figure', () => {
   assert.equal(monthlyRate(0), 0);
 });
 
+test('outlook: growth is the yearly figure, with inflation taken off for today’s money', () => {
+  // 7% a year with 3% inflation is about 3.9% in today's money, not 4% on top of 7%.
+  near(realGrowth(o), 1.07 / 1.03 - 1, 1e-12);
+  near(realGrowth(o), 0.0388, 0.0001);
+  near(Math.pow(1 + growthOf(o, none).rate, 12), 1.07 / 1.03, 1e-12);
+  // No inflation: growth is all of it. Inflation ahead of growth: it loses ground.
+  near(realGrowth({ yearlyGrowth: 0.07, inflation: 0 }), 0.07, 1e-12);
+  assert.ok(realGrowth({ yearlyGrowth: 0.02, inflation: 0.03 }) < 0);
+  // Losing ground, it takes more than the gap itself to get there.
+  const losing = growthOf({ yearlyGrowth: 0, inflation: 0.03 }, { invested: 100_000_00, share: 1 });
+  const needed = neededMonthly(100_000_00, losing, 110_000_00, 36);
+  assert.ok(needed > 10_000_00 / 36);
+  const plan = { ...losing, monthly: needed, source: 'yours' as const, earned: 0 };
+  near(project(100_000_00, plan, 36)[36], 110_000_00, 100);
+});
+
 test('outlook: what you add comes from your pace, less what your money earned', () => {
-  // $120,000, all invested, growing $3,900 a month: about $692 of that is 3% inflation plus 4% growth.
+  // $120,000, all invested, going up $3,900 a month: about $678 of that is its 7% yearly growth.
   const plan = makePlan(120_000_00, 3_900_00, o, all(120_000_00))!;
   assert.equal(plan.source, 'pace');
-  near(plan.earned, 120_000_00 * (Math.pow(1.03 * 1.04, 1 / 12) - 1));
+  near(plan.earned, 120_000_00 * monthlyRate(0.07));
   near(plan.monthly, 3_900_00 - plan.earned);
-  near(plan.monthly / 100, 3210, 1);
+  near(plan.monthly / 100, 3222, 1);
 
-  // A quarter invested: that part earned growth and inflation, the rest only kept up with prices.
+  // A quarter invested: that part earned its growth, the rest only kept up with prices.
   const part = makePlan(120_000_00, 3_900_00, o, { invested: 30_000_00, share: 0.25 })!;
-  near(part.earned, 30_000_00 * (Math.pow(1.03 * 1.04, 1 / 12) - 1) + 90_000_00 * monthlyRate(0.03));
+  near(part.earned, 30_000_00 * monthlyRate(0.07) + 90_000_00 * monthlyRate(0.03));
   assert.ok(part.monthly > plan.monthly);
   // Nothing invested: only inflation comes off the pace.
   near(makePlan(120_000_00, 3_900_00, o, none)!.earned, 120_000_00 * monthlyRate(0.03));
@@ -54,7 +71,7 @@ test('outlook: what you add comes from your pace, less what your money earned', 
   // Your own number wins, even without enough history.
   assert.deepEqual(makePlan(50_000_00, null, { ...o, monthly: 2_000_00 }, all(50_000_00)), {
     monthly: 2_000_00,
-    rate: monthlyRate(0.04),
+    rate: monthlyRate(1.07 / 1.03 - 1),
     invested: 50_000_00,
     share: 1,
     source: 'yours',

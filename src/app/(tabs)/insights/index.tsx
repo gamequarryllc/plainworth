@@ -632,7 +632,7 @@ function HeadedCard({
   // Only what's invested grows; with nothing invested, say so instead.
   const growth =
     mix.invested > 0
-      ? `plus investments growing ${ratePercent(outlook.growth)} a year after ${ratePercent(outlook.inflation)} inflation.`
+      ? `plus investments growing ${ratePercent(outlook.yearlyGrowth)} a year, less ${ratePercent(outlook.inflation)} inflation.`
       : "No growth is counted, since nothing is in Investments.";
   const then = mix.invested > 0 ? ", " : ". ";
   // The monthly amount is a pace, not a deposit: it's how much net worth has
@@ -645,7 +645,7 @@ function HeadedCard({
         : adds
           ? `Your pace: up about ${adds} a month over your last ${counted} months${mix.invested > 0 ? ", not counting growth, " : ". "}${growth}`
           : mix.invested > 0
-            ? `Assumes investments growing ${ratePercent(outlook.growth)} a year after ${ratePercent(outlook.inflation)} inflation.`
+            ? `Assumes investments growing ${ratePercent(outlook.yearlyGrowth)} a year, less ${ratePercent(outlook.inflation)} inflation.`
             : growth;
   const note = `${assumes} In today’s money. A direction, not a promise.`;
 

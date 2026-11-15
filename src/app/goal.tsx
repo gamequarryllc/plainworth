@@ -15,7 +15,7 @@ import { dayNumber, parseDateKey } from '@/lib/dates';
 import { confirm } from '@/lib/dialogs';
 import { centsToInput, formatTyping, parseAmount } from '@/lib/money';
 import { growingMix } from '@/lib/insights';
-import { goalStatus, growthOf, inFutureMoney, makePlan, ratePercent, type Mix, type Plan } from '@/lib/outlook';
+import { goalStatus, growthOf, inFutureMoney, makePlan, ratePercent, realGrowth, type Mix, type Plan } from '@/lib/outlook';
 import { netWorthHistory, netWorthPace, shift } from '@/lib/trends';
 import type { NetWorthGoal, Outlook } from '@/lib/types';
 import { useStore } from '@/store';
@@ -34,8 +34,8 @@ const roughly = (cents: number) => Math.round(cents / 1000) * 1000;
 
 /**
  * Set a net worth goal, in today's money, with or without a date (a year, or
- * an age), and the assumptions Where You're Headed uses: inflation, growth on
- * top of it, and the monthly pace. A summary shows where you stand as
+ * an age), and the assumptions Where You're Headed uses: yearly growth,
+ * inflation, and the monthly pace. A summary shows where you stand as
  * you type.
  */
 export default function GoalScreen() {
@@ -58,7 +58,7 @@ export default function GoalScreen() {
   const [age, setAge] = useState(saved?.age != null ? String(saved.age) : '');
   const [born, setBorn] = useState(savedBirthYear != null ? String(savedBirthYear) : '');
   const [inflation, setInflation] = useState(outlook.inflation);
-  const [growth, setGrowth] = useState(outlook.growth);
+  const [growth, setGrowth] = useState(outlook.yearlyGrowth);
   const [monthly, setMonthly] = useState<number | null>(outlook.monthly ?? null);
 
   const target = parseAmount(amount) ?? 0;
@@ -80,12 +80,12 @@ export default function GoalScreen() {
   const now = history.length ? history[history.length - 1] : null;
   const current = now?.end ?? 0;
   const pace = netWorthPace(history)?.perMonth ?? null;
-  const draftOutlook: Outlook = { inflation, growth, ...(monthly != null ? { monthly } : null) };
+  const draftOutlook: Outlook = { inflation, yearlyGrowth: growth, ...(monthly != null ? { monthly } : null) };
   const mix = growingMix({ accounts, snapshots, nwCategories }, dayNumber(today));
   const plan = makePlan(current, pace, draftOutlook, mix);
-  const estimate = makePlan(current, pace, { inflation, growth }, mix);
+  const estimate = makePlan(current, pace, { inflation, yearlyGrowth: growth }, mix);
   const birth = when === 'age' && bornOk ? bornNum : undefined;
-  const status = draft && now ? goalStatus(draft, birth, current, plan, growthOf({ growth }, mix), now.year, now.month) : null;
+  const status = draft && now ? goalStatus(draft, birth, current, plan, growthOf({ yearlyGrowth: growth, inflation }, mix), now.year, now.month) : null;
 
   const save = () => {
     if (!canSave) return;
@@ -238,9 +238,10 @@ export default function GoalScreen() {
 }
 
 function assumptionsNote(growth: number, inflation: number, estimate: Plan | null, mix: Mix): string {
-  const before = Math.round(((1 + growth) * (1 + inflation) - 1) * 100);
+  // Everything ahead is in today's money, so say what the growth comes to once prices have risen.
+  const real = Math.round(realGrowth({ yearlyGrowth: growth, inflation }) * 100);
   return (
-    `Only what’s in Investments grows: ${ratePercent(growth)} on top of ${ratePercent(inflation)} inflation, about ${before}% a year before inflation. ` +
+    `Only what’s in Investments grows: ${ratePercent(growth)} a year, about ${real}% after ${ratePercent(inflation)} inflation. ` +
     (mix.invested > 0
       ? 'Cash, a home and everything else hold their value. '
       : 'Nothing is in Investments yet, so no growth is counted. ') +

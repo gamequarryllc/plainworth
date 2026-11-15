@@ -1,5 +1,5 @@
 import { normalizeFund } from '@/lib/emergency';
-import type { Account, Data, NWCategory, SpendCategory } from '@/lib/types';
+import type { Account, Data, NWCategory, Outlook, SpendCategory } from '@/lib/types';
 
 import { DATA_VERSION, defaultOutlook, defaultReminder, defaultSettings, emptyData } from './defaults';
 
@@ -33,9 +33,24 @@ export function migrate(raw: unknown): Data {
       ...defaultSettings(),
       ...settings,
       reminder: { ...defaultReminder(), ...d.settings?.reminder },
-      outlook: { ...defaultOutlook(), ...d.settings?.outlook },
+      outlook: outlookOf(d.settings?.outlook),
     },
   };
+}
+
+/**
+ * Growth used to be saved as what's left after inflation (`growth`, 4% by
+ * default). Now it's the full yearly figure (`yearlyGrowth`, 7%), so an old
+ * one has inflation added back: 4% on top of 3% becomes 7%. The key is new so
+ * that a device still on the old version never reads 7% as "on top of inflation".
+ */
+function outlookOf(saved: (Partial<Outlook> & { growth?: unknown }) | undefined): Outlook {
+  const { growth, ...rest } = saved ?? {};
+  const outlook = { ...defaultOutlook(), ...rest };
+  if (rest.yearlyGrowth == null && typeof growth === 'number' && Number.isFinite(growth)) {
+    outlook.yearlyGrowth = Math.round((growth + outlook.inflation) * 1000) / 1000;
+  }
+  return outlook;
 }
 
 /**
