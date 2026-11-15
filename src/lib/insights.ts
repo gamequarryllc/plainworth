@@ -1,7 +1,15 @@
 import { dayNumber, monthKey, MONTHS, parseDateKey, parseMonthKey } from './dates';
 import { kindOf, seriesByAccount, type SeriesPoint } from './networth';
 import { grows, type Mix } from './outlook';
-import { earnedTotals, monthTotals, savingsRate, yearSummary, type MonthTotals } from './spending';
+import {
+  categoryTotals,
+  earnedTotals,
+  monthTotals,
+  savingsRate,
+  yearSummary,
+  yearsWithData,
+  type MonthTotals,
+} from './spending';
 import type { Account, Cents, Data, DateKey, ID, MonthKey, NWCategory, SpendCategory, SpendGroup } from './types';
 
 /** A value on a day: the latest point on or before it, or undefined before the first one. */
@@ -317,6 +325,31 @@ function summarize(
     rates: all.map((m, i) => (counted.has(i) ? savingsRate(m) : null)),
     categories,
   };
+}
+
+/**
+ * The years Where It Went can show, newest first: those with spending that
+ * counts, up to this year. A year with only income entered, or one still
+ * ahead, isn't one of them.
+ */
+export function spendingYears(data: Pick<Data, 'spend' | 'spendCategories'>, today: DateKey): number[] {
+  const now = parseDateKey(today).y;
+  return yearsWithData(data.spend)
+    .filter((y) => y <= now && !!spendingYear(data, y, today)?.categories.length)
+    .reverse();
+}
+
+/** The years Income can show, newest first: those with something earned, up to this year. */
+export function incomeYears(data: Pick<Data, 'spend' | 'spendCategories'>, today: DateKey): number[] {
+  const now = parseDateKey(today).y;
+  return yearsWithData(data.spend)
+    .filter((y) => y <= now && categoryTotals(data, y, ['income']).length > 0)
+    .reverse();
+}
+
+/** The year to show: the one picked while it's still on offer, otherwise the newest. */
+export function shownYear(years: number[], picked: number | null, fallback: number): number {
+  return picked != null && years.includes(picked) ? picked : (years[0] ?? fallback);
 }
 
 /** The first year anything was entered, in either tracker. */

@@ -1,16 +1,18 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import { StyleSheet } from 'react-native';
+import { useState } from 'react';
+import { StyleSheet, View } from 'react-native';
 
 import { IncomeSources } from '@/components/income-sources';
 import { InsightCard, RankRow } from '@/components/insight-card';
 import { PreviewFooter, useInsightsPreview } from '@/components/insights-preview';
 import { Row, Section } from '@/components/list';
+import { YearPills } from '@/components/pills';
 import { Screen } from '@/components/screen';
 import { Text } from '@/components/text';
 import { useMoney } from '@/hooks/use-money';
 import { useToday } from '@/hooks/use-today';
 import { parseDateKey } from '@/lib/dates';
-import { monthsLabel, recentMonths, spendingMonths, spendingYear } from '@/lib/insights';
+import { monthsLabel, recentMonths, shownYear, spendingMonths, spendingYear, spendingYears } from '@/lib/insights';
 import { formatPercent, roundsToZero } from '@/lib/money';
 import { categoryTotals, groupTitle } from '@/lib/spending';
 import type { SpendGroup } from '@/lib/types';
@@ -21,7 +23,8 @@ const GROUPS: SpendGroup[] = ['recurring', 'variable'];
 
 /**
  * Every spending category for a year (or the preview's two months), a month
- * on average, by group, then what the year's income was made of.
+ * on average, by group, then what the year's income was made of. It opens on
+ * the year the card was showing, and a row of years at the top shows any other.
  */
 export default function WhereItWentScreen() {
   const c = useColors();
@@ -32,11 +35,13 @@ export default function WhereItWentScreen() {
   const spend = useStore((s) => s.spend);
   const spendCategories = useStore((s) => s.spendCategories);
   const now = parseDateKey(today);
-  const year = Number(params.year) || now.y;
+  const data = { spend, spendCategories };
+  const years = preview ? [] : spendingYears(data, today);
+  const [picked, setPicked] = useState<number | null>(Number(params.year) || null);
+  const year = shownYear(years, picked, now.y);
   const whole = (cents: number) => money(cents, { whole: true });
   const signed = (cents: number) => money(cents, { signed: true, whole: true });
 
-  const data = { spend, spendCategories };
   const months = preview ? recentMonths(today) : null;
   const sp = months ? spendingMonths(data, months) : spendingYear(data, year, today);
   const spBefore = months ? null : spendingYear(data, year - 1, today);
@@ -47,7 +52,7 @@ export default function WhereItWentScreen() {
   if (!sp || !sp.categories.length) {
     return (
       <Screen title="Where It Went">
-        <Section footer={`Nothing spent in ${months ? monthsLabel(months) : year} yet.`}>
+        <Section footer={`Nothing spent in ${months ? monthsLabel(months) : year}${months || year === now.y ? ' yet' : ''}.`}>
           <Row title="Open Spending" titleColor="tint" chevron={false} onPress={() => router.navigate('/spending')} />
         </Section>
         <PreviewFooter />
@@ -60,6 +65,11 @@ export default function WhereItWentScreen() {
   const counted = sp.months === 1 ? 'one month' : `${sp.months} months`;
   return (
     <Screen title="Where It Went">
+      {years.length > 1 ? (
+        <View style={styles.years}>
+          <YearPills years={years} value={year} onChange={setPicked} style={styles.pills} />
+        </View>
+      ) : null}
       {GROUPS.map((group) => {
         const list = sp.categories.filter((x) => x.category.group === group);
         if (!list.length) return null;
@@ -109,6 +119,14 @@ export default function WhereItWentScreen() {
 }
 
 const styles = StyleSheet.create({
+  // The row scrolls edge to edge, with the first pill lined up with the cards' text.
+  years: {
+    marginHorizontal: layout.margin,
+    marginTop: 12,
+  },
+  pills: {
+    marginBottom: 0,
+  },
   footer: {
     marginHorizontal: layout.margin,
     marginTop: 8,

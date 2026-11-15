@@ -1,4 +1,4 @@
-import type { ComponentProps } from 'react';
+import type { ComponentProps, ReactNode } from 'react';
 
 import type { FormatMoney } from '@/hooks/use-money';
 import { formatPercent, MASK } from '@/lib/money';
@@ -18,6 +18,7 @@ export function IncomeSources({
   sentence = (answer) => answer,
   card,
   masked,
+  years,
 }: {
   totals: CategoryTotal[];
   /** "this year" or "in 2025". */
@@ -27,6 +28,8 @@ export function IncomeSources({
   sentence?: (answer: string, teaser: string) => string;
   card?: Partial<ComponentProps<typeof InsightCard>>;
   masked?: boolean;
+  /** A row to pick the year, drawn above the sources. */
+  years?: ReactNode;
 }) {
   const c = useColors();
   if (!totals.length) return null;
@@ -39,6 +42,7 @@ export function IncomeSources({
         'See what you earned this year, by source.',
       )}
       {...card}>
+      {years}
       {totals.map((t) => (
         <RankRow
           key={t.category.id}

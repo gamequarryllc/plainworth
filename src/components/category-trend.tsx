@@ -1,14 +1,11 @@
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
-
 import type { FormatMoney } from '@/hooks/use-money';
 import type { CategoryChange, CategoryMonth } from '@/lib/category-trend';
 import { MONTHS, MONTHS_SHORT } from '@/lib/dates';
-import { haptics } from '@/lib/haptics';
 import type { SpendCategory, SpendGroup } from '@/lib/types';
-import { layout, useColors } from '@/theme';
+import { useColors } from '@/theme';
 
 import type { Bar } from './bar-chart';
-import { Text } from './text';
+import { Pills } from './pills';
 
 /** Spending in blue, income in green, as elsewhere in the app. */
 export function useGroupColor() {
@@ -71,63 +68,12 @@ export function CategoryPills({
   /** Inside a card that opens Pro when tapped: shown, but not buttons of their own. */
   locked?: boolean;
 }) {
-  const c = useColors();
   return (
-    <ScrollView
-      horizontal
-      showsHorizontalScrollIndicator={false}
-      style={styles.scroll}
-      contentContainerStyle={styles.row}
-      accessibilityRole="tablist">
-      {categories.map((cat) => {
-        const selected = cat.id === value;
-        const label = (
-          <Text variant="footnote" weight="600" color={selected ? 'text' : 'secondary'} numberOfLines={1}>
-            {cat.name}
-          </Text>
-        );
-        if (locked) {
-          return (
-            <View key={cat.id} style={[styles.pill, { backgroundColor: selected ? c.fillStrong : c.fill }]}>
-              {label}
-            </View>
-          );
-        }
-        return (
-          <Pressable
-            key={cat.id}
-            onPress={() => {
-              if (!selected) haptics.selection();
-              onChange(cat.id);
-            }}
-            accessibilityRole="tab"
-            accessibilityState={{ selected }}
-            style={({ pressed }) => [
-              styles.pill,
-              { backgroundColor: selected ? c.fillStrong : c.fill },
-              pressed && !selected && { opacity: 0.6 },
-            ]}>
-            {label}
-          </Pressable>
-        );
-      })}
-    </ScrollView>
+    <Pills
+      options={categories.map((cat) => ({ value: cat.id, label: cat.name }))}
+      value={value}
+      onChange={onChange}
+      locked={locked}
+    />
   );
 }
-
-const styles = StyleSheet.create({
-  // Runs to the card's edges, so the pills scroll under them.
-  scroll: {
-    marginHorizontal: -layout.margin,
-    marginBottom: 14,
-  },
-  row: {
-    paddingHorizontal: layout.margin,
-    gap: 6,
-  },
-  pill: {
-    paddingHorizontal: 11,
-    paddingVertical: 6,
-    borderRadius: 14,
-  },
-});

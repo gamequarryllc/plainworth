@@ -14,6 +14,7 @@ import { EmptyState } from "@/components/empty-state";
 import { Icon } from "@/components/icon";
 import { IncomeSources } from "@/components/income-sources";
 import { InsightCard, RankRow } from "@/components/insight-card";
+import { YearPills } from "@/components/pills";
 import {
   InsightsUnlocked,
   InsightsWaiting,
@@ -46,7 +47,10 @@ import { dayNumber, MONTHS, MONTHS_SHORT, parseDateKey } from "@/lib/dates";
 import {
   firstYear,
   growingMix,
+  incomeYears,
+  shownYear,
   spendingYear,
+  spendingYears,
   type Month,
 } from "@/lib/insights";
 import { formatPercent, MASK, roundsToZero } from "@/lib/money";
@@ -939,8 +943,9 @@ function Spending({ filled }: { filled?: boolean }) {
     chartable.length ? (
       <CategoryCard key="category" categories={chartable} />
     ) : null,
-    sp?.categories.length ? <WhereItWentCard key="where" year={year} /> : null,
-    <IncomeCard key="income" year={year} />,
+    // Each of these picks its own year, so they show as long as any year has something.
+    spendingYears(data, today).length ? <WhereItWentCard key="where" /> : null,
+    <IncomeCard key="income" />,
   ]);
 
   // Four charts and the income card.
@@ -1581,23 +1586,38 @@ function CategoryCard({ categories }: { categories: SpendCategory[] }) {
 }
 
 /** What came in this year, by source. Nothing to show without income entered. */
-function IncomeCard({ year }: { year: number }) {
+function IncomeCard() {
   const lock = useLock();
+  const today = useToday();
+  const thisYear = parseDateKey(today).y;
   const data = useSpendData();
+  const years = incomeYears(data, today);
+  const [picked, setPicked] = useState<number | null>(null);
+  // Locked, it stays on the newest year: the row of years is part of Pro.
+  const year = shownYear(years, lock.locked ? null : picked, thisYear);
   return (
     <IncomeSources
       totals={categoryTotals(data, year, ["income"])}
-      when="this year"
+      when={year === thisYear ? "this year" : `in ${year}`}
       money={lock.money}
       sentence={lock.text}
       card={lock.card}
       masked={lock.locked}
+      years={
+        lock.locked ? null : (
+          <YearPills years={years} value={year} onChange={setPicked} />
+        )
+      }
     />
   );
 }
 
-/** The year's biggest spending categories, with the full list a tap away. */
-function WhereItWentCard({ year }: { year: number }) {
+/**
+ * A year's biggest spending categories, with the full list a tap away. A row
+ * of years, when there's more than one, shows any of them, each against the
+ * year before it.
+ */
+function WhereItWentCard() {
   const c = useColors();
   const lock = useLock();
   const money = lock.money;
@@ -1605,24 +1625,32 @@ function WhereItWentCard({ year }: { year: number }) {
   const data = useSpendData();
   const whole = (cents: number) => money(cents, { whole: true });
   const signed = (cents: number) => money(cents, { signed: true, whole: true });
-  const sp = spendingYear(data, year, today)!;
+  const thisYear = parseDateKey(today).y;
+  const years = spendingYears(data, today);
+  const [picked, setPicked] = useState<number | null>(null);
+  // Locked, it stays on the newest year: the row of years is part of Pro.
+  const year = shownYear(years, lock.locked ? null : picked, thisYear);
+  const sp = spendingYear(data, year, today);
   const spBefore = spendingYear(data, year - 1, today);
+  // Only drawn when some year has spending, and `year` is one of those.
+  const top = sp?.categories[0];
+  if (!sp || !top) return null;
   const canCompare = !!spBefore && sp.months >= 2 && spBefore.months >= 2;
+  const when = year === thisYear ? "this year" : `in ${year}`;
   const lastYearMonthly = new Map(
     spBefore?.categories.map((x) => [x.category.id, x.monthly]) ?? [],
   );
-  const top = sp.categories[0];
   return (
     <InsightCard
       label="Where It Went"
       sentence={lock.text(
-        `${top.category.name} took ${formatPercent(top.share)} of your spending this year.`,
+        `${top.category.name} took ${formatPercent(top.share)} of your spending ${when}.`,
         "See every category a month on average, and how each compares with last year.",
       )}
       note={
         canCompare
           ? `Under each is how much more or less that is a month than in ${year - 1}.`
-          : null
+          : "Under each is its share of your spending."
       }
       onPress={() =>
         router.push({
@@ -1632,6 +1660,9 @@ function WhereItWentCard({ year }: { year: number }) {
       }
       {...lock.card}
     >
+      {lock.locked ? null : (
+        <YearPills years={years} value={year} onChange={setPicked} />
+      )}
       {sp.categories.slice(0, 5).map((x) => {
         const change = canCompare
           ? x.monthly - (lastYearMonthly.get(x.category.id) ?? 0)

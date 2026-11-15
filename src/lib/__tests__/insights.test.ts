@@ -7,13 +7,16 @@ import {
   firstYear,
   growingMix,
   holdingsOn,
+  incomeYears,
   monthsLabel,
   monthsSpan,
   netWorthMonths,
   netWorthYear,
   recentMonths,
+  shownYear,
   spendingMonths,
   spendingYear,
+  spendingYears,
   valueAt,
   yearSpan,
 } from '../insights';
@@ -267,4 +270,41 @@ test('insights: spending over a few months counts the ones entered', () => {
   assert.deepEqual(both.spent, year.spent.slice(0, 2));
   assert.deepEqual(both.categories.map((x) => x.category.id), ['rent', 'fun', 'food']);
   assert.equal(spendingMonths(spendData, [{ year: 2024, month: 5 }]), null);
+});
+
+test('insights: the years Where It Went and Income can show', () => {
+  const cats: SpendCategory[] = [
+    { id: 'pay', name: 'Pay', group: 'income', order: 0, hidden: false },
+    { id: 'rent', name: 'Rent', group: 'recurring', order: 1, hidden: false },
+  ];
+  const data = {
+    spendCategories: cats,
+    spend: {
+      '2022-03': { rent: 900_00 },
+      // Only income entered: a year for Income, not for Where It Went.
+      '2023-06': { pay: 3_000_00 },
+      '2024-01': { rent: 1_000_00, pay: 3_000_00 },
+      // Nothing but zeros: not a year at all.
+      '2025-02': { rent: 0 },
+      '2026-05': { rent: 1_200_00, pay: 3_500_00 },
+      // Still ahead: left out.
+      '2027-01': { rent: 1_300_00, pay: 3_600_00 },
+      // A category that was deleted: nothing to show for it.
+      '2021-04': { gone: 500_00 },
+    },
+  };
+  assert.deepEqual(spendingYears(data, '2026-11-14'), [2026, 2024, 2022]);
+  assert.deepEqual(incomeYears(data, '2026-11-14'), [2026, 2024, 2023]);
+  // Each of those years has something to draw.
+  for (const y of spendingYears(data, '2026-11-14')) assert.ok(spendingYear(data, y, '2026-11-14')!.categories.length > 0);
+  // In January with nothing entered yet, last year is the newest.
+  assert.deepEqual(spendingYears({ ...data, spend: { '2025-08': { rent: 900_00 } } }, '2026-01-10'), [2025]);
+  assert.deepEqual(spendingYears({ spendCategories: cats, spend: {} }, '2026-01-10'), []);
+
+  // The year shown: the one picked while it's on offer, otherwise the newest, otherwise this year.
+  assert.equal(shownYear([2026, 2024, 2022], null, 2026), 2026);
+  assert.equal(shownYear([2026, 2024, 2022], 2024, 2026), 2024);
+  assert.equal(shownYear([2026, 2024, 2022], 2023, 2026), 2026);
+  assert.equal(shownYear([2025], null, 2026), 2025);
+  assert.equal(shownYear([], 2024, 2026), 2026);
 });
