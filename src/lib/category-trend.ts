@@ -46,19 +46,11 @@ export function categoryMonths(data: SpendData, id: ID, today: DateKey): Categor
   if (!firstKey) return [];
   const [y, m] = firstKey.split('-').map(Number);
   const first: Month = { year: y, month: m };
-  // A stopped category ends at its last amount instead of trailing off in zeros.
-  const stopped = data.spendCategories.find((c) => c.id === id)?.hidden;
-  const lastKey = stopped
-    ? Object.keys(data.spend)
-        .filter((key) => key <= endKey && !!data.spend[key]?.[id])
-        .sort()
-        .pop()!
-    : endKey;
+  // Hidden or not, a category counts the same: hiding only tidies the month screen.
   return Array.from({ length: monthsBetween(first, end) + 1 }, (_, i) => {
     const month = shift(first, i);
     const key = monthKey(month.year, month.month);
     const entries = data.spend[key];
-    if (key > lastKey) return { ...month, value: null };
     return { ...month, value: entries?.[id] ? entries[id] : hasData(entries) ? 0 : null };
   });
 }

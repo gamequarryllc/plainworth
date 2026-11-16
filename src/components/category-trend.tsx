@@ -24,6 +24,16 @@ export function categorySentence(
   average: number | null,
   whole: (cents: number) => string,
 ): string {
+  // Paid now and then, like a yearly insurance bill: a monthly figure would mislead.
+  const counted = months.filter((m) => m.value != null);
+  const paid = counted.filter((m) => !!m.value);
+  if (counted.length >= 3 && paid.length * 2 < counted.length) {
+    const total = whole(paid.reduce((sum, m) => sum + m.value!, 0));
+    const first = paid[0];
+    return paid.length === 1
+      ? `${total} in ${MONTHS_SHORT[first.month - 1]} ${first.year}.`
+      : `${total} in ${paid.length} months since ${MONTHS_SHORT[first.month - 1]} ${first.year}.`;
+  }
   if (!change) {
     const first = months.find((m) => m.value != null);
     if (average == null || !first) return `Nothing entered for ${name} yet.`;

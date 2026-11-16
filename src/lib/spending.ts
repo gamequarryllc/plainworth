@@ -1,4 +1,4 @@
-import { monthKey, parseMonthKey } from './dates';
+import { monthKey, parseMonthKey, shiftMonth } from './dates';
 import type { Cents, Data, ID, MonthKey, SpendCategory, SpendGroup } from './types';
 
 export interface MonthTotals {
@@ -136,13 +136,28 @@ export function yearsWithData(spend: Data['spend']): number[] {
   return [...years].sort((a, b) => a - b);
 }
 
-/** Categories to show for a month: visible ones, plus hidden ones that have a value that month. */
+/**
+ * Categories to show for a month: visible ones, plus hidden ones that have a
+ * value that month (or are in `keep`, so a row being typed in doesn't vanish).
+ */
 export function categoriesForMonth(
   categories: SpendCategory[],
   entries: Record<ID, Cents> | undefined,
   group: SpendGroup,
+  keep?: ReadonlySet<ID>,
 ): SpendCategory[] {
   return categories
-    .filter((c) => c.group === group && (!c.hidden || !!entries?.[c.id]))
+    .filter((c) => c.group === group && (!c.hidden || !!entries?.[c.id] || !!keep?.has(c.id)))
     .sort((a, b) => a.order - b.order);
+}
+
+/**
+ * Whether last month's amount for a bill is one to copy into `month`: it was
+ * there the month before too, or that month has nothing entered at all (your
+ * first months). A one-off, like a yearly insurance payment, isn't copied.
+ */
+export function repeats(spend: Data['spend'], month: MonthKey, id: ID): boolean {
+  if (!spend[shiftMonth(month, -1)]?.[id]) return false;
+  const before = spend[shiftMonth(month, -2)];
+  return !before || !Object.values(before).some(Boolean) || !!before[id];
 }

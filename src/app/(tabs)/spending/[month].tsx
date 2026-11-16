@@ -15,10 +15,9 @@ import { Text } from '@/components/text';
 import { useMoney } from '@/hooks/use-money';
 import { features } from '@/lib/features';
 import { currentMonthKey, formatMonth, MONTHS, parseMonthKey, shiftMonth } from '@/lib/dates';
-import { confirm } from '@/lib/dialogs';
 import { haptics } from '@/lib/haptics';
 import { formatPercent, roundsToZero } from '@/lib/money';
-import { categoriesForMonth, GROUPS, monthTotals, type MonthTotals } from '@/lib/spending';
+import { categoriesForMonth, GROUPS, monthTotals, repeats, type MonthTotals } from '@/lib/spending';
 import type { SpendCategory } from '@/lib/types';
 import { useStore } from '@/store';
 import { useProfiles } from '@/store/profile-list';
@@ -54,7 +53,14 @@ export default function MonthScreen() {
   const imported = useLastImport((s) => (s.last?.month === month && s.last.profile === profile ? s.last : null));
   const chain = useFieldChain();
   const [swipes] = useState(() => new SwipeGroup());
-  const lists = GROUPS.map((group) => categoriesForMonth(categories, entries, group.key));
+  // Hidden rows with an amount stay put while you're on this month, even if you
+  // clear the amount, so a row doesn't vanish under your finger mid-typing.
+  const [kept, setKept] = useState<{ month: string; ids: Set<string> }>({ month: '', ids: new Set() });
+  if (kept.month !== month) {
+    setKept({ month, ids: new Set(categories.filter((x) => x.hidden && !!entries[x.id]).map((x) => x.id)) });
+  }
+  const keep = kept.month === month ? kept.ids : undefined;
+  const lists = GROUPS.map((group) => categoriesForMonth(categories, entries, group.key, keep));
   const drag = useDragRows(lists.map((list) => list.map((x) => x.id).join(',')).join('|'));
   const reorder = (ids: string[]) => {
     setSpendCategoryOrder(ids);
@@ -66,8 +72,9 @@ export default function MonthScreen() {
   const prevTotals = monthTotals(previous, byId);
   const prevName = MONTHS[parseMonthKey(previousKey).month - 1];
 
+  const allSpend = useStore((s) => s.spend);
   const canFill = categoriesForMonth(categories, entries, 'recurring').some(
-    (x) => !entries[x.id] && !!previous?.[x.id],
+    (x) => !x.hidden && !entries[x.id] && repeats(allSpend, month, x.id),
   );
 
   const vsPrev = (now: number, before: number): string | undefined => {
@@ -85,32 +92,10 @@ export default function MonthScreen() {
   const go = (step: number) => router.setParams({ month: shiftMonth(month, step) });
 
   /**
-   * Stop a category from showing up in new months. Nothing already entered is
-   * cleared: this month and every other month keep their amounts, and so do the
-   * totals and Insights. A category that was never used is simply removed.
+   * Hide a category from months with no amount. Nothing entered is cleared, so
+   * there's nothing to confirm; a category that was never used is removed.
    */
-  const stop = async (cat: SpendCategory, close: () => void) => {
-    const spend = useStore.getState().spend;
-    const used = Object.keys(spend).filter((m) => !!spend[m][cat.id]);
-    if (used.length) {
-      const here = used.includes(month);
-      const monthName = MONTHS[parseMonthKey(month).month - 1];
-      const others = used.length - (here ? 1 : 0);
-      const where = here
-        ? others
-          ? `${monthName} and ${others === 1 ? '1 other month' : `${others} other months`} keep`
-          : `${monthName} keeps`
-        : `The ${used.length === 1 ? 'month that uses it keeps its amount' : `${used.length} months that use it keep their amounts`}`;
-      const ok = await confirm({
-        title: `Stop Tracking ${cat.name}?`,
-        message: `It won’t show up in new months. ${here ? `${where} ${used.length === 1 ? 'its amount' : 'their amounts'}` : where}, and your totals and Insights stay the same.`,
-        confirmLabel: 'Stop Tracking',
-      });
-      if (!ok) {
-        close();
-        return;
-      }
-    }
+  const hide = (cat: SpendCategory) => {
     // Let the tap finish before the row (and its swipe gesture) goes away.
     requestAnimationFrame(() => {
       removeSpendCategory(cat.id);
@@ -201,7 +186,7 @@ export default function MonthScreen() {
                       },
                       cat.hidden
                         ? {
-                            label: 'Resume',
+                            label: 'Unhide',
                             color: c.tint,
                             onPress: (close) => {
                               close();
@@ -209,11 +194,18 @@ export default function MonthScreen() {
                               haptics.light();
                             },
                           }
-                        : { label: 'Stop', color: c.down, onPress: (close) => stop(cat, close) },
+                        : {
+                            label: 'Hide',
+                            color: '#FF9500',
+                            onPress: (close) => {
+                              // A row with an amount this month stays, so slide it shut.
+                              if (entries[cat.id]) close();
+                              hide(cat);
+                            },
+                          },
                     ]}>
                     <Row
                       title={cat.name}
-                      subtitle={cat.hidden ? 'Not tracked in new months' : undefined}
                       accessory={
                         <AmountInput
                           ref={chain.ref(i)}

@@ -25,13 +25,13 @@ export default function SpendCategoryFormScreen() {
   const [name, setName] = useState(existing?.name ?? '');
   const [group, setGroup] = useState<SpendGroup>(existing?.group ?? params.group ?? 'variable');
   const [hidden, setHidden] = useState(existing?.hidden ?? false);
-  // Two categories with one name in the same list can't be told apart.
-  const taken = useStore((s) =>
-    s.spendCategories.some(
-      (x) =>
-        x.id !== params.id && !x.hidden && x.group === group && x.name.trim().toLowerCase() === name.trim().toLowerCase(),
-    ),
+  // One name, one category, so Insights never shows two of them. Typing the
+  // name of a hidden one when adding brings that one back instead.
+  const same = useStore((s) =>
+    s.spendCategories.find((x) => x.id !== params.id && x.name.trim().toLowerCase() === name.trim().toLowerCase()),
   );
+  const bringsBack = !existing && !!same?.hidden;
+  const taken = !!same && !bringsBack;
   const valid = name.trim().length > 0 && !taken;
 
   const save = () => {
@@ -46,7 +46,7 @@ export default function SpendCategoryFormScreen() {
     const ok = await confirm({
       title: `Delete ${existing.name}?`,
       message: usedMonths
-        ? `It has amounts in ${usedMonths} ${usedMonths === 1 ? 'month' : 'months'}, and those will be removed from your totals. To keep them, turn off Track in New Months instead.`
+        ? `It has amounts in ${usedMonths} ${usedMonths === 1 ? 'month' : 'months'}, and those will be removed from your totals. To keep them, hide it instead.`
         : undefined,
       confirmLabel: 'Delete',
       destructive: true,
@@ -63,7 +63,15 @@ export default function SpendCategoryFormScreen() {
       title={existing ? 'Edit Category' : 'New Category'}
       left={[{ label: 'Cancel', icon: 'xmark', onPress: () => router.back() }]}
       right={[{ label: 'Save', icon: 'checkmark', variant: 'done', disabled: !valid, onPress: save }]}>
-      <Section footer={taken ? 'You already have a category with this name.' : undefined} footerWarns>
+      <Section
+        footer={
+          taken
+            ? `You already have ${same.hidden ? 'a hidden category' : 'a category'} with this name.`
+            : bringsBack
+              ? `Brings back ${same.name} and its past months.`
+              : undefined
+        }
+        footerWarns={taken}>
         <Row
           title={
             <TextInput
@@ -77,6 +85,7 @@ export default function SpendCategoryFormScreen() {
           }
         />
       </Section>
+      {bringsBack ? null : (
       <Section
         header="Group"
         footer="Recurring is for bills you have to pay, like rent, utilities and insurance. Spending is everything you choose, like eating out. Insights can show either one on its own. Income is money coming in.">
@@ -91,10 +100,11 @@ export default function SpendCategoryFormScreen() {
           }
         />
       </Section>
+      )}
       {existing ? (
         <>
-          <Section footer="Turn this off when you’re done with a category, like paying a friend back. It stops showing up in new months, and months that already use it keep their amounts.">
-            <Row title="Track in New Months" accessory={<Switch value={!hidden} onValueChange={(on) => setHidden(!on)} />} />
+          <Section footer="A hidden category only shows in months that have an amount. Type its name again to bring it back.">
+            <Row title="Hidden" accessory={<Switch value={hidden} onValueChange={setHidden} />} />
           </Section>
           <Section>
             <Row title="Delete Category" titleColor="down" centered onPress={remove} />

@@ -32,7 +32,7 @@ export default function SpendCategoriesScreen() {
               <Row
                 key={cat.id}
                 title={cat.name}
-                value={cat.hidden ? 'Not Tracked' : undefined}
+                value={cat.hidden ? 'Hidden' : undefined}
                 chevron={!reordering}
                 accessory={
                   reordering ? (

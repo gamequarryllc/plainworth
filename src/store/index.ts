@@ -6,6 +6,7 @@ import { newId } from '@/lib/id';
 import { spotUpdates } from '@/lib/metals';
 import { compareSnapshots } from '@/lib/networth';
 import { placeInOrder } from '@/lib/order';
+import { repeats } from '@/lib/spending';
 import { storage } from '@/lib/storage';
 import type {
   Account,
@@ -71,11 +72,7 @@ interface Actions {
   addSpendCategory(input: Pick<SpendCategory, 'name' | 'group'>): ID;
   updateSpendCategory(id: ID, patch: Partial<Pick<SpendCategory, 'name' | 'group' | 'hidden'>>): void;
   deleteSpendCategory(id: ID): void;
-  /**
-   * Take a category out of the list from a month screen: clears its amount for
-   * that month, then hides it if other months still use it, or deletes it.
-   */
-  /** Stop offering a category in new months, keeping every amount; deletes it only if it was never used. */
+  /** Hide a category from months with no amount, keeping every amount; deletes it only if it was never used. */
   removeSpendCategory(id: ID): 'hidden' | 'deleted';
   moveSpendCategory(id: ID, direction: -1 | 1): void;
   /**
@@ -342,7 +339,7 @@ const realStore = create<Store>()((set, get) => ({
     let filled = 0;
     const entries = { ...current };
     for (const c of recurring) {
-      if (!entries[c.id] && previous[c.id]) {
+      if (!entries[c.id] && repeats(s.spend, month, c.id)) {
         entries[c.id] = previous[c.id];
         filled++;
       }
@@ -362,9 +359,9 @@ const realStore = create<Store>()((set, get) => ({
 
   addSpendCategory({ name, group }) {
     const trimmed = name.trim();
-    // Adding back a category that was removed brings back its history too.
+    // Typing the name of a hidden category brings it back, with its history, in its own group.
     const removed = get().spendCategories.find(
-      (c) => c.hidden && c.group === group && c.name.trim().toLowerCase() === trimmed.toLowerCase(),
+      (c) => c.hidden && c.name.trim().toLowerCase() === trimmed.toLowerCase(),
     );
     if (removed) {
       get().updateSpendCategory(removed.id, { hidden: false });
@@ -393,7 +390,7 @@ const realStore = create<Store>()((set, get) => ({
   },
 
   removeSpendCategory(id) {
-    // Stopping a category never touches amounts already entered: those months,
+    // Hiding a category never touches amounts already entered: those months,
     // the totals and Insights keep them. Only a category with no amounts at all goes away.
     const stillUsed = Object.values(get().spend).some((entries) => !!entries[id]);
     if (stillUsed) {

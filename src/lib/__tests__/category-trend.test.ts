@@ -41,10 +41,13 @@ test('category trend: months from the first amount, gaps for months with nothing
   assert.deepEqual(months[21], { year: 2026, month: 10, value: 486_00 });
 });
 
-test('category trend: a stopped category ends at its last amount', () => {
+test('category trend: a hidden category counts like any other', () => {
   const months = categoryMonths(data, 'gym', today);
   assert.equal(months[2].value, 40_00);
-  assert.ok(months.slice(3).every((m) => m.value === null));
+  // Months after its last amount are zeros (and Jun 2025, with nothing entered, an empty slot).
+  assert.equal(months[3].value, 0);
+  assert.equal(months[5].value, null);
+  assert.equal(months[21].value, 0);
 });
 
 test('category trend: the last 12 months, average over months entered', () => {

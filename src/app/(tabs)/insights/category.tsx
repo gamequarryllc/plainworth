@@ -94,11 +94,7 @@ export default function CategoryTrendScreen() {
             ? `See how ${category.name} changes month to month.`
             : categorySentence(category.name, all, change, averageOf(all), whole)
         }
-        note={
-          category.hidden
-            ? `You stopped tracking ${category.name}. Its months stay here.`
-            : 'Lately means your last three months. Counts each month once it’s over.'
-        }>
+        note="Lately means your last three months. Counts each month once it’s over.">
         <CategoryPills categories={categories} value={category.id} onChange={pick} />
         {spans.length > 1 ? (
           <Segmented options={spans} value={shown.value} onChange={changeSpan} style={styles.spans} />
