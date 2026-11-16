@@ -263,6 +263,22 @@ export function lifestyleCreep(months: CreepMonth[]): Creep | null {
   return { months, start: direction === 'steady' ? null : entered[split], direction, before, lately };
 }
 
+/**
+ * One calendar year of `creepMonths`, January to December, with months
+ * outside what was tracked left empty so the chart always reads as a year.
+ */
+export function creepYear(all: CreepMonth[], year: number): CreepMonth[] {
+  const byMonth = new Map(all.filter((m) => m.year === year).map((m) => [m.month, m]));
+  return Array.from({ length: 12 }, (_, i) => byMonth.get(i + 1) ?? { year, month: i + 1, spent: null, earned: null });
+}
+
+/** The years Lifestyle Creep can show, newest first: those with enough months entered to tell. */
+export function creepYears(all: CreepMonth[]): number[] {
+  return [...new Set(all.map((m) => m.year))]
+    .filter((y) => lifestyleCreep(creepYear(all, y)) != null)
+    .sort((a, b) => b - a);
+}
+
 export type PeriodUnit = 'month' | 'quarter' | 'year';
 
 export interface Distribution {

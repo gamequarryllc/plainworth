@@ -4,6 +4,8 @@ import { test } from 'node:test';
 import {
   distribution,
   creepMonths,
+  creepYear,
+  creepYears,
   lifestyleCreep,
   netWorthHistory,
   netWorthPace,
@@ -207,4 +209,17 @@ test('trends: this year against last over the same months', () => {
   // No last year, or nothing this year.
   assert.equal(compareYears([n, 5, n, n, n, n, n, n, n, n, n, n], Array(12).fill(n))?.then, null);
   assert.equal(compareYears(Array(12).fill(n), [1, 2, n, n, n, n, n, n, n, n, n, n]), null);
+});
+
+test('creepYears offers only years with six months entered, newest first', () => {
+  const months = [
+    ...Array.from({ length: 4 }, (_, i) => ({ year: 2024, month: 9 + i, spent: 1000, earned: null })),
+    ...Array.from({ length: 12 }, (_, i) => ({ year: 2025, month: i + 1, spent: 1000 + i * 100, earned: null })),
+    ...Array.from({ length: 7 }, (_, i) => ({ year: 2026, month: i + 1, spent: 2000, earned: null })),
+  ];
+  assert.deepEqual(creepYears(months), [2026, 2025]);
+  const y = creepYear(months, 2026);
+  assert.equal(y.length, 12);
+  assert.equal(y[6].spent, 2000);
+  assert.equal(y[7].spent, null);
 });

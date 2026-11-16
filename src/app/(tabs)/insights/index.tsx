@@ -6,9 +6,7 @@ import { BarChart } from "@/components/bar-chart";
 import {
   CategoryPills,
   categoryBars,
-  categorySentence,
   useGroupColor,
-  yearLabels,
 } from "@/components/category-trend";
 import { EmptyState } from "@/components/empty-state";
 import { Icon } from "@/components/icon";
@@ -39,9 +37,10 @@ import { useMoney } from "@/hooks/use-money";
 import { useToday } from "@/hooks/use-today";
 import {
   averageOf,
-  categoryChange,
+  categoryMonths,
+  categoryYearMonths,
+  categoryYears,
   chartableCategories,
-  recentCategoryMonths,
 } from "@/lib/category-trend";
 import { dayNumber, MONTHS, MONTHS_SHORT, parseDateKey } from "@/lib/dates";
 import {
@@ -70,6 +69,8 @@ import {
 import {
   compareYears,
   creepMonths,
+  creepYear,
+  creepYears,
   distribution,
   lifestyleCreep,
   netWorthHistory,
@@ -939,7 +940,7 @@ function Spending({ filled }: { filled?: boolean }) {
         lastYear={spentSoFar(data, year - 1, today)}
       />
     ) : null,
-    lifestyleCreep(creepAll) ? <CreepCard key="creep" all={creepAll} /> : null,
+    creepYears(creepAll).length ? <CreepCard key="creep" all={creepAll} /> : null,
     chartable.length ? (
       <CategoryCard key="category" categories={chartable} />
     ) : null,
@@ -1296,14 +1297,6 @@ function goalSentence(
   return null;
 }
 
-type CreepRange = "12" | "24" | "60" | "all";
-const CREEP_RANGES: { value: CreepRange; label: string }[] = [
-  { value: "12", label: "1Y" },
-  { value: "24", label: "2Y" },
-  { value: "60", label: "5Y" },
-  { value: "all", label: "All" },
-];
-
 /** "Jan–Jun 2025", or "Nov 2024–Apr 2025" across a new year. */
 function monthSpan(from: Month, to: Month): string {
   const a = MONTHS_SHORT[from.month - 1];
@@ -1316,9 +1309,10 @@ function monthSpan(from: Month, to: Month): string {
 }
 
 /**
- * Lifestyle creep in plain dollars: every month's spending as a bar, with
- * the steady months before the climb faded and the month it started marked,
- * so "about $1,800 a month, then a raise, then up and up" reads at a glance.
+ * Lifestyle creep in plain dollars, one year at a time: every month's
+ * spending as a bar, with the steady months before the climb faded and the
+ * month it started marked, so "about $1,800 a month, then a raise, then up
+ * and up" reads at a glance. A row of years picks which year.
  */
 function CreepCard({ all }: { all: CreepMonth[] }) {
   const c = useColors();
@@ -1327,43 +1321,28 @@ function CreepCard({ all }: { all: CreepMonth[] }) {
   const whole = (cents: number) => money(cents, { whole: true });
   const hidden = useStore((s) => s.settings.hideAmounts);
   const today = useToday();
-  const [range, setRange] = useState<CreepRange | null>(null);
+  const thisYear = parseDateKey(today).y;
+  const years = creepYears(all);
+  const [picked, setPicked] = useState<number | null>(null);
   const [at, setAt] = useState<number | null>(null);
-
-  // A range shows once there's more history than the one before it, and enough in it to tell.
-  const options = CREEP_RANGES.filter((r, i) => {
-    if (i > 0 && all.length <= Number(CREEP_RANGES[i - 1].value)) return false;
-    if (r.value === "all") return all.length > 60;
-    return lifestyleCreep(all.slice(-Number(r.value))) != null;
-  });
-  // Two years by default: long enough to reach back before a raise.
-  const fallback =
-    [...options]
-      .reverse()
-      .find((r) => r.value !== "all" && Number(r.value) <= 24) ??
-    options[options.length - 1];
-  const picked = options.find((r) => r.value === range) ?? fallback;
-  const months =
-    picked && picked.value !== "all" ? all.slice(-Number(picked.value)) : all;
+  // Locked, it stays on the newest year: the row of years is part of Pro.
+  const year = shownYear(years, lock.locked ? null : picked, thisYear);
+  const months = creepYear(all, year);
   const creep = lifestyleCreep(months);
   if (!creep) return null;
   const { before, lately, direction, start } = creep;
-  const thisYear = parseDateKey(today).y;
-  const when = (m: Month) =>
-    m.year === thisYear
-      ? MONTHS[m.month - 1]
-      : `${MONTHS[m.month - 1]} ${m.year}`;
+  const inYear = year === thisYear ? "" : ` in ${year}`;
 
   const diff = lately.spent - before.spent;
   const sentence =
     direction === "steady" || start == null
-      ? `Steady at about ${whole(lately.spent)} a month.`
-      : `${direction === "up" ? "Up" : "Down"} ${whole(Math.abs(diff))} a month since ${when(months[start])}.`;
+      ? `Steady at about ${whole(lately.spent)} a month${inYear}.`
+      : `${direction === "up" ? "Up" : "Down"} ${whole(Math.abs(diff))} a month since ${MONTHS[months[start].month - 1]}${year === thisYear ? "" : ` ${year}`}.`;
 
   const count = months.length;
   const selected = at != null && at < count ? months[at] : null;
-  const pick = (r: CreepRange) => {
-    setRange(r);
+  const pick = (y: number) => {
+    setPicked(y);
     setAt(null);
   };
   const bars = months.map((m, i) => ({
@@ -1393,18 +1372,11 @@ function CreepCard({ all }: { all: CreepMonth[] }) {
         "See when your spending started to climb, and how much more a month it is now.",
       )}
       {...lock.card}
-      note={`Each bar is what you spent that month. Lately is your last three months. Counts each month once it’s over.`}
+      note={`Each bar is what you spent that month. Lately is the year’s last three months. Counts each month once it’s over.`}
     >
-      {options.length > 1 ? (
-        <View pointerEvents={lock.locked ? "none" : "auto"}>
-          <Segmented
-            options={options}
-            value={picked.value}
-            onChange={pick}
-            style={styles.horizon}
-          />
-        </View>
-      ) : null}
+      {lock.locked ? null : (
+        <YearPills years={years} value={year} onChange={pick} />
+      )}
       {/* Same height either way, so the chart stays put under a dragging finger. */}
       <View style={styles.creepTop}>
         {selected ? (
@@ -1473,11 +1445,6 @@ function CreepCard({ all }: { all: CreepMonth[] }) {
             ? undefined
             : (v) => money(v, { compact: true, whole: true })
         }
-        axisLabels={
-          count > 13
-            ? yearLabels(months.map((m) => ({ ...m, value: m.spent })))
-            : undefined
-        }
         height={150}
       />
     </InsightCard>
@@ -1485,38 +1452,51 @@ function CreepCard({ all }: { all: CreepMonth[] }) {
 }
 
 /**
- * One category at a time, month by month for the last year, like Screen
- * Time's daily bars: eating out at $150 in January and $500 by October shows
- * at a glance. Pills pick the category; every month it has is a tap away.
+ * One category at a time, month by month for a year, like Screen Time's
+ * daily bars: eating out at $150 in January and $500 by October shows at a
+ * glance. Pills pick the category and the year; every month it has is a tap
+ * away.
  */
 function CategoryCard({ categories }: { categories: SpendCategory[] }) {
   const lock = useLock();
   const money = lock.money;
   const groupColor = useGroupColor();
   const today = useToday();
+  const thisYear = parseDateKey(today).y;
   const spend = useStore((s) => s.spend);
   const spendCategories = useStore((s) => s.spendCategories);
   const hidden = useStore((s) => s.settings.hideAmounts);
   const [picked, setPicked] = useState<string | null>(null);
+  const [pickedYear, setPickedYear] = useState<number | null>(null);
   const [at, setAt] = useState<number | null>(null);
   const category = categories.find((x) => x.id === picked) ?? categories[0];
   const whole = (cents: number) => money(cents, { whole: true });
 
-  const data = { spend, spendCategories };
-  const months = recentCategoryMonths(data, category.id, today, 12);
+  const all = categoryMonths({ spend, spendCategories }, category.id, today);
+  const perYear = categoryYears(all);
+  const years = perYear.map((y) => y.year).reverse();
+  // Locked, it stays on the newest year: the row of years is part of Pro.
+  const year = shownYear(years, lock.locked ? null : pickedYear, thisYear);
+  const months = categoryYearMonths(all, year);
   const average = averageOf(months);
-  const change = categoryChange(
-    recentCategoryMonths(data, category.id, today, 24),
-  );
-  const sentence = categorySentence(
-    category.name,
-    months,
-    change,
-    average,
-    whole,
-  );
+  const prev = perYear.find((y) => y.year === year - 1)?.monthly;
+  let sentence: string;
+  if (average == null) {
+    sentence = `Nothing entered for ${category.name} yet.`;
+  } else {
+    const said = `${whole(average)} a month ${year === thisYear ? "this year" : `in ${year}`}`;
+    if (prev == null) sentence = `${said}.`;
+    else if (average === prev || (prev > 0 && Math.abs(average / prev - 1) < 0.05))
+      sentence = `${said}, same as ${year - 1}.`;
+    else
+      sentence = `${said}, ${average > prev ? "up" : "down"} ${whole(Math.abs(average - prev))} from ${year - 1}.`;
+  }
   const pick = (id: string) => {
     setPicked(id);
+    setAt(null);
+  };
+  const pickYear = (y: number) => {
+    setPickedYear(y);
     setAt(null);
   };
   const open = () =>
@@ -1534,7 +1514,7 @@ function CategoryCard({ categories }: { categories: SpendCategory[] }) {
         sentence,
         "See how each category, like eating out or rent, changes month to month.",
       )}
-      note="Lately means your last three months. Counts each month once it’s over."
+      note="Compares the year’s average month with the year before. Counts each month once it’s over."
       {...lock.card}
     >
       <CategoryPills
@@ -1543,6 +1523,9 @@ function CategoryCard({ categories }: { categories: SpendCategory[] }) {
         onChange={pick}
         locked={lock.locked}
       />
+      {lock.locked ? null : (
+        <YearPills years={years} value={year} onChange={pickYear} />
+      )}
       {selected ? (
         <Readout
           title={`${MONTHS[selected.month - 1]} ${selected.year}`}
@@ -1558,7 +1541,7 @@ function CategoryCard({ categories }: { categories: SpendCategory[] }) {
         />
       ) : (
         <Readout
-          title="Last 12 Months"
+          title={String(year)}
           items={
             average != null
               ? [{ label: "Average", value: `${whole(average)}/mo` }]

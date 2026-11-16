@@ -121,6 +121,15 @@ export interface CategoryYear {
   change: number | null;
 }
 
+/**
+ * One calendar year of a category, January to December, from `months`
+ * (as `categoryMonths` gives them). Months outside them are left empty.
+ */
+export function categoryYearMonths(months: CategoryMonth[], year: number): CategoryMonth[] {
+  const byMonth = new Map(months.filter((m) => m.year === year).map((m) => [m.month, m.value]));
+  return Array.from({ length: 12 }, (_, i) => ({ year, month: i + 1, value: byMonth.get(i + 1) ?? null }));
+}
+
 /** A month on average for each year, oldest first, each against the year before. */
 export function categoryYears(months: CategoryMonth[]): CategoryYear[] {
   const years = [...new Set(months.map((m) => m.year))];

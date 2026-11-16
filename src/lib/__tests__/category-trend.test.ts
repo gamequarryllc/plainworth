@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
 import {
+  categoryYearMonths,
   averageOf,
   categoryChange,
   categoryMonths,
@@ -82,4 +83,18 @@ test('category trend: spending first by size, then income', () => {
     chartableCategories(data, today).map((c) => c.id),
     ['rent', 'eat', 'gym', 'pay'],
   );
+});
+
+test('categoryYearMonths gives January to December of one year, empty outside the data', () => {
+  const months = [
+    { year: 2025, month: 11, value: 100 },
+    { year: 2025, month: 12, value: 0 },
+    { year: 2026, month: 1, value: 300 },
+  ];
+  const y = categoryYearMonths(months, 2025);
+  assert.equal(y.length, 12);
+  assert.equal(y[0].value, null);
+  assert.equal(y[10].value, 100);
+  assert.equal(y[11].value, 0);
+  assert.equal(categoryYearMonths(months, 2026)[0].value, 300);
 });
