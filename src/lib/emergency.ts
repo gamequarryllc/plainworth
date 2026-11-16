@@ -2,7 +2,7 @@ import { addMonths, dateKey, dayNumber, parseDateKey, todayKey } from './dates';
 import { valueAt } from './insights';
 import { seriesByAccount, type SeriesPoint } from './networth';
 import { spendHistory } from './trends';
-import type { Account, Cents, Data, DateKey, EmergencyFund, EmergencySituation } from './types';
+import type { Account, Cents, Data, DateKey, EmergencyFund, EmergencySituation, ID } from './types';
 
 /** What the fund reads: Spending for a month's cost, and Net Worth only for a linked account's balance. */
 export type FundData = Pick<Data, 'spend' | 'spendCategories' | 'accounts' | 'snapshots'>;
@@ -30,8 +30,9 @@ export function newFund(situation: EmergencySituation = 'stake'): EmergencyFund 
 
 /**
  * An emergency fund as stored, made current. The first TestFlight version
- * could follow several Net Worth accounts and kept one typed amount; now it
- * follows at most one, and every amount typed in is kept as a dated list.
+ * kept accounts as objects and one typed amount, and 1.2.0 followed only one
+ * account; now it's a list of account ids, and every amount typed in is kept
+ * as a dated list.
  */
 export function normalizeFund(raw: unknown, today: DateKey = todayKey()): EmergencyFund | undefined {
   if (!raw || typeof raw !== 'object') return undefined;
@@ -47,18 +48,46 @@ export function normalizeFund(raw: unknown, today: DateKey = todayKey()): Emerge
   }
   const months = typeof f.months === 'number' && f.months > 0 ? f.months : 6;
   const fund: EmergencyFund = { saved, months };
-  if (typeof f.account === 'string' && f.account) fund.account = f.account;
-  else if (Array.isArray(f.accounts) && typeof f.accounts[0]?.id === 'string') fund.account = f.accounts[0].id;
+  const ids: ID[] = [];
+  if (Array.isArray(f.accounts)) {
+    for (const x of f.accounts) {
+      const id = typeof x === 'string' ? x : x && typeof x.id === 'string' ? (x.id as string) : null;
+      if (id && !ids.includes(id)) ids.push(id);
+    }
+  } else if (typeof f.account === 'string' && f.account) {
+    // Saved by 1.2.0, which followed one account.
+    ids.push(f.account);
+  }
+  if (ids.length) {
+    fund.accounts = ids;
+    fund.account = ids[0];
+  }
   if (typeof f.monthly === 'number' && f.monthly > 0) fund.monthly = f.monthly;
   if (f.situation === 'steady' || f.situation === 'stake' || f.situation === 'self') fund.situation = f.situation;
   return fund;
 }
 
-/** The open account the fund follows, or undefined when it's typed in (or that account was closed or deleted). */
-export function fundAccount(fund: EmergencyFund, accounts: Account[]): Account | undefined {
-  if (!fund.account) return undefined;
-  const account = accounts.find((a) => a.id === fund.account);
-  return account && !account.closed ? account : undefined;
+/** The open accounts the fund follows; none when it's typed in. Closed or deleted ones drop out. */
+export function fundAccounts(fund: EmergencyFund, accounts: Account[]): Account[] {
+  const byId = new Map(accounts.map((a) => [a.id, a]));
+  return (fund.accounts ?? []).map((id) => byId.get(id)).filter((a): a is Account => !!a && !a.closed);
+}
+
+/** The fund following these accounts (none: typed in again), with `account` kept for 1.2.0. */
+export function withAccounts(fund: EmergencyFund, ids: ID[]): EmergencyFund {
+  const next = { ...fund };
+  delete next.accounts;
+  delete next.account;
+  if (ids.length) {
+    next.accounts = ids;
+    next.account = ids[0];
+  }
+  return next;
+}
+
+/** "Fidelity + Capital One"; past two, "3 accounts". */
+export function accountNames(accounts: Account[]): string {
+  return accounts.length > 2 ? `${accounts.length} accounts` : accounts.map((a) => a.name).join(' + ');
 }
 
 /** What's in the fund now: the latest amount typed in, or null before any. */
@@ -100,13 +129,21 @@ export function monthlyCost(
 }
 
 /**
- * What was in the fund at the end of a day: the linked account's balance then
- * (never below zero), or the last amount typed in by then. Null before either.
+ * What was in the fund at the end of a day: the linked accounts' balances
+ * then added up (each never below zero; one not opened yet adds nothing), or
+ * the last amount typed in by then. Null before either.
  */
-function balanceOn(fund: EmergencyFund, day: number, accountSeries: SeriesPoint[] | null): Cents | null {
-  if (accountSeries) {
-    const v = valueAt(accountSeries, day);
-    return v == null ? null : Math.max(0, v);
+function balanceOn(fund: EmergencyFund, day: number, linked: SeriesPoint[][] | null): Cents | null {
+  if (linked) {
+    let total = 0;
+    let any = false;
+    for (const series of linked) {
+      const v = valueAt(series, day);
+      if (v == null) continue;
+      any = true;
+      total += Math.max(0, v);
+    }
+    return any ? total : null;
   }
   let value: Cents | null = null;
   for (const s of fund.saved) {
@@ -116,22 +153,24 @@ function balanceOn(fund: EmergencyFund, day: number, accountSeries: SeriesPoint[
   return value;
 }
 
-/** The linked account's balances, or null when the fund is typed in. */
-function linkedSeries(fund: EmergencyFund, data: Pick<FundData, 'accounts' | 'snapshots'>): SeriesPoint[] | null {
-  const account = fundAccount(fund, data.accounts);
-  if (!account) return null;
-  return seriesByAccount(data.snapshots.filter((s) => s.accountId === account.id)).get(account.id) ?? [];
+/** Each linked account's balances, or null when the fund is typed in. */
+function linkedSeries(fund: EmergencyFund, data: Pick<FundData, 'accounts' | 'snapshots'>): SeriesPoint[][] | null {
+  const linked = fundAccounts(fund, data.accounts);
+  if (!linked.length) return null;
+  const ids = new Set(linked.map((a) => a.id));
+  const series = seriesByAccount(data.snapshots.filter((s) => ids.has(s.accountId)));
+  return linked.map((a) => series.get(a.id) ?? []);
 }
 
-/** What's in the fund now, from the linked account or the amounts typed in. Null without either. */
+/** What's in the fund now, from the linked accounts or the amounts typed in. Null without either. */
 export function fundBalance(fund: EmergencyFund, data: Pick<FundData, 'accounts' | 'snapshots'>, today: DateKey): Cents | null {
   return balanceOn(fund, dayNumber(today), linkedSeries(fund, data));
 }
 
 export interface FundStatus {
   balance: Cents;
-  /** The Net Worth account the balance comes from, when it's linked. */
-  account?: Account;
+  /** The Net Worth accounts the balance comes from, when they're linked. */
+  accounts?: Account[];
   monthly: Cents;
   /** Months of costs the fund covers, e.g. 5.1. */
   covered: number;
@@ -168,7 +207,7 @@ export function fundStatus(fund: EmergencyFund, data: FundData, today: DateKey):
   }
   return {
     balance,
-    account: series ? fundAccount(fund, data.accounts) : undefined,
+    accounts: series ? fundAccounts(fund, data.accounts) : undefined,
     monthly,
     covered: balance / monthly,
     goal,

@@ -124,12 +124,14 @@ export type EmergencySituation = 'steady' | 'stake' | 'self';
  * Money set aside for emergencies, and how many months of costs it should
  * cover. It belongs to Spending: a month's cost is the spending average
  * unless one is typed in, and what's in it is typed in (kept with the date of
- * each change, for the graph) or follows one Net Worth account.
+ * each change, for the graph) or follows Net Worth accounts.
  */
 export interface EmergencyFund {
   /** What's in the fund, each time it was changed, oldest first. The last one is what's there now. */
   saved: { date: DateKey; amount: Cents }[];
-  /** A Net Worth account the fund follows instead: what's in it is that account's balance. */
+  /** Net Worth accounts the fund follows instead: what's in it is their balances added up. */
+  accounts?: ID[];
+  /** The first of `accounts`, kept for 1.2.0, which followed only one (it reads this over iCloud). */
   account?: ID;
   /** What a month costs, typed in. Left out, it's the spending average. */
   monthly?: Cents;

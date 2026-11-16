@@ -12,7 +12,6 @@ import { useMoney } from '@/hooks/use-money';
 import { useToday } from '@/hooks/use-today';
 import { confirm } from '@/lib/dialogs';
 import {
-  fundAccount,
   fundBalance,
   MONTH_OPTIONS,
   newFund,
@@ -20,6 +19,7 @@ import {
   savedNow,
   SITUATIONS,
   spendingAverage,
+  withAccounts,
   withSaved,
 } from '@/lib/emergency';
 import { haptics } from '@/lib/haptics';
@@ -31,7 +31,7 @@ import { useColors } from '@/theme';
 
 /**
  * Set up the emergency fund, part of Spending: how much is in it (typed in,
- * or one Net Worth account's balance), what a month costs (the spending
+ * or Net Worth accounts' balances added up), what a month costs (the spending
  * average unless typed in), and how many months it should cover.
  */
 export default function EmergencyFundScreen() {
@@ -53,17 +53,26 @@ export default function EmergencyFundScreen() {
   const [amount, setAmount] = useState<Cents | null>(() => (saved ? savedNow(saved) : null));
   const [picking, setPicking] = useState(false);
 
-  // Any open asset account can hold the fund; it then follows that account's balance.
+  // Any open asset accounts can hold the fund; it then follows their balances added up.
   const summaries = summarizeAccounts(accounts, snapshots, categories);
   const assets = sortAccounts(
     accounts.filter((a) => !a.closed).map((a) => summaries.get(a.id)!).filter((x) => x.kind === 'asset'),
     sort,
   );
-  const linked = assets.some((x) => x.account.id === fund.account) ? fundAccount(fund, accounts) : undefined;
-  const linkedBalance = linked ? fundBalance(fund, { accounts, snapshots }, today) : null;
-  const pickAccount = (id: string | undefined) => {
+  const chosen = new Set(fund.accounts ?? []);
+  const linked = assets.filter((x) => chosen.has(x.account.id)).map((x) => x.account);
+  const linkedIds = linked.map((a) => a.id);
+  const linkedBalance = linked.length ? fundBalance(withAccounts(fund, linkedIds), { accounts, snapshots }, today) : null;
+  const toggleAccount = (id: string) => {
     haptics.selection();
-    setFund((f) => ({ ...f, account: id }));
+    setFund((f) => {
+      const ids = f.accounts ?? [];
+      return withAccounts(f, ids.includes(id) ? ids.filter((x) => x !== id) : [...ids, id]);
+    });
+  };
+  const typeItIn = () => {
+    haptics.selection();
+    setFund((f) => withAccounts(f, []));
     setPicking(false);
   };
 
@@ -72,12 +81,10 @@ export default function EmergencyFundScreen() {
   const check = <Icon name="checkmark" size={17} weight="semibold" color={c.tint} />;
 
   const save = () => {
-    let next: EmergencyFund = { ...fund };
-    // Amounts typed in are kept while an account is linked, for if it's unlinked later.
-    if (!linked) {
-      delete next.account;
-      if (amount != null && amount !== savedNow(fund)) next = withSaved(next, Math.max(0, amount), today);
-    }
+    // Saved in the order they're listed, without closed or deleted ones.
+    let next = withAccounts(fund, linkedIds);
+    // Amounts typed in are kept while accounts are linked, for if they're unlinked later.
+    if (!linked.length && amount != null && amount !== savedNow(fund)) next = withSaved(next, Math.max(0, amount), today);
     if (next.monthly == null || next.monthly <= 0) delete next.monthly;
     updateSettings({ emergencyFund: next });
     router.back();
@@ -99,11 +106,11 @@ export default function EmergencyFundScreen() {
       <Section
         header="In the Fund"
         footer={
-          linked
-            ? `Follows ${linked.name} on Net Worth.`
+          linked.length
+            ? `Follows ${linked.map((a) => a.name).join(' + ')} on Net Worth.`
             : 'Update it whenever it grows. Each change adds a point to the graph.'
         }>
-        {linked ? (
+        {linked.length ? (
           <Row
             title="Saved"
             value={
@@ -120,8 +127,8 @@ export default function EmergencyFundScreen() {
         )}
         {assets.length ? (
           <Row
-            title="From Account"
-            value={linked?.name ?? 'None'}
+            title="From Accounts"
+            value={linked.length > 1 ? `${linked.length} Accounts` : (linked[0]?.name ?? 'None')}
             chevron={false}
             accessory={<Icon name="chevron.up.chevron.down" size={14} color={c.tertiary} />}
             onPress={() => setPicking((v) => !v)}
@@ -129,15 +136,15 @@ export default function EmergencyFundScreen() {
         ) : null}
         {picking ? (
           <>
-            <Row title="None" subtitle="Type it in" chevron={false} accessory={linked ? null : check} onPress={() => pickAccount(undefined)} />
+            <Row title="None" subtitle="Type it in" chevron={false} accessory={linked.length ? null : check} onPress={typeItIn} />
             {assets.map((x) => (
               <Row
                 key={x.account.id}
                 title={x.account.name}
                 value={whole(x.balance)}
                 chevron={false}
-                accessory={x.account.id === linked?.id ? check : null}
-                onPress={() => pickAccount(x.account.id)}
+                accessory={chosen.has(x.account.id) ? check : null}
+                onPress={() => toggleAccount(x.account.id)}
               />
             ))}
           </>
