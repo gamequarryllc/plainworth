@@ -228,6 +228,7 @@ function NetWorth({ filled }: { filled?: boolean }) {
 
   const history = netWorthHistory({ accounts, snapshots, nwCategories }, today);
   const some = history.length > 0;
+  // Enough of your own for the Pro preview to show it instead of the sample.
   const compared =
     history.length >= 2 && lastIndex(netWorthSoFar(history, year)) >= 0;
   // Where You're Headed waits for a saving pace (two finished months), unless
@@ -261,9 +262,6 @@ function NetWorth({ filled }: { filled?: boolean }) {
       ) : null}
       <Waiting needs={paced ? null : "Needs 2 months of balances"}>
         <HeadedFromStore />
-      </Waiting>
-      <Waiting needs={compared ? null : "Needs 2 months of balances"}>
-        <YearFromStore />
       </Waiting>
       <Waiting needs={some ? null : "Needs a balance"}>
         <DistributionCard />
@@ -310,20 +308,6 @@ function HeadedFromStore() {
       pace={pace?.perMonth ?? null}
       counted={pace?.months ?? 0}
       mix={growingMix({ accounts, snapshots, nwCategories }, dayNumber(today))}
-    />
-  );
-}
-
-function YearFromStore() {
-  const year = parseDateKey(useToday()).y;
-  const history = useHistory();
-  const soFar = netWorthSoFar(history, year);
-  if (lastIndex(soFar) < 0 || history.length < 2) return null;
-  return (
-    <NetWorthYearCard
-      year={year}
-      soFar={soFar}
-      lastYear={netWorthSoFar(history, year - 1)}
     />
   );
 }
@@ -824,92 +808,6 @@ function GoalLink({
         {title}
       </Text>
     </Pressable>
-  );
-}
-
-/**
- * Growth since January 1, this year against last, month by month. Someone
- * who started partway through the year sees growth since their first
- * balances, against the same months last year.
- */
-function NetWorthYearCard({
-  year,
-  soFar,
-  lastYear,
-}: {
-  year: number;
-  soFar: (number | null)[];
-  lastYear: (number | null)[];
-}) {
-  const c = useColors();
-  const lock = useLock();
-  const money = lock.money;
-  const whole = (cents: number) => money(cents, { whole: true });
-  const { from, last, before, then } = compareYears(soFar, lastYear)!;
-  const value = soFar[last]!;
-  const hasBefore = lastIndex(before) >= 0;
-  const signed = (cents: number) => money(cents, { signed: true, whole: true });
-
-  const since = from > 0 ? `since ${MONTHS[from]}` : "this year";
-  let sentence = `${value >= 0 ? "Up" : "Down"} ${whole(Math.abs(value))} ${since}`;
-  if (then != null) {
-    const diff = value - then;
-    sentence +=
-      Math.abs(diff) <= Math.max(Math.abs(then) * 0.03, 100)
-        ? ", same as last year."
-        : `, ${whole(Math.abs(diff))} ${diff > 0 ? "ahead of" : "behind"} last year.`;
-  } else {
-    sentence += ".";
-  }
-
-  return (
-    <InsightCard
-      label="This Year vs Last Year"
-      sentence={lock.text(
-        sentence,
-        `See whether your net worth is growing faster than it did in ${year - 1}.`,
-      )}
-      note={
-        from > 0
-          ? `How much your net worth has grown since your first balances in ${MONTHS[from]}.`
-          : "How much your net worth has grown since January 1."
-      }
-      {...lock.card}
-    >
-      {hasBefore ? (
-        <TrendKey
-          items={[
-            { label: String(year), color: c.up },
-            { label: String(year - 1), color: c.tertiary },
-          ]}
-        />
-      ) : null}
-      <TrendChart
-        count={12}
-        zero
-        series={[
-          { values: before, color: c.tertiary },
-          { values: soFar, color: c.up, endDot: true },
-        ]}
-        labels={MONTH_LABELS}
-        onScrub={lock.locked ? undefined : () => {}}
-        tip={(i) =>
-          soFar[i] == null && before[i] == null
-            ? null
-            : {
-                title: MONTHS[i],
-                rows: [
-                  ...(soFar[i] != null
-                    ? [{ label: hasBefore ? String(year) : undefined, value: signed(soFar[i]!), color: c.up }]
-                    : []),
-                  ...(hasBefore && before[i] != null
-                    ? [{ label: String(year - 1), value: signed(before[i]!) }]
-                    : []),
-                ],
-              }
-        }
-      />
-    </InsightCard>
   );
 }
 
