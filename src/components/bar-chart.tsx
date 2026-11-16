@@ -245,7 +245,7 @@ export function BarChart({
  * A tapped bar shows in full, even a faded one, and the rest step back.
  * Faded bars step back further, so they stay apart from the others.
  */
-function barOpacity(i: number, selected: number | null, faded?: boolean): number {
+export function barOpacity(i: number, selected: number | null, faded?: boolean): number {
   if (selected === i) return 1;
   if (selected != null) return faded ? 0.15 : 0.3;
   return faded ? 0.35 : 1;
@@ -262,7 +262,7 @@ const UPDOWN = 8;
  * not a choice: when the finger lifts the selection clears, so there's no thin
  * bar to find and tap to get the chart back. Sideways drags keep the page still.
  */
-function useBarScrub(
+export function useBarScrub(
   count: number,
   plotW: number,
   selected: number | null,

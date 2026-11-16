@@ -3,6 +3,7 @@ import { Fragment, useContext, useState, type ReactElement, type ReactNode } fro
 import { Pressable, StyleSheet, View } from "react-native";
 
 import { BarChart } from "@/components/bar-chart";
+import { GainBars } from "@/components/gain-bars";
 import {
   CategoryPills,
   categoryBars,
@@ -318,6 +319,13 @@ function YearFromStore() {
   const history = useHistory();
   const soFar = netWorthSoFar(history, year);
   if (lastIndex(soFar) < 0 || history.length < 2) return null;
+  // MOCKUP switch, web only: ?nwyear=a (month by month) or b (year by year).
+  const mock =
+    typeof window !== "undefined" && window.location?.search
+      ? new URLSearchParams(window.location.search).get("nwyear")
+      : null;
+  if (mock === "a") return <MonthByMonthCard history={history} year={year} />;
+  if (mock === "b") return <YearByYearCard history={history} year={year} />;
   return (
     <NetWorthYearCard
       year={year}
@@ -907,6 +915,157 @@ function NetWorthYearCard({
                 ],
               }
         }
+      />
+    </InsightCard>
+  );
+}
+
+
+/** Average of the finished months' changes, or null with none. */
+function finishedAverage(months: NetWorthMonth[]): number | null {
+  const done = months.filter((m) => m.finished);
+  return done.length ? done.reduce((t, m) => t + m.change, 0) / done.length : null;
+}
+
+/**
+ * How much net worth rose or fell each month of a year, green up and red
+ * down, with that year's average. Pills pick the year.
+ */
+function MonthByMonthCard({ history, year }: { history: NetWorthMonth[]; year: number }) {
+  const lock = useLock();
+  const money = lock.money;
+  const hidden = useStore((s) => s.settings.hideAmounts);
+  const whole = (cents: number) => money(cents, { whole: true });
+  const years = [...new Set(history.map((m) => m.year))].sort((a, b) => b - a);
+  const [picked, setPicked] = useState<number | null>(null);
+  const [at, setAt] = useState<number | null>(null);
+  const shown = lock.locked || picked == null || !years.includes(picked) ? years[0] : picked;
+  const inYear = history.filter((m) => m.year === shown);
+  const byMonth = new Map(inYear.map((m) => [m.month, m]));
+  const average = finishedAverage(inYear);
+  const total = inYear.reduce((t, m) => t + m.change, 0);
+
+  const thisAvg = finishedAverage(history.filter((m) => m.year === year));
+  const lastAvg = finishedAverage(history.filter((m) => m.year === year - 1));
+  const ref = thisAvg ?? lastAvg;
+  let sentence = "";
+  if (ref != null) {
+    const when = thisAvg != null ? "this year" : `in ${year - 1}`;
+    sentence = `${ref >= 0 ? "Up" : "Down"} ${whole(Math.abs(ref))} a month ${when}`;
+    if (thisAvg != null && lastAvg != null) {
+      const diff = thisAvg - lastAvg;
+      sentence += Math.abs(diff) <= Math.max(Math.abs(lastAvg) * 0.03, 100)
+        ? `, same as ${year - 1}.`
+        : `, ${whole(Math.abs(diff))} ${diff > 0 ? "more" : "less"} than ${year - 1}.`;
+    } else sentence += ".";
+  } else {
+    sentence = `${total >= 0 ? "Up" : "Down"} ${whole(Math.abs(total))} so far this month.`;
+  }
+
+  const bars = MONTHS_SHORT.map((m, i) => {
+    const got = byMonth.get(i + 1);
+    return {
+      value: got?.change ?? null,
+      label: m[0],
+      faded: got ? !got.finished : false,
+      accessibilityLabel: got ? `${MONTHS[i]}: ${money(got.change, { signed: true, whole: true })}` : MONTHS[i],
+    };
+  });
+  const sel = at != null ? byMonth.get(at + 1) : undefined;
+  const signedWord = (v: number) => `${v >= 0 ? "Up" : "Down"} ${whole(Math.abs(v))}`;
+  const switchYear = (y: number) => {
+    setPicked(y);
+    setAt(null);
+  };
+
+  return (
+    <InsightCard
+      label="Month by Month"
+      sentence={lock.text(sentence, "See how much your net worth rose or fell each month.")}
+      note="How much your net worth rose or fell each month, counting new money and growth. The dashed line is the year's average."
+      {...lock.card}
+    >
+      {lock.locked ? null : <YearPills years={years} value={shown} onChange={switchYear} />}
+      {at != null ? (
+        <Readout
+          title={`${MONTHS[at]} ${shown}`}
+          items={sel ? [{ label: sel.finished ? "" : "So far", value: signedWord(sel.change) }] : [{ label: "", value: "No balances" }]}
+        />
+      ) : (
+        <Readout
+          title={shown === year ? `${shown} So Far` : String(shown)}
+          items={[
+            { label: "", value: signedWord(total) },
+            ...(average != null ? [{ label: "· Average", value: `${whole(average)}/mo` }] : []),
+          ]}
+        />
+      )}
+      <GainBars
+        bars={bars}
+        average={average}
+        selected={at}
+        onSelect={lock.locked ? undefined : setAt}
+        formatTick={hidden || lock.locked ? undefined : (v) => money(v, { compact: true, whole: true })}
+        height={140}
+      />
+    </InsightCard>
+  );
+}
+
+/** How much net worth rose or fell in each year, the year still going drawn light. */
+function YearByYearCard({ history, year }: { history: NetWorthMonth[]; year: number }) {
+  const lock = useLock();
+  const money = lock.money;
+  const hidden = useStore((s) => s.settings.hideAmounts);
+  const whole = (cents: number) => money(cents, { whole: true });
+  const [at, setAt] = useState<number | null>(null);
+  const totals = new Map<number, number>();
+  for (const m of history) totals.set(m.year, (totals.get(m.year) ?? 0) + m.change);
+  const years = [...totals.keys()].sort((a, b) => a - b).slice(-10);
+  const short = years.length > 6;
+  const now = totals.get(year) ?? 0;
+  const before = totals.get(year - 1);
+  const signedWord = (v: number) => `${v >= 0 ? "Up" : "Down"} ${whole(Math.abs(v))}`;
+  let sentence = `${signedWord(now)} so far this year`;
+  sentence += before != null ? `, after ${before >= 0 ? "" : "down "}${whole(Math.abs(before))} in all of ${year - 1}.` : ".";
+  const bars = years.map((y) => ({
+    value: totals.get(y)!,
+    label: short ? `’${String(y).slice(2)}` : String(y),
+    faded: y === year,
+    accessibilityLabel: `${y}: ${money(totals.get(y)!, { signed: true, whole: true })}`,
+  }));
+  const monthsIn = new Map<number, number>();
+  for (const m of history) monthsIn.set(m.year, (monthsIn.get(m.year) ?? 0) + 1);
+  // Only whole years: a first year that started in the fall would pull it down.
+  const fullYears = years.filter((y) => y !== year && monthsIn.get(y) === 12);
+  const average = fullYears.length >= 2 ? fullYears.reduce((t, y) => t + totals.get(y)!, 0) / fullYears.length : null;
+  const sel = at != null ? years[at] : null;
+
+  return (
+    <InsightCard
+      label="Year by Year"
+      sentence={lock.text(sentence, "See how much your net worth grew each year.")}
+      note="How much your net worth rose or fell in each year, counting new money and growth. This year is drawn light because it isn’t over."
+      {...lock.card}
+    >
+      {sel != null ? (
+        <Readout
+          title={sel === year ? `${sel} So Far` : String(sel)}
+          items={[{ label: "", value: signedWord(totals.get(sel)!) }]}
+        />
+      ) : (
+        <Readout
+          title={`Last ${years.length} Years`}
+          items={average != null ? [{ label: "Average", value: `${whole(average)}/yr` }] : []}
+        />
+      )}
+      <GainBars
+        bars={bars}
+        average={average}
+        selected={at}
+        onSelect={lock.locked ? undefined : setAt}
+        formatTick={hidden || lock.locked ? undefined : (v) => money(v, { compact: true, whole: true })}
+        height={140}
       />
     </InsightCard>
   );
