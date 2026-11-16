@@ -991,9 +991,9 @@ function Spending({ filled }: { filled?: boolean }) {
 }
 
 /**
- * How many months of costs the emergency fund covers, against the goal for
- * your situation, with how that has grown. Before it's set up, a short
- * question and a Set Up button.
+ * How many months of costs the emergency fund covers, as a bar against the
+ * goal for your situation, with what's saved, what a month costs and what the
+ * goal comes to. Before it's set up, a short question and a Set Up button.
  */
 function EmergencyFundCard() {
   const c = useColors();
@@ -1043,10 +1043,9 @@ function EmergencyFundCard() {
     );
   }
 
-  const { covered, goal, toGo, balance, target, monthly, history, historyMonths } = status;
+  const { covered, goal, toGo, balance, target, monthly } = status;
   const linked = status.accounts;
   const max = Math.max(goal * 1.12, covered);
-  const shown = history.filter((v) => v != null).length;
   return (
     <InsightCard
       label="Emergency Fund"
@@ -1075,17 +1074,22 @@ function EmergencyFundCard() {
             ? `Goal reached, with ${whole(balance - target)} extra.`
             : "Goal reached."}
       </Text>
-      {shown >= 2 ? (
-        <TrendChart
-          count={12}
-          zero
-          series={[
-            { values: history.map(() => goal), color: c.tertiary, dashed: true },
-            { values: history, color: c.up, endDot: true },
-          ]}
-          labels={historyMonths.map((m, index) => ({ index, text: MONTHS_SHORT[m - 1][0] }))}
-        />
-      ) : null}
+      <View style={styles.fundStats}>
+        {[
+          ["Saved", whole(balance)],
+          ["A Month", whole(monthly)],
+          [`${goal} ${goal === 1 ? "Month" : "Months"}`, whole(target)],
+        ].map(([label, value]) => (
+          <View key={label} style={styles.fundStat}>
+            <Text variant="footnote" color="secondary">
+              {label}
+            </Text>
+            <Text variant="headline" tabular numberOfLines={1} adjustsFontSizeToFit>
+              {value}
+            </Text>
+          </View>
+        ))}
+      </View>
       <GoalLink title="Update" onPress={edit} />
     </InsightCard>
   );
@@ -1805,6 +1809,16 @@ const styles = StyleSheet.create({
     top: 0,
     bottom: 0,
     borderRadius: 5,
+  },
+  fundStats: {
+    flexDirection: "row",
+    marginTop: 12,
+    marginBottom: 10,
+    gap: 12,
+  },
+  fundStat: {
+    flex: 1,
+    gap: 1,
   },
   fundTick: {
     position: "absolute",
