@@ -134,12 +134,14 @@ function InsightsScreen({ sample }: { sample?: boolean }) {
   const spend = useStore((s) => s.spend);
   const [part, setPart] = useState<Part>("networth");
   const preview = useInsightsPreview();
-  // App Store screenshot builds: plainworth:///insights?shot=spending opens on Spending.
+  // App Store screenshot builds: plainworth:///insights?shot=spending opens on
+  // Spending, and ?shot=fund on Spending scrolled down to the emergency fund.
   const shot = useLocalSearchParams<{ shot?: string }>().shot;
   const [shotSeen, setShotSeen] = useState<string | undefined>(undefined);
   if (STORE_SHOTS && shot !== shotSeen) {
     setShotSeen(shot);
     if (shot === "spending" || shot === "networth") setPart(shot);
+    if (shot === "fund") setPart("spending");
   }
   const Body = sample ? SampleBody : Fragment;
 
@@ -157,7 +159,7 @@ function InsightsScreen({ sample }: { sample?: boolean }) {
   }
 
   return (
-    <Screen title="Insights" large left={tabButtons}>
+    <Screen title="Insights" large left={tabButtons} atEnd={STORE_SHOTS && shot === "fund"}>
       {sample ? (
         <SampleBanner
           action="Add an Account"

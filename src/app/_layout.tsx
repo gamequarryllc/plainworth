@@ -28,6 +28,12 @@ configureReanimatedLogger({ level: ReanimatedLogLevel.warn, strict: false });
 if (STORE_SHOTS) {
   useStore.getState().loadSampleData(36);
   hideSample();
+  // An emergency fund that follows the two cash accounts, for its screenshot.
+  const { accounts, updateSettings } = useStore.getState();
+  const cash = accounts.filter((a) => a.name === 'High-Yield Savings' || a.name === 'Checking').map((a) => a.id);
+  updateSettings({
+    emergencyFund: { saved: [], accounts: cash, account: cash[0], situation: 'self', months: 9 },
+  });
 }
 
 export default function RootLayout() {
