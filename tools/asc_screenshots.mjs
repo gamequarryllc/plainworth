@@ -1,6 +1,9 @@
 #!/usr/bin/env node
 // Puts the App Store screenshots on one version in App Store Connect, in the
 // 6.9-inch iPhone slot (APP_IPHONE_67, 1320 x 2868), replacing what is there.
+// If the version also has a 6.3-inch set (APP_IPHONE_61, often carried over from
+// the version before) and <folder>/6.3in/ holds 1206 x 2622 pictures, that set is
+// replaced too; without one, Apple shrinks the 6.9-inch pictures for smaller phones.
 //
 //   node tools/asc_screenshots.mjs <app id> <version> <folder> plan    read-only: prints what is there
 //   node tools/asc_screenshots.mjs <app id> <version> <folder> apply   uploads <folder>/NN-*.png in name order
@@ -62,17 +65,27 @@ function pngSize(blob) {
   return [blob.readUInt32BE(16), blob.readUInt32BE(20)];
 }
 
-const files = fs
-  .readdirSync(folder)
-  .filter((f) => /^\d\d-.*\.png$/.test(f))
-  .sort();
-if (files.length < 1 || files.length > 10) throw new Error(`expected 1 to 10 screenshots in ${folder}, found ${files.length}`);
-const blobs = new Map(files.map((f) => [f, fs.readFileSync(path.join(folder, f))]));
-for (const [f, blob] of blobs) {
-  const [w, h] = pngSize(blob);
-  if (w !== 1320 || h !== 2868) throw new Error(`${f} is ${w} x ${h}; the 6.9-inch slot takes 1320 x 2868`);
-}
 const md5 = (blob) => crypto.createHash("md5").update(blob).digest("hex");
+
+function readFolder(dir, w, h) {
+  if (!fs.existsSync(dir)) return null;
+  const files = fs
+    .readdirSync(dir)
+    .filter((f) => /^\d\d-.*\.png$/.test(f))
+    .sort();
+  if (files.length < 1 || files.length > 10) throw new Error(`expected 1 to 10 screenshots in ${dir}, found ${files.length}`);
+  const blobs = new Map(files.map((f) => [f, fs.readFileSync(path.join(dir, f))]));
+  for (const [f, blob] of blobs) {
+    const [bw, bh] = pngSize(blob);
+    if (bw !== w || bh !== h) throw new Error(`${f} is ${bw} x ${bh}; this slot takes ${w} x ${h}`);
+  }
+  return { files, blobs };
+}
+
+const main = readFolder(folder, 1320, 2868);
+if (!main) throw new Error(`no folder ${folder}`);
+const small = readFolder(path.join(folder, "6.3in"), 1206, 2622);
+const files = main.files;
 
 const versions = (await call("GET", `/v1/apps/${appId}/appStoreVersions?filter[platform]=IOS&filter[versionString]=${versionString}`)).data;
 const version = versions[0];
@@ -84,62 +97,73 @@ if (!editable.includes(state)) throw new Error(`version ${versionString} is ${st
 
 const locs = (await call("GET", `/v1/appStoreVersions/${version.id}/appStoreVersionLocalizations`)).data;
 const en = locs.find((l) => l.attributes.locale === "en-US") || locs[0];
-console.log(`listing ${en.attributes.locale} (only its ${KIND} screenshots are touched)`);
+console.log(`listing ${en.attributes.locale} (only its iPhone 6.9-inch and 6.3-inch screenshots are touched)`);
 const sets = (await call("GET", `/v1/appStoreVersionLocalizations/${en.id}/appScreenshotSets`)).data;
 console.log(`screenshot sets there: ${sets.map((s) => s.attributes.screenshotDisplayType).join(", ") || "none"}`);
-let set = sets.find((s) => s.attributes.screenshotDisplayType === KIND);
-const have = set ? (await call("GET", `/v1/appScreenshotSets/${set.id}/appScreenshots?limit=50`)).data : [];
-console.log(`${KIND} now: ${have.map((s) => s.attributes.fileName).join(", ") || "none"}`);
-console.log(`to upload: ${files.join(", ")}`);
 
-const same =
-  have.length === files.length && have.every((s, i) => s.attributes.fileName === files[i] && s.attributes.sourceFileChecksum === md5(blobs.get(files[i])));
-if (same) {
-  console.log("Already the same pictures; nothing to do.");
-  process.exit(0);
-}
-if (mode === "plan") {
-  console.log("plan only: nothing changed");
-  process.exit(0);
-}
+const jobs = [{ kind: KIND, pics: main, create: true }];
+const smallSet = sets.find((s) => s.attributes.screenshotDisplayType === "APP_IPHONE_61");
+if (smallSet && small) jobs.push({ kind: "APP_IPHONE_61", pics: small, create: false });
+else if (smallSet) console.log("APP_IPHONE_61 set is there but no 6.3in pictures were given: left as it is");
 
-if (!set) {
-  set = (
-    await call("POST", "/v1/appScreenshotSets", {
-      data: { type: "appScreenshotSets", attributes: { screenshotDisplayType: KIND }, relationships: { appStoreVersionLocalization: rel("appStoreVersionLocalizations", en.id) } },
-    })
-  ).data;
-}
-for (const old of have) await call("DELETE", `/v1/appScreenshots/${old.id}`);
-for (const name of files) {
-  const blob = blobs.get(name);
-  const made = (
-    await call("POST", "/v1/appScreenshots", {
-      data: { type: "appScreenshots", attributes: { fileName: name, fileSize: blob.length }, relationships: { appScreenshotSet: rel("appScreenshotSets", set.id) } },
-    })
-  ).data;
-  for (const op of made.attributes.uploadOperations) {
-    const headers = Object.fromEntries((op.requestHeaders || []).map((h) => [h.name, h.value]));
-    const res = await fetch(op.url, { method: op.method, headers, body: blob.subarray(op.offset, op.offset + op.length) });
-    if (!res.ok) throw new Error(`upload of ${name} -> ${res.status}`);
+for (const job of jobs) await replace(job);
+
+async function replace({ kind, pics, create }) {
+  const { files, blobs } = pics;
+  let set = sets.find((s) => s.attributes.screenshotDisplayType === kind);
+  const have = set ? (await call("GET", `/v1/appScreenshotSets/${set.id}/appScreenshots?limit=50`)).data : [];
+  console.log(`\n${kind} now: ${have.map((s) => s.attributes.fileName).join(", ") || "none"}`);
+  console.log(`to upload: ${files.join(", ")}`);
+  const same =
+    have.length === files.length && have.every((s, i) => s.attributes.fileName === files[i] && s.attributes.sourceFileChecksum === md5(blobs.get(files[i])));
+  if (same) {
+    console.log("Already the same pictures; nothing to do.");
+    return;
   }
-  await call("PATCH", `/v1/appScreenshots/${made.id}`, {
-    data: { type: "appScreenshots", id: made.id, attributes: { uploaded: true, sourceFileChecksum: md5(blob) } },
-  });
-  console.log(`uploaded ${name}`);
-}
+  if (mode === "plan") {
+    console.log("plan only: nothing changed");
+    return;
+  }
+  if (!set) {
+    if (!create) return;
+    set = (
+      await call("POST", "/v1/appScreenshotSets", {
+        data: { type: "appScreenshotSets", attributes: { screenshotDisplayType: kind }, relationships: { appStoreVersionLocalization: rel("appStoreVersionLocalizations", en.id) } },
+      })
+    ).data;
+  }
+  for (const old of have) await call("DELETE", `/v1/appScreenshots/${old.id}`);
+  for (const name of files) {
+    const blob = blobs.get(name);
+    const made = (
+      await call("POST", "/v1/appScreenshots", {
+        data: { type: "appScreenshots", attributes: { fileName: name, fileSize: blob.length }, relationships: { appScreenshotSet: rel("appScreenshotSets", set.id) } },
+      })
+    ).data;
+    for (const op of made.attributes.uploadOperations) {
+      const headers = Object.fromEntries((op.requestHeaders || []).map((h) => [h.name, h.value]));
+      const res = await fetch(op.url, { method: op.method, headers, body: blob.subarray(op.offset, op.offset + op.length) });
+      if (!res.ok) throw new Error(`upload of ${name} -> ${res.status}`);
+    }
+    await call("PATCH", `/v1/appScreenshots/${made.id}`, {
+      data: { type: "appScreenshots", id: made.id, attributes: { uploaded: true, sourceFileChecksum: md5(blob) } },
+    });
+    console.log(`uploaded ${name}`);
+  }
 
-// Apple checks each picture after the upload.
-let states = [];
-for (let i = 0; i < 40; i++) {
-  const now = (await call("GET", `/v1/appScreenshotSets/${set.id}/appScreenshots?limit=50`)).data;
-  states = now.map((s) => `${s.attributes.fileName}: ${s.attributes.assetDeliveryState?.state}`);
-  if (now.every((s) => ["COMPLETE", "FAILED"].includes(s.attributes.assetDeliveryState?.state))) break;
-  await new Promise((r) => setTimeout(r, 3000));
+  // Apple checks each picture after the upload.
+  let states = [];
+  for (let i = 0; i < 40; i++) {
+    const now = (await call("GET", `/v1/appScreenshotSets/${set.id}/appScreenshots?limit=50`)).data;
+    states = now.map((s) => `${s.attributes.fileName}: ${s.attributes.assetDeliveryState?.state}`);
+    if (now.every((s) => ["COMPLETE", "FAILED"].includes(s.attributes.assetDeliveryState?.state))) break;
+    await new Promise((r) => setTimeout(r, 3000));
+  }
+  console.log("Apple's check: " + states.join(", "));
+  if (states.some((s) => !s.endsWith("COMPLETE"))) {
+    console.error(`Not every ${kind} screenshot was accepted; see App Store Connect for the reason.`);
+    process.exit(1);
+  }
 }
-console.log("Apple's check: " + states.join(", "));
-if (states.some((s) => !s.endsWith("COMPLETE"))) {
-  console.error("Not every screenshot was accepted; see App Store Connect for the reason.");
-  process.exit(1);
-}
+if (mode === "plan") process.exit(0);
 console.log(`OK: ${files.length} screenshots on version ${versionString}. Nothing was submitted for review.`);

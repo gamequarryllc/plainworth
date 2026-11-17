@@ -13,7 +13,10 @@ name: iOS build
 #               (tools/store_shots_frame.cjs). Download them from the run's Artifacts.
 #   screenshots-upload  The same, then they replace the 6.9-inch iPhone screenshots of
 #               the version in App Store Connect (tools/asc_screenshots.mjs). Touches
-#               nothing else on the listing.
+#               nothing else on the listing. A 6.3-inch set already on the version is
+#               replaced with the same pictures at 1206 x 2622.
+#   screenshots-upload-saved  Uploads the pictures saved in store/screenshots/ on the
+#               branch (the approved ones) the same way, without taking them again.
 #
 # Nothing here submits the app for review; that stays a manual step in App Store Connect.
 # Organization secrets: ASC_KEY_ID, ASC_ISSUER_ID, ASC_KEY_P8, APPLE_TEAM_ID
@@ -25,7 +28,7 @@ on:
         description: "check = unsigned test build; testflight = sign and upload; screenshots = App Store pictures"
         required: true
         type: choice
-        options: [check, testflight, screenshots, screenshots-upload]
+        options: [check, testflight, screenshots, screenshots-upload, screenshots-upload-saved]
         default: check
       version:
         description: "Version shown in TestFlight and on the App Store (blank = app.json's)"
@@ -135,7 +138,7 @@ jobs:
 
   shots:
     needs: privacy
-    if: ${{ startsWith(inputs.mode || 'check', 'screenshots') }}
+    if: ${{ inputs.mode == 'screenshots' || inputs.mode == 'screenshots-upload' }}
     runs-on: macos-latest
     permissions:
       contents: write
@@ -177,6 +180,11 @@ jobs:
           npm install --prefix "$RUNNER_TEMP/pw" --no-audit --no-fund --silent playwright@1.56.1
           "$RUNNER_TEMP/pw/node_modules/.bin/playwright" install chromium > /dev/null
           NODE_PATH="$RUNNER_TEMP/pw/node_modules" node tools/store_shots_frame.cjs "$RUNNER_TEMP/shots"
+          # The 6.3-inch size (1206 x 2622), for a version that has a 6.3-inch set.
+          mkdir -p "$RUNNER_TEMP/shots/6.3in"
+          for f in "$RUNNER_TEMP"/shots/0*.png; do
+            sips -z 2622 1206 "$f" --out "$RUNNER_TEMP/shots/6.3in/$(basename "$f")" > /dev/null
+          done
 
       - name: Keep them on the run
         uses: actions/upload-artifact@v4
@@ -195,6 +203,7 @@ jobs:
           set -euo pipefail
           rm -rf store/screenshots && mkdir -p store/screenshots
           cp "$RUNNER_TEMP"/shots/0*.png store/screenshots/
+          mkdir -p store/screenshots/6.3in && cp "$RUNNER_TEMP"/shots/6.3in/0*.png store/screenshots/6.3in/
           git config user.name "Game Quarry LLC"
           git config user.email gamequarryllc@protonmail.com
           git add store/screenshots
@@ -207,9 +216,11 @@ jobs:
           done
           echo "::warning::Couldn't save the screenshots to $BRANCH; they are still in the run's Artifacts"
 
+  # screenshots-upload-saved puts up the pictures already saved in store/screenshots/
+  # on the branch (the ones looked over and approved), without taking them again.
   upload:
     needs: shots
-    if: ${{ inputs.mode == 'screenshots-upload' }}
+    if: ${{ !cancelled() && ((inputs.mode == 'screenshots-upload' && needs.shots.result == 'success') || inputs.mode == 'screenshots-upload-saved') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
@@ -217,10 +228,15 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Get the screenshots
+        if: ${{ inputs.mode == 'screenshots-upload' }}
         uses: actions/download-artifact@v4
         with:
           name: store-screenshots
           path: shots
+
+      - name: Use the saved screenshots
+        if: ${{ inputs.mode == 'screenshots-upload-saved' }}
+        run: cp -R store/screenshots shots
 
       - name: Put them on the version in App Store Connect
         env:
