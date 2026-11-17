@@ -6,7 +6,7 @@ import { newId } from '@/lib/id';
 import { spotUpdates } from '@/lib/metals';
 import { compareSnapshots } from '@/lib/networth';
 import { placeInOrder } from '@/lib/order';
-import { repeats } from '@/lib/spending';
+import { mergeSameNames } from '@/lib/spending';
 import { storage } from '@/lib/storage';
 import type {
   Account,
@@ -339,7 +339,7 @@ const realStore = create<Store>()((set, get) => ({
     let filled = 0;
     const entries = { ...current };
     for (const c of recurring) {
-      if (!entries[c.id] && repeats(s.spend, month, c.id)) {
+      if (!entries[c.id] && previous[c.id]) {
         entries[c.id] = previous[c.id];
         filled++;
       }
@@ -539,3 +539,18 @@ useStore.subscribe((state, prev) => {
 export function flushSave(): Promise<void> {
   return saveTimer ? writeNow() : writing;
 }
+
+/**
+ * Two categories with one name (possible before 1.2.1) are folded into one as
+ * soon as they show up, whether from saved data, a restored backup or another
+ * device, so a category's past months never look empty. It's an ordinary
+ * change, so sync passes it on (the app calls it once at launch, after sync starts).
+ */
+export function foldSameNames() {
+  const s = realStore.getState();
+  const fixed = mergeSameNames(s);
+  if (fixed) realStore.setState(fixed);
+}
+realStore.subscribe((state, prev) => {
+  if (state.spendCategories !== prev.spendCategories) queueMicrotask(foldSameNames);
+});

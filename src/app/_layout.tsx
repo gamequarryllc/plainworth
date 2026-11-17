@@ -11,7 +11,7 @@ import { LockGate } from '@/components/lock-gate';
 import { useStackOptions } from '@/components/stack-options';
 import { syncReminders, useReminderTaps } from '@/lib/notifications';
 import { STORE_SHOTS } from '@/lib/store-shots';
-import { flushSave, useStore } from '@/store';
+import { flushSave, foldSameNames, useStore } from '@/store';
 import { startPro } from '@/store/pro';
 import { hideSample } from '@/store/sample-hidden';
 import { noteLaunch } from '@/store/review-prompt';
@@ -40,6 +40,7 @@ export default function RootLayout() {
     noteLaunch();
     startPro();
     startSync();
+    foldSameNames();
   }, []);
 
   useEffect(() => {

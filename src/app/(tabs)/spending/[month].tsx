@@ -17,7 +17,7 @@ import { features } from '@/lib/features';
 import { currentMonthKey, formatMonth, MONTHS, parseMonthKey, shiftMonth } from '@/lib/dates';
 import { haptics } from '@/lib/haptics';
 import { formatPercent, roundsToZero } from '@/lib/money';
-import { categoriesForMonth, GROUPS, monthTotals, repeats, type MonthTotals } from '@/lib/spending';
+import { categoriesForMonth, GROUPS, monthTotals, type MonthTotals } from '@/lib/spending';
 import type { SpendCategory } from '@/lib/types';
 import { useStore } from '@/store';
 import { useProfiles } from '@/store/profile-list';
@@ -72,9 +72,8 @@ export default function MonthScreen() {
   const prevTotals = monthTotals(previous, byId);
   const prevName = MONTHS[parseMonthKey(previousKey).month - 1];
 
-  const allSpend = useStore((s) => s.spend);
   const canFill = categoriesForMonth(categories, entries, 'recurring').some(
-    (x) => !x.hidden && !entries[x.id] && repeats(allSpend, month, x.id),
+    (x) => !x.hidden && !entries[x.id] && !!previous?.[x.id],
   );
 
   const vsPrev = (now: number, before: number): string | undefined => {

@@ -1,4 +1,4 @@
-import { monthKey, parseMonthKey, shiftMonth } from './dates';
+import { monthKey, parseMonthKey } from './dates';
 import type { Cents, Data, ID, MonthKey, SpendCategory, SpendGroup } from './types';
 
 export interface MonthTotals {
@@ -152,12 +152,55 @@ export function categoriesForMonth(
 }
 
 /**
- * Whether last month's amount for a bill is one to copy into `month`: it was
- * there the month before too, or that month has nothing entered at all (your
- * first months). A one-off, like a yearly insurance payment, isn't copied.
+ * Folds spending categories that share a name (ignoring case and spaces) into
+ * one, adding their amounts together month by month. Older versions could end
+ * up with two "Travel"s, one holding the past amounts and one empty, so past
+ * months looked like $0. The one used in the most months (then the oldest) is kept, with its
+ * group; it stays hidden only if every copy was hidden. Returns null when
+ * there's nothing to fold.
  */
-export function repeats(spend: Data['spend'], month: MonthKey, id: ID): boolean {
-  if (!spend[shiftMonth(month, -1)]?.[id]) return false;
-  const before = spend[shiftMonth(month, -2)];
-  return !before || !Object.values(before).some(Boolean) || !!before[id];
+export function mergeSameNames(
+  data: Pick<Data, 'spendCategories' | 'spend'>,
+): Pick<Data, 'spendCategories' | 'spend'> | null {
+  const byName = new Map<string, SpendCategory[]>();
+  for (const c of data.spendCategories) {
+    const key = c.name.trim().toLowerCase();
+    if (!key) continue;
+    byName.set(key, [...(byName.get(key) ?? []), c]);
+  }
+  const groups = [...byName.values()].filter((list) => list.length > 1);
+  if (!groups.length) return null;
+  const used = (id: ID) => Object.values(data.spend).filter((entries) => !!entries[id]).length;
+  const first = (id: ID) =>
+    Object.keys(data.spend)
+      .filter((m) => !!data.spend[m][id])
+      .sort()[0] ?? '9999';
+  const into = new Map<ID, ID>();
+  const keepers = new Map<ID, SpendCategory>();
+  for (const list of groups) {
+    const ranked = [...list].sort(
+      (a, b) =>
+        used(b.id) - used(a.id) ||
+        (first(a.id) < first(b.id) ? -1 : first(a.id) > first(b.id) ? 1 : 0) ||
+        Number(a.hidden) - Number(b.hidden) ||
+        a.order - b.order ||
+        (a.id < b.id ? -1 : 1),
+    );
+    const keeper = ranked[0];
+    keepers.set(keeper.id, { ...keeper, hidden: list.every((c) => c.hidden) });
+    for (const c of ranked.slice(1)) into.set(c.id, keeper.id);
+  }
+  const spendCategories = data.spendCategories
+    .filter((c) => !into.has(c.id))
+    .map((c) => keepers.get(c.id) ?? c);
+  const spend: Data['spend'] = {};
+  for (const [month, entries] of Object.entries(data.spend)) {
+    const next: Record<ID, Cents> = {};
+    for (const [id, amount] of Object.entries(entries)) {
+      const to = into.get(id) ?? id;
+      next[to] = (next[to] ?? 0) + amount;
+    }
+    spend[month] = next;
+  }
+  return { spendCategories, spend };
 }

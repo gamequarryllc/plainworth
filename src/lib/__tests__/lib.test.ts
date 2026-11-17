@@ -7,7 +7,7 @@ import { centsToInput, fitMoney, formatMoney, formatSignedTyping, formatTyping, 
 import { buildSeries, seriesByAccount, sliceSeries, seriesChange, summarizeAccounts, totalsOf, updatesByAccount } from '../networth';
 import { DATA_VERSION, emptyData } from '../../store/defaults';
 import { migrate } from '../../store/migrate';
-import { categoriesForMonth, categoryTotals, earnedTotals, repeats, yearSummary } from '../spending';
+import { categoriesForMonth, categoryTotals, earnedTotals, mergeSameNames, yearSummary } from '../spending';
 import type { Account, NWCategory, Snapshot, SpendCategory } from '../types';
 
 test('dates', () => {
@@ -412,20 +412,25 @@ test('migrate: growth saved as "on top of inflation" becomes the full yearly fig
   assert.deepEqual(migrate(JSON.parse(JSON.stringify(once))).settings.outlook, once.settings.outlook);
 });
 
-test('copy recurring: only bills that repeat, not a one-off like yearly insurance', () => {
-  const spend = {
-    '2026-04': { rent: 1800_00 },
-    '2026-05': { rent: 1800_00, ins: 1200_00, phone: 50_00 },
-  };
-  assert.equal(repeats(spend, '2026-06', 'rent'), true);
-  assert.equal(repeats(spend, '2026-06', 'ins'), false);
-  // Your second month copies everything from your first.
-  assert.equal(repeats({ '2026-05': { ins: 1200_00 } }, '2026-06', 'ins'), true);
-  assert.equal(repeats(spend, '2026-07', 'rent'), false);
-});
-
 test('month rows: a hidden row being typed in stays', () => {
   const cats = [{ id: 'old', name: 'Old', group: 'variable' as const, order: 0, hidden: true }];
   assert.deepEqual(categoriesForMonth(cats, {}, 'variable').length, 0);
   assert.deepEqual(categoriesForMonth(cats, {}, 'variable', new Set(['old'])).length, 1);
+});
+
+test('two categories with one name fold into one, keeping the past amounts', () => {
+  const data = {
+    spendCategories: [
+      { id: 'travel', name: 'Travel', group: 'variable' as const, order: 7, hidden: true },
+      { id: 'new', name: 'travel ', group: 'variable' as const, order: 9, hidden: false },
+      { id: 'rent', name: 'Rent', group: 'recurring' as const, order: 0, hidden: false },
+    ],
+    spend: { '2026-04': { travel: 850_00, rent: 1800_00 }, '2026-11': { new: 300_00 }, '2026-07': { travel: 100_00, new: 50_00 } },
+  };
+  const out = mergeSameNames(data)!;
+  assert.deepEqual(out.spendCategories.map((c) => [c.id, c.hidden]), [['travel', false], ['rent', false]]);
+  assert.deepEqual(out.spend['2026-04'], { travel: 850_00, rent: 1800_00 });
+  assert.deepEqual(out.spend['2026-11'], { travel: 300_00 });
+  assert.equal(out.spend['2026-07'].travel, 150_00);
+  assert.equal(mergeSameNames(out), null);
 });
