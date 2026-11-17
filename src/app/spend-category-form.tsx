@@ -2,6 +2,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { StyleSheet, Switch, TextInput } from 'react-native';
 
+import { Icon } from '@/components/icon';
 import { Row, Section } from '@/components/list';
 import { Screen } from '@/components/screen';
 import { Segmented } from '@/components/segmented';
@@ -31,6 +32,21 @@ export default function SpendCategoryFormScreen() {
     s.spendCategories.find((x) => x.id !== params.id && x.name.trim().toLowerCase() === name.trim().toLowerCase()),
   );
   const bringsBack = !existing && !!same?.hidden;
+  // Hidden categories in this group, most recently used first, to bring back with a tap.
+  const spend = useStore((s) => s.spend);
+  const allCategories = useStore((s) => s.spendCategories);
+  const typed = name.trim().toLowerCase();
+  const usedBefore = existing
+    ? []
+    : allCategories
+        .filter((x) => x.hidden && x.group === group && (!typed || x.name.toLowerCase().includes(typed)))
+        .map((x) => ({ cat: x, last: Object.keys(spend).filter((m) => !!spend[m][x.id]).sort().pop() ?? '' }))
+        .sort((a, b) => (a.last < b.last ? 1 : a.last > b.last ? -1 : a.cat.order - b.cat.order))
+        .map((x) => x.cat);
+  const bringBack = (id: string) => {
+    updateSpendCategory(id, { hidden: false });
+    router.back();
+  };
   const taken = !!same && !bringsBack;
   const valid = name.trim().length > 0 && !taken;
 
@@ -85,6 +101,19 @@ export default function SpendCategoryFormScreen() {
           }
         />
       </Section>
+      {usedBefore.length ? (
+        <Section header="Used Before">
+          {usedBefore.map((x) => (
+            <Row
+              key={x.id}
+              title={x.name}
+              leading={<Icon name="arrow.uturn.backward" size={16} color={c.tint} />}
+              chevron={false}
+              onPress={() => bringBack(x.id)}
+            />
+          ))}
+        </Section>
+      ) : null}
       {bringsBack ? null : (
       <Section
         header="Group"
