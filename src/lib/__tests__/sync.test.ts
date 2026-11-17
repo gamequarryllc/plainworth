@@ -12,7 +12,8 @@ import {
   type SyncStatus,
 } from '../sync/engine';
 import { canon, merge, newMeta, stampChanges, syncedPart, type Replica } from '../sync/merge';
-import type { Data } from '../types';
+import { withOldGrowth } from '../outlook';
+import type { Data, Outlook } from '../types';
 
 // ---------------------------------------------------------------------------
 // A pretend iCloud folder and pretend devices
@@ -49,7 +50,11 @@ class Folder implements CloudFolder {
 let clock = 1_000_000;
 let ids = 0;
 
-function device(folder: Folder, name: string, opts: { dataVersion?: number; skew?: number } = {}) {
+function device(
+  folder: Folder,
+  name: string,
+  opts: { dataVersion?: number; skew?: number; read?: (data: Data) => Data } = {},
+) {
   const d = {
     name,
     data: emptyData(),
@@ -78,7 +83,8 @@ function device(folder: Folder, name: string, opts: { dataVersion?: number; skew
     },
     readData: (data, version) => {
       try {
-        return readBackup(JSON.stringify({ app: 'Plainworth', version, date: '2026-01-01', data })).data;
+        const read = readBackup(JSON.stringify({ app: 'Plainworth', version, date: '2026-01-01', data })).data;
+        return opts.read ? opts.read({ ...read, settings: { ...read.settings, outlook: (data as Data).settings.outlook } }) : read;
       } catch {
         return null;
       }
@@ -608,4 +614,72 @@ test('sync: the iCloud file is something a backup restore would accept', async (
   assert.equal(file.data.settings.requireUnlock, undefined);
   const back = readBackup(makeBackup(file.data, '2026-11-01'));
   assert.equal(back.data.accounts.length, a.data.accounts.length);
+});
+
+// ---------------------------------------------------------------------------
+// A phone still on 1.2.0
+// ---------------------------------------------------------------------------
+
+/**
+ * How 1.2.0 read Growth: its own defaults with whatever was saved on top, and
+ * only the old `growth` key (on top of inflation) used.
+ */
+const as120 = (data: Data): Data => ({
+  ...data,
+  settings: { ...data.settings, outlook: { inflation: 0.03, growth: 0.04, ...data.settings.outlook } as Outlook },
+});
+
+/** 1.2.0's goal sheet saves a fresh outlook holding only what it knows. */
+const save120 = (growth: number, inflation = 0.03) => (data: Data) => ({
+  settings: { ...data.settings, outlook: { inflation, growth } as unknown as Outlook },
+});
+
+/** 1.2.1 saves through updateSettings, which writes the old key too. */
+const save121 = (yearlyGrowth: number, inflation = 0.03) => (data: Data) => ({
+  settings: { ...data.settings, outlook: withOldGrowth({ inflation, yearlyGrowth }) },
+});
+
+test('sync: a 1.2.0 phone shows 1.2.1\'s Growth and saving its goal sheet keeps it', async () => {
+  const folder = new Folder();
+  const a = device(folder, 'a');
+  const old = device(folder, 'old', { read: as120 });
+  a.change(addAccount('checking', 'Checking', 100_00));
+  await a.sync.enable('device');
+  await old.sync.enable('icloud');
+
+  // 10% a year with 3% inflation on 1.2.1 is 7% on top of inflation on 1.2.0, not its default 4%.
+  a.change(save121(0.1));
+  await settle(a, old);
+  assert.equal(old.data.settings.outlook.growth, 0.07);
+
+  // Saving 1.2.0's goal sheet without touching Growth leaves 1.2.1 on 10%.
+  old.change(save120(0.07));
+  await settle(old, a);
+  assert.equal(a.data.settings.outlook.yearlyGrowth, 0.1);
+  assert.equal(a.data.settings.outlook.growth, 0.07);
+
+  // Changing Growth on 1.2.0 to 5% on top of 3% shows up on 1.2.1 as 8% a year.
+  old.change(save120(0.05));
+  await settle(old, a);
+  assert.equal(a.data.settings.outlook.yearlyGrowth, 0.08);
+
+  // And changing it back on 1.2.1 reaches 1.2.0 again.
+  a.change(save121(0.12));
+  await settle(a, old);
+  assert.equal(old.data.settings.outlook.growth, 0.09);
+  assert.equal(a.data.settings.outlook.yearlyGrowth, 0.12);
+});
+
+test('outlook: the old Growth is kept to what 1.2.0\'s stepper can show', () => {
+  // 1.2.0's stepper went 0% to 10% on a half percent.
+  assert.equal(withOldGrowth({ inflation: 0.03, yearlyGrowth: 0.07 }).growth, 0.04);
+  assert.equal(withOldGrowth({ inflation: 0.03, yearlyGrowth: 0.2 }).growth, 0.1);
+  assert.equal(withOldGrowth({ inflation: 0.03, yearlyGrowth: 0.01 }).growth, 0);
+  // Exactly one of 1.2.0's steps, so its stepper lands on it.
+  const steps = Array.from({ length: 21 }, (_, k) => Math.round(k * 0.005 * 10000) / 10000);
+  for (let y = 0; y <= 0.2001; y += 0.005) {
+    for (const inflation of [0, 0.025, 0.03, 0.1]) {
+      assert.ok(steps.includes(withOldGrowth({ inflation, yearlyGrowth: Math.round(y * 200) / 200 }).growth));
+    }
+  }
 });

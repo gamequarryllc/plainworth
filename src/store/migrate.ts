@@ -1,5 +1,5 @@
 import { normalizeFund } from '@/lib/emergency';
-import { GROWTH_MAX, INFLATION_MAX, snapRate } from '@/lib/outlook';
+import { GROWTH_MAX, INFLATION_MAX, snapRate, withOldGrowth } from '@/lib/outlook';
 import type { Account, Data, NWCategory, Outlook, SpendCategory } from '@/lib/types';
 
 import { DATA_VERSION, defaultOutlook, defaultReminder, defaultSettings, emptyData } from './defaults';
@@ -44,8 +44,11 @@ export function migrate(raw: unknown): Data {
  * default). Now it's the full yearly figure (`yearlyGrowth`, 7%), so an old
  * one has inflation added back: 4% on top of 3% becomes 7%. The key is new so
  * that a device still on the old version never reads 7% as "on top of inflation".
+ * The old key is written too (see `withOldGrowth`), so a 1.2.0 phone syncing
+ * over iCloud shows the same Growth. If `yearlyGrowth` is missing, the old
+ * version saved last, and its `growth` is the one to use.
  */
-function outlookOf(saved: (Partial<Outlook> & { growth?: unknown }) | undefined): Outlook {
+function outlookOf(saved: (Partial<Omit<Outlook, 'growth'>> & { growth?: unknown }) | undefined): Outlook {
   const { growth, ...rest } = saved ?? {};
   // From a damaged file, anything that isn't a number counts as missing.
   const number = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
@@ -59,7 +62,7 @@ function outlookOf(saved: (Partial<Outlook> & { growth?: unknown }) | undefined)
   // Kept to what the goal sheet can show, so its steppers never show one number while another is used.
   outlook.yearlyGrowth = snapRate(outlook.yearlyGrowth, GROWTH_MAX);
   outlook.inflation = snapRate(outlook.inflation, INFLATION_MAX);
-  return outlook;
+  return withOldGrowth(outlook);
 }
 
 /**

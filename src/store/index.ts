@@ -5,6 +5,7 @@ import { shiftMonth } from '@/lib/dates';
 import { newId } from '@/lib/id';
 import { spotUpdates } from '@/lib/metals';
 import { compareSnapshots } from '@/lib/networth';
+import { withOldGrowth } from '@/lib/outlook';
 import { placeInOrder } from '@/lib/order';
 import { mergeSameNames } from '@/lib/spending';
 import { storage } from '@/lib/storage';
@@ -422,7 +423,9 @@ const realStore = create<Store>()((set, get) => ({
   },
 
   updateSettings(patch) {
-    set((s) => ({ settings: { ...s.settings, ...patch } }));
+    // Growth is saved the old way too, for a phone still on 1.2.0 (see withOldGrowth).
+    const next = patch.outlook ? { ...patch, outlook: withOldGrowth(patch.outlook) } : patch;
+    set((s) => ({ settings: { ...s.settings, ...next } }));
   },
 
   loadSampleData(months) {

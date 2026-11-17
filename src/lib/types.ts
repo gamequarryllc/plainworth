@@ -105,6 +105,14 @@ export interface Outlook {
    * look ahead is in today's money, so inflation comes off it there.
    */
   yearlyGrowth: number;
+  /**
+   * The same growth the way 1.2.0 saved it: what's left after inflation, so
+   * 7% with 3% inflation is 0.04. Only written so a phone still on 1.2.0,
+   * syncing over iCloud, shows the right Growth and doesn't put back its own
+   * default when its goal sheet is saved. Nothing here reads it except
+   * migrate, and only when `yearlyGrowth` is missing (see `withOldGrowth`).
+   */
+  growth?: number;
   /** What you add each month, in today's money. Left out, it's worked out from your pace. */
   monthly?: Cents;
 }

@@ -34,6 +34,20 @@ export function snapRate(rate: number, max: number): number {
   return Math.round(Math.min(Math.max(rate, 0), max) * 200) / 200;
 }
 
+/** The highest Growth 1.2.0's goal sheet could show, on top of inflation. */
+export const OLD_GROWTH_MAX = 0.1;
+
+/**
+ * `o` with 1.2.0's `growth` filled in from `yearlyGrowth`, kept to what that
+ * version's stepper can show (0% to 10%, on a half percent). 1.2.0 saves its
+ * goal sheet as a fresh object with only `growth`, so when `yearlyGrowth` is
+ * missing, a 1.2.0 phone wrote it last, and migrate turns its `growth` back
+ * into `yearlyGrowth` by adding inflation. When both are there, `yearlyGrowth` wins.
+ */
+export function withOldGrowth<T extends Pick<Outlook, 'yearlyGrowth' | 'inflation'>>(o: T): T & { growth: number } {
+  return { ...o, growth: snapRate(o.yearlyGrowth - o.inflation, OLD_GROWTH_MAX) };
+}
+
 /** The monthly rate that compounds to a yearly one. */
 export const monthlyRate = (yearly: number) => Math.pow(1 + yearly, 1 / 12) - 1;
 
