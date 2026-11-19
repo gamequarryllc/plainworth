@@ -15,7 +15,6 @@ import { flushSave, foldSameNames, useStore } from '@/store';
 import { startPro } from '@/store/pro';
 import { hideSample } from '@/store/sample-hidden';
 import { noteLaunch } from '@/store/review-prompt';
-import { useSpotPriceRefresh } from '@/store/spot';
 import { startSync } from '@/store/sync';
 import { useColors } from '@/theme';
 
@@ -40,7 +39,6 @@ export default function RootLayout() {
   const scheme = useColorScheme();
   const c = useColors();
   const stackOptions = useStackOptions();
-  useSpotPriceRefresh();
 
   useEffect(() => {
     noteLaunch();

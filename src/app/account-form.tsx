@@ -148,7 +148,7 @@ export default function AccountFormScreen() {
   let quantityFooter: string | undefined;
   if (liveMetal) {
     quantityFooter = autoPriced
-      ? `Follows today’s ${metalLabel} price on its own. You only enter how many troy ounces you have.`
+      ? `Uses today’s ${metalLabel} price whenever you update it. You only enter how many troy ounces you have.`
       : `Live prices aren’t available in ${currency}, so enter the price per ounce yourself.`;
   } else if (tracksQuantity) {
     quantityFooter = `Enter how many ${unitLabel || 'units'} you hold and the price per ${unitLabel || 'unit'}.`;

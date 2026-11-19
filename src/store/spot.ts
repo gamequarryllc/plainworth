@@ -1,5 +1,4 @@
 import { useEffect } from 'react';
-import { AppState } from 'react-native';
 import { create } from 'zustand';
 
 import { todayKey } from '@/lib/dates';
@@ -8,11 +7,11 @@ import type { Account, Cents, Metal } from '@/lib/types';
 
 import { useStore } from './index';
 
-/** On its own, look a price up at most this often. */
+/** Reuse a price looked up this recently. */
 const FRESH_MS = 15 * 60_000;
 /** Pull to refresh: the source itself only changes every 30 seconds. */
 const FORCED_MS = 30_000;
-/** After a failed lookup (offline, say), wait this long before trying again on its own. */
+/** After a failed lookup (offline, say), wait this long before trying again unless asked. */
 const RETRY_MS = 60_000;
 
 interface Quote {
@@ -66,7 +65,11 @@ export function loadSpotPrice(metal: Metal, currency: string, opts: { force?: bo
 
 const followsMetal = (a: Account) => !a.closed && !!a.metal;
 
-/** Look up prices for every metal that open accounts follow and write them in. */
+/**
+ * Look up prices for every metal that open accounts follow and write them in.
+ * Only runs when asked (pull to refresh on Net Worth): metal accounts no longer
+ * add an entry by themselves each day, so the chart only moves when you update.
+ */
 export async function refreshSpotPrices(opts: { force?: boolean } = {}): Promise<void> {
   const { accounts, settings } = useStore.getState();
   const currency = settings.currency;
@@ -83,32 +86,13 @@ export async function refreshSpotPrices(opts: { force?: boolean } = {}): Promise
   useStore.getState().applySpotPrices(prices, todayKey());
 }
 
-/**
- * Keeps metal accounts at today's price: on launch, whenever Plainworth comes back
- * to the foreground, and when metal accounts or the currency change.
- */
-export function useSpotPriceRefresh() {
-  const currency = useStore((s) => s.settings.currency);
-  const following = useStore((s) =>
-    s.accounts
-      .filter(followsMetal)
-      .map((a) => `${a.id}:${a.metal}`)
-      .join(','),
-  );
-  useEffect(() => {
-    if (!following) return;
-    refreshSpotPrices();
-    const sub = AppState.addEventListener('change', (state) => {
-      if (state === 'active') refreshSpotPrices();
-    });
-    return () => sub.remove();
-  }, [following, currency]);
-}
-
 export type SpotStatus = 'off' | 'unsupported' | 'loading' | 'ready' | 'failed';
 
-/** A metal's current price for showing in a form, looked up if needed. */
-export function useSpotPrice(metal: Metal | undefined): { price: Cents | null; status: SpotStatus } {
+/** A metal's current price for showing in a form, looked up if needed (force: fresher than 30 seconds). */
+export function useSpotPrice(
+  metal: Metal | undefined,
+  opts: { force?: boolean } = {},
+): { price: Cents | null; status: SpotStatus } {
   const currency = useStore((s) => s.settings.currency);
   const supported = liveCurrencySupported(currency);
   const key = metal ? keyOf(metal, currency) : '';
@@ -117,11 +101,32 @@ export function useSpotPrice(metal: Metal | undefined): { price: Cents | null; s
   const failed = useSpot((s) => (key ? !!s.failedAt[key] : false));
 
   useEffect(() => {
-    if (metal && supported) loadSpotPrice(metal, currency);
-  }, [metal, currency, supported]);
+    if (metal && supported) loadSpotPrice(metal, currency, { force: opts.force });
+  }, [metal, currency, supported, opts.force]);
 
   if (!metal) return { price: null, status: 'off' };
   if (!supported) return { price: null, status: 'unsupported' };
   if (quote) return { price: quote.price, status: 'ready' };
   return { price: null, status: failed && !loading ? 'failed' : 'loading' };
+}
+
+/** Current prices for several metals at once, freshly looked up when the screen opens. Missing while loading or offline. */
+export function useSpotPrices(metals: Metal[]): Partial<Record<Metal, Cents>> {
+  const currency = useStore((s) => s.settings.currency);
+  const supported = liveCurrencySupported(currency);
+  const wanted = [...new Set(metals)].sort().join(',');
+  const quotes = useSpot((s) => s.quotes);
+
+  useEffect(() => {
+    if (!wanted || !supported) return;
+    for (const m of wanted.split(',') as Metal[]) loadSpotPrice(m, currency, { force: true });
+  }, [wanted, currency, supported]);
+
+  const prices: Partial<Record<Metal, Cents>> = {};
+  if (!supported) return prices;
+  for (const m of metals) {
+    const quote = quotes[keyOf(m, currency)];
+    if (quote) prices[m] = quote.price;
+  }
+  return prices;
 }

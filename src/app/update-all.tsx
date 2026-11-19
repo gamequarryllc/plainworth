@@ -14,11 +14,12 @@ import { useMoney } from '@/hooks/use-money';
 import { useToday } from '@/hooks/use-today';
 import { relativeDate } from '@/lib/dates';
 import { haptics } from '@/lib/haptics';
-import { liveCurrencySupported, metalName } from '@/lib/metals';
+import { liveCurrencySupported } from '@/lib/metals';
 import { summarizeAccounts, type AccountSummary } from '@/lib/networth';
 import { sortAccounts } from '@/lib/sort';
-import type { ID } from '@/lib/types';
+import type { Cents, ID } from '@/lib/types';
 import { useStore, type NewSnapshot } from '@/store';
+import { useSpotPrices } from '@/store/spot';
 import { offerReminder } from '@/store/reminder-offer';
 import { balanceUpdateSaved } from '@/store/review-prompt';
 
@@ -33,33 +34,35 @@ export default function UpdateAllScreen() {
   const currency = useStore((s) => s.settings.currency);
   const addSnapshots = useStore((s) => s.addSnapshots);
   const [date, setDate] = useState(today);
-  /** Typed values: the new balance, or for quantity accounts the new price per unit. */
+  /** Typed values: the new balance, or for quantity accounts the new price per unit. Missing = not typed. */
   const [typed, setTyped] = useState<Record<ID, number | null>>({});
   const chain = useFieldChain();
 
   const summaries = summarizeAccounts(accounts, snapshots, categories);
-  // Metals on a live price keep themselves current, so they are left out.
-  const isLive = (s: AccountSummary) => !!s.account.metal && liveCurrencySupported(currency);
   // Same order as the Net Worth list, so you can work down it top to bottom.
-  const all = sortAccounts(
+  const open = sortAccounts(
     accounts.filter((a) => !a.closed).map((a) => summaries.get(a.id)!),
     sort,
   );
-  const open = all.filter((s) => !isLive(s));
-  const live = all.filter(isLive);
-  const liveNote =
-    live.length === 1
-      ? `${live[0].account.name} follows the live ${metalName(live[0].account.metal!).toLowerCase()} price, so it isn’t listed.`
-      : live.length > 1
-        ? `${live.length} metal accounts follow live prices, so they aren’t listed.`
-        : undefined;
+  // Metals on a live price come in at today's price, so saving brings them up to date too.
+  // They don't update by themselves any more: only here, on their own Update screen, or pull to refresh.
+  const isLive = (s: AccountSummary) =>
+    !!s.account.metal && liveCurrencySupported(currency) && s.latest?.quantity != null;
+  const live = open.filter(isLive);
+  const livePrices = useSpotPrices(live.map((s) => s.account.metal!));
+  /** Today's price for a metal nobody has typed over. Only for today: an older date keeps what you type. */
+  const autoPrice = (s: AccountSummary): Cents | null =>
+    isLive(s) && date === today && !(s.account.id in typed) ? (livePrices[s.account.metal!] ?? null) : null;
+  const liveNote = live.length
+    ? `${live.length === 1 ? live[0].account.name : 'Metal accounts'} ${live.length === 1 ? 'takes' : 'take'} today’s live price. Type a price to use your own.`
+    : undefined;
   const groups = [
     { key: 'asset', title: 'Assets', items: open.filter((s) => s.kind === 'asset') },
     { key: 'liability', title: 'Liabilities', items: open.filter((s) => s.kind === 'liability') },
   ].filter((g) => g.items.length > 0);
 
   const newValue = (s: AccountSummary): number | null => {
-    const t = typed[s.account.id];
+    const t = typed[s.account.id] ?? autoPrice(s);
     if (t == null) return null;
     if (s.account.unit) {
       const q = s.latest?.quantity;
@@ -86,8 +89,10 @@ export default function UpdateAllScreen() {
       value,
       date,
       ...(summary.account.unit
-        ? { quantity: summary.latest?.quantity, unitPrice: typed[summary.account.id] ?? undefined }
+        ? { quantity: summary.latest?.quantity, unitPrice: typed[summary.account.id] ?? autoPrice(summary) ?? undefined }
         : null),
+      // Like the Update screen: a live price nobody typed keeps following the market for the rest of the day.
+      ...(autoPrice(summary) != null ? { source: 'spot' as const } : null),
     }));
     addSnapshots(entries);
     haptics.success();
@@ -109,7 +114,7 @@ export default function UpdateAllScreen() {
             ? `${changes.length} ${changes.length === 1 ? 'account' : 'accounts'} will get a new balance.`
             : groups.length
               ? 'Type new balances below. Accounts you leave alone stay as they are.'
-              : (liveNote ?? 'Add an account to update its balance here.')
+              : 'Add an account to update its balance here.'
         }>
         <Row title="Date" accessory={<DateField value={date} onChange={setDate} maximum={today} />} />
         <Row
@@ -150,7 +155,7 @@ export default function UpdateAllScreen() {
                     ref={chain.ref(i)}
                     onFocus={chain.onFocus(i)}
                     inputAccessoryViewID={KEYBOARD_BAR_ID}
-                    value={typed[s.account.id]}
+                    value={typed[s.account.id] ?? autoPrice(s)}
                     hint={unit ? s.latest?.unitPrice : s.balance}
                     placeholder={money(unit ? (s.latest?.unitPrice ?? 0) : s.balance)}
                     onChange={(cents) => setTyped((prev) => ({ ...prev, [s.account.id]: cents }))}

@@ -39,7 +39,7 @@ export default function UpdateBalanceScreen() {
   const unit = account?.unit;
   // Metal accounts take today's live price, so only the quantity needs typing.
   const live = account?.metal && liveCurrencySupported(currency) ? account.metal : undefined;
-  const spot = useSpotPrice(live);
+  const spot = useSpotPrice(live, { force: true });
 
   const [text, setText] = useState('');
   const [qty, setQty] = useState(latest?.quantity != null ? formatTyping(String(latest.quantity), 6) : '');
@@ -60,7 +60,8 @@ export default function UpdateBalanceScreen() {
       ? Math.round(quantity * unitPrice)
       : null
     : parseAmount(text);
-  const changed = value != null && (!unit || touched);
+  // A metal can be saved as it is: the new entry takes today's price.
+  const changed = value != null && (!unit || touched || (!!live && value !== latest?.value));
   const delta = value != null && latest ? value - latest.value : null;
 
   const save = () => {
