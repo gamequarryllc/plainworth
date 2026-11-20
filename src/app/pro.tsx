@@ -1,4 +1,4 @@
-import { router, useLocalSearchParams } from 'expo-router';
+import { router, useLocalSearchParams, type Href } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, Platform, Pressable, StyleSheet, View } from 'react-native';
 
@@ -13,6 +13,23 @@ import { LIFETIME_PRICE, PRO_FEATURES, type ProFeature } from '@/lib/pro';
 import { purchasesAvailable } from '@/lib/purchases';
 import { buyPro, loadOffer, restorePurchases, setTestPro, useProStore } from '@/store/pro';
 import { layout, useColors } from '@/theme';
+
+/** Once Pro is owned, each feature on the sheet opens the thing itself. */
+const OPENS: Record<ProFeature, Href> = {
+  insights: '/insights',
+  'chart-values': '/',
+  export: '/export',
+  sync: '/settings/sync',
+  profiles: '/settings/profiles',
+};
+
+/** Closes the sheet (and Settings, when it was opened from there) and goes to the feature. */
+function openFeature(feature: ProFeature) {
+  const to = OPENS[feature];
+  if (router.canDismiss()) router.dismissAll();
+  if (feature === 'insights' || feature === 'chart-values') router.navigate(to);
+  else router.push(to);
+}
 
 const DEVICE = Platform.OS === 'android' ? 'phone' : 'iPhone';
 const ACCOUNT = Platform.OS === 'android' ? 'Google account' : 'Apple ID';
@@ -88,6 +105,7 @@ export default function ProScreen() {
         {features.map((f) => (
           <Row
             key={f.key}
+            onPress={source ? () => openFeature(f.key) : undefined}
             leading={<Icon name={f.icon} size={20} color={c.tint} />}
             title={
               <Text variant="body" weight="600">
