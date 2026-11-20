@@ -183,7 +183,7 @@ export default function SettingsScreen() {
         <Row
           title="Plainworth Pro"
           subtitle={
-            proSource === 'test' ? 'On for testing' : pro ? 'Lifetime · Thank you!' : 'Insights, exact chart values, Excel export, sync'
+            proSource === 'test' ? 'On for testing' : pro ? 'Lifetime · Thank you!' : 'Insights, exact chart values, Excel export, sync, profiles'
           }
           onPress={() => openPaywall()}
         />
