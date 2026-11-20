@@ -196,6 +196,10 @@ test('guesses a category from the merchant, and leaves transfers out', () => {
   // A choice made before wins, even over a known merchant.
   assert.deepEqual(guess('KROGER #442', 1000, { KROGER: 'general' }), { choice: 'general', sure: true });
   assert.deepEqual(guess('VENMO PAYMENT JORDAN', 1000, { 'VENMO PAYMENT': 'skip' }), { choice: 'skip', sure: true });
+  // A remembered category that was hidden since is ignored too, and a hidden one is never guessed.
+  const hiddenGroceries = cats.map((c) => (c.id === 'groceries' ? { ...c, hidden: true } : c));
+  assert.deepEqual(guessCategory({ date: null, description: 'VENMO PAYMENT JORDAN', amount: 1000 }, hiddenGroceries, { 'VENMO PAYMENT': 'groceries' }), { choice: 'general', sure: false });
+  assert.notEqual(guessCategory({ date: null, description: 'KROGER #442', amount: 1000 }, hiddenGroceries, {}).choice, 'groceries');
   // A remembered category that was since deleted is ignored.
   assert.deepEqual(guess('KROGER #442', 1000, { KROGER: 'gone' }), { choice: 'groceries', sure: true });
 });

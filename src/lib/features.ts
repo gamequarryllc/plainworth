@@ -4,6 +4,6 @@
  * turned back on by changing the value here.
  */
 export const features = {
-  /** Import Statement on a month in Spending (src/app/import.tsx). Off for 1.2. */
-  statementImport: false,
+  /** Import Statement on a month in Spending (src/app/import.tsx). Off in 1.2.0 to 1.2.2. */
+  statementImport: true,
 };

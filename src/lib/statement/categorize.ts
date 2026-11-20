@@ -95,7 +95,8 @@ export function guessCategory(txn: Txn, categories: SpendCategory[], remembered:
   const shown = categories.filter((c) => !c.hidden);
   const saved = remembered[merchantKey(txn.description)];
   if (saved === 'skip') return { choice: 'skip', sure: true };
-  if (saved && categories.some((c) => c.id === saved)) return { choice: saved, sure: true };
+  // A category hidden since then isn't wanted any more: the line is guessed afresh.
+  if (saved && shown.some((c) => c.id === saved)) return { choice: saved, sure: true };
 
   const text = txn.description.toLowerCase();
   const kind = KINDS.find(([, rx]) => rx.test(text))?.[0];

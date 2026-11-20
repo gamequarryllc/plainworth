@@ -121,6 +121,8 @@ export function deleteProfile(id: ID, opts: { at?: number; elsewhere?: boolean }
   resting.delete(id);
   if (!had) return;
   storage.remove(dataKey(id)).catch(() => {});
+  // What statement import remembered for it (see statement-import.ts).
+  storage.remove(`plainworth.import.${id}`).catch(() => {});
   if (!opts.elsewhere) listener?.removed(id);
 }
 
