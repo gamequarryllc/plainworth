@@ -135,7 +135,8 @@ export default function MonthScreen() {
             titleColor="tint"
             leading={<Icon name="square.and.arrow.down" size={18} color={c.tint} />}
             chevron={false}
-            onPress={() => router.push({ pathname: '/import', params: { month } })}
+            // In the sample it asks to start instead: an import always goes into the real data.
+            onPress={guard(() => router.push({ pathname: '/import', params: { month } }))}
           />
         ) : null}
         {canFill && !sample ? (
@@ -149,7 +150,7 @@ export default function MonthScreen() {
             }}
           />
         ) : null}
-        {features.statementImport && imported ? (
+        {features.statementImport && imported && !sample ? (
           <Row
             title={`Undo Import (${imported.count} ${imported.count === 1 ? 'line' : 'lines'})`}
             titleColor="down"
