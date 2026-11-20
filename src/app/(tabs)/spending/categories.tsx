@@ -3,6 +3,7 @@ import { useState } from 'react';
 
 import { Row, Section } from '@/components/list';
 import { ReorderButtons } from '@/components/reorder-buttons';
+import { useSampleGuard } from '@/components/sample';
 import { Screen } from '@/components/screen';
 import { GROUPS } from '@/lib/spending';
 import { useStore } from '@/store';
@@ -11,6 +12,8 @@ export default function SpendCategoriesScreen() {
   const categories = useStore((s) => s.spendCategories);
   const moveSpendCategory = useStore((s) => s.moveSpendCategory);
   const [reordering, setReordering] = useState(false);
+  // The sample's categories can be looked at, not changed.
+  const guard = useSampleGuard();
 
   return (
     <Screen
@@ -20,9 +23,9 @@ export default function SpendCategoriesScreen() {
           label: reordering ? 'Done' : 'Reorder',
           icon: reordering ? 'checkmark' : 'arrow.up.arrow.down',
           variant: reordering ? 'done' : 'plain',
-          onPress: () => setReordering((v) => !v),
+          onPress: guard(() => setReordering((v) => !v)),
         },
-        { label: 'Add Category', icon: 'plus', onPress: () => router.push('/spend-category-form') },
+        { label: 'Add Category', icon: 'plus', onPress: guard(() => router.push('/spend-category-form')) },
       ]}>
       {GROUPS.map((group) => {
         const list = categories.filter((x) => x.group === group.key).sort((a, b) => a.order - b.order);
@@ -45,7 +48,7 @@ export default function SpendCategoriesScreen() {
                   ) : null
                 }
                 onPress={
-                  reordering ? undefined : () => router.push({ pathname: '/spend-category-form', params: { id: cat.id } })
+                  reordering ? undefined : guard(() => router.push({ pathname: '/spend-category-form', params: { id: cat.id } }))
                 }
               />
             ))}
@@ -53,7 +56,7 @@ export default function SpendCategoriesScreen() {
               title={`Add ${group.key === 'income' ? 'Income Source' : 'Category'}`}
               titleColor="tint"
               chevron={false}
-              onPress={() => router.push({ pathname: '/spend-category-form', params: { group: group.key } })}
+              onPress={guard(() => router.push({ pathname: '/spend-category-form', params: { group: group.key } }))}
             />
           </Section>
         );

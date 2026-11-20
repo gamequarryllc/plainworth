@@ -6,6 +6,7 @@ import { Button } from '@/components/button';
 import { Change } from '@/components/change';
 import { EmptyState } from '@/components/empty-state';
 import { Row, Section } from '@/components/list';
+import { useSampleGuard } from '@/components/sample';
 import { Screen } from '@/components/screen';
 import { TrendHeader } from '@/components/trend-header';
 import { useMoney } from '@/hooks/use-money';
@@ -29,6 +30,8 @@ export default function AccountScreen() {
   const closeAccount = useStore((s) => s.closeAccount);
   const reopenAccount = useStore((s) => s.reopenAccount);
   const deleteAccount = useStore((s) => s.deleteAccount);
+  // In the sample, anything that would change the account asks to start with real numbers instead.
+  const guard = useSampleGuard();
 
   const account = accounts.find((a) => a.id === id);
   if (!account) {
@@ -125,14 +128,14 @@ export default function AccountScreen() {
         <Section
           style={styles.update}
           footer={`Closed${closedOn ? ` ${formatDate(closedOn)}` : ''}. It counts as ${money(0, { whole: true })} from then on, and its past balances still count in your net worth history. Delete it for good only if it shouldn’t be in your history at all.`}>
-          <Row title="Reopen Account" titleColor="tint" onPress={onReopen} chevron={false} />
-          <Row title="Delete for Good" titleColor="down" onPress={onDelete} chevron={false} />
+          <Row title="Reopen Account" titleColor="tint" onPress={guard(onReopen)} chevron={false} />
+          <Row title="Delete for Good" titleColor="down" onPress={guard(onDelete)} chevron={false} />
         </Section>
       ) : (
         <View style={styles.update}>
           <Button
             title={live ? 'Update Quantity' : 'Update Balance'}
-            onPress={() => router.push({ pathname: '/update', params: { id: account.id } })}
+            onPress={guard(() => router.push({ pathname: '/update', params: { id: account.id } }))}
           />
         </View>
       )}
@@ -147,7 +150,7 @@ export default function AccountScreen() {
           <Row
             title="Interest Rate"
             value={`${formatRate(account.apr ?? 0)} APR`}
-            onPress={() => router.push({ pathname: '/account-form', params: { id: account.id } })}
+            onPress={guard(() => router.push({ pathname: '/account-form', params: { id: account.id } }))}
           />
           {account.apr != null && (latest?.value ?? 0) > 0 ? (
             <Row title="Interest a Month" value={`About ${money(monthlyInterest(latest!.value, account.apr))}`} />
@@ -178,7 +181,7 @@ export default function AccountScreen() {
               subtitle={sub}
               value={money(snap.value)}
               detail={delta ? <Change delta={delta} invert={isDebt} variant="footnote" weight="500" /> : undefined}
-              onPress={() => router.push({ pathname: '/entry', params: { id: snap.id } })}
+              onPress={guard(() => router.push({ pathname: '/entry', params: { id: snap.id } }))}
             />
           );
         })}

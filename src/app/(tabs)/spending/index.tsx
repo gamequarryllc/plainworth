@@ -1,10 +1,10 @@
 import { router } from 'expo-router';
-import { Fragment, useState } from 'react';
+import { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
 import { BarChart } from '@/components/bar-chart';
 import { Hero } from '@/components/hero';
-import { SampleBanner, SampleBody, SampleData } from '@/components/sample';
+import { SampleBanner, SampleData, startSpending, useSpendingSample } from '@/components/sample';
 import { MonthsTable, type TableCell, type TableRow } from '@/components/months-table';
 import { Screen } from '@/components/screen';
 import { Stepper } from '@/components/stepper';
@@ -15,16 +15,14 @@ import { currentMonthKey, MONTHS, MONTHS_SHORT, parseMonthKey } from '@/lib/date
 import { fitMoney, formatPercent, MASK, roundsToZero } from '@/lib/money';
 import { earnedTotals, yearSummary } from '@/lib/spending';
 import { useStore } from '@/store';
-import { useSampleOn } from '@/store/sample-hidden';
 import { layout, useColors } from '@/theme';
 
 
 /** Until a first amount is entered, the page shows made-up sample spending (see the Net Worth tab). */
 export default function SpendingTab() {
-  const empty = useStore((s) => Object.values(s.spend).every((month) => Object.keys(month).length === 0));
-  const sample = useSampleOn() && empty;
+  const sample = useSpendingSample();
   return sample ? (
-    <SampleData>
+    <SampleData start={startSpending}>
       <SpendingScreen sample />
     </SampleData>
   ) : (
@@ -125,8 +123,6 @@ function SpendingScreen({ sample }: { sample?: boolean }) {
     : undefined;
 
 
-  // The sample can be scrolled but not tapped.
-  const Body = sample ? SampleBody : Fragment;
 
   return (
     <Screen title="Spending" large left={tabButtons}>
@@ -134,10 +130,10 @@ function SpendingScreen({ sample }: { sample?: boolean }) {
         <SampleBanner
           action="Enter This Month"
           icon="plus"
-          onAction={() => router.push({ pathname: '/spending/[month]', params: { month: currentMonthKey() } })}
+          onAction={startSpending}
         />
       ) : null}
-      <Body>
+      <>
         <Stepper
           label={String(year)}
           onPrev={() => changeYear(-1)}
@@ -180,7 +176,7 @@ function SpendingScreen({ sample }: { sample?: boolean }) {
 
         <MonthsTable title="Months" columns={columns} rows={rows} total={total} />
 
-      </Body>
+      </>
     </Screen>
   );
 }
