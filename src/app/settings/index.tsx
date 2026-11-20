@@ -278,7 +278,7 @@ export default function SettingsScreen() {
       {testStore ? (
         <Section
           header="TestFlight"
-          footer="Only in TestFlight. Test as Free hides your test purchase so you can see Plainworth as a free user. Load Test Data opens 3 months, 3 years or 10 years of made-up numbers in their own profile.">
+          footer="Only in TestFlight. Test as Free hides your test purchase so you can see Plainworth as a free user. Load Test Data opens a new Pro user’s empty first day, or 3 months, 3 years or 10 years of made-up numbers, in a profile of its own.">
           <Row title="Test as Free" accessory={<Switch value={testFree} onValueChange={setTestFree} />} />
           <Row title="Load Test Data" titleColor="tint" chevron={false} onPress={onTestData} />
         </Section>
