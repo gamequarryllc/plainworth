@@ -8,6 +8,7 @@ import { Hero } from '@/components/hero';
 import { Icon } from '@/components/icon';
 import { KEYBOARD_BAR_ID, KeyboardBar, useFieldChain } from '@/components/keyboard-bar';
 import { Row, Section, SectionTitle } from '@/components/list';
+import { useSampleGuard, useSamplePage } from '@/components/sample';
 import { Screen } from '@/components/screen';
 import { StatTiles, type Tile } from '@/components/stat-tiles';
 import { SwipeGroup, SwipeRow } from '@/components/swipe-row';
@@ -34,7 +35,12 @@ function keptLine(t: MonthTotals, money: ReturnType<typeof useMoney>): string {
 }
 
 export default function MonthScreen() {
-  const params = useLocalSearchParams<{ month: string }>();
+  const params = useLocalSearchParams<{ month: string; mine?: string }>();
+  // The sample's months can be looked through, not changed: each amount asks
+  // to start with real numbers instead, and the buttons that change things go.
+  const sample = useSamplePage();
+  const guard = useSampleGuard();
+  const nudge = guard(() => {});
   const month = /^\d{4}-\d{2}$/.test(params.month ?? '') ? params.month : currentMonthKey();
   const previousKey = shiftMonth(month, -1);
   const c = useColors();
@@ -123,7 +129,7 @@ export default function MonthScreen() {
       <StatTiles tiles={tiles} />
 
       <Section>
-        {features.statementImport ? (
+        {features.statementImport && !sample ? (
           <Row
             title="Import Statement"
             titleColor="tint"
@@ -132,7 +138,7 @@ export default function MonthScreen() {
             onPress={() => router.push({ pathname: '/import', params: { month } })}
           />
         ) : null}
-        {canFill ? (
+        {canFill && !sample ? (
           <Row
             title={`Copy Recurring from ${prevName}`}
             titleColor="tint"
@@ -171,10 +177,10 @@ export default function MonthScreen() {
             {list.map((cat) => {
               const i = index++;
               return (
-                <DragRow key={cat.id} drag={drag} id={cat.id} ids={ids} onReorder={reorder}>
+                <DragRow key={cat.id} drag={drag} id={cat.id} ids={ids} onReorder={guard(reorder)}>
                   <SwipeRow
                     group={swipes}
-                    actions={[
+                    actions={sample ? [] : [
                       {
                         label: 'Edit',
                         color: '#8E8E93',
@@ -203,6 +209,14 @@ export default function MonthScreen() {
                             },
                           },
                     ]}>
+                    {sample ? (
+                      <Row
+                        title={cat.name}
+                        value={entries[cat.id] ? money(entries[cat.id]) : ''}
+                        chevron={false}
+                        onPress={nudge}
+                      />
+                    ) : (
                     <Row
                       title={cat.name}
                       accessory={
@@ -217,10 +231,12 @@ export default function MonthScreen() {
                         />
                       }
                     />
+                    )}
                   </SwipeRow>
                 </DragRow>
               );
             })}
+            {sample ? null : (
             <Row
               title={`Add ${group.key === 'income' ? 'Income Source' : 'Category'}`}
               titleColor="tint"
@@ -228,10 +244,12 @@ export default function MonthScreen() {
               leading={<Icon name="plus" size={17} weight="semibold" color={c.tint} />}
               onPress={() => router.push({ pathname: '/spend-category-form', params: { group: group.key } })}
             />
+            )}
           </Section>
         );
       })}
 
+      {sample ? null : (
       <Section header="Notes">
         <Row
           title={
@@ -246,12 +264,14 @@ export default function MonthScreen() {
           }
         />
       </Section>
+      )}
 
       <Section>
         <Row
           title="Categories"
           value={String(categories.filter((x) => !x.hidden).length)}
-          onPress={() => router.push('/spending/categories')}
+          // Someone entering their first month keeps their own categories on the next page too.
+          onPress={() => router.push({ pathname: '/spending/categories', params: params.mine ? { mine: '1' } : {} })}
         />
       </Section>
       <KeyboardBar chain={chain} count={index} />

@@ -3,6 +3,7 @@ import { useState } from 'react';
 
 import { Row, Section } from '@/components/list';
 import { ReorderButtons } from '@/components/reorder-buttons';
+import { useSampleGuard } from '@/components/sample';
 import { Screen } from '@/components/screen';
 import type { CategoryKind } from '@/lib/types';
 import { useStore } from '@/store';
@@ -17,6 +18,8 @@ export default function NetWorthCategoriesScreen() {
   const accounts = useStore((s) => s.accounts);
   const moveNWCategory = useStore((s) => s.moveNWCategory);
   const [reordering, setReordering] = useState(false);
+  // The sample's categories can be looked at, not changed.
+  const guard = useSampleGuard();
 
   return (
     <Screen
@@ -26,9 +29,9 @@ export default function NetWorthCategoriesScreen() {
           label: reordering ? 'Done' : 'Reorder',
           icon: reordering ? 'checkmark' : 'arrow.up.arrow.down',
           variant: reordering ? 'done' : 'plain',
-          onPress: () => setReordering((v) => !v),
+          onPress: guard(() => setReordering((v) => !v)),
         },
-        { label: 'Add Category', icon: 'plus', onPress: () => router.push('/category-form') },
+        { label: 'Add Category', icon: 'plus', onPress: guard(() => router.push('/category-form')) },
       ]}>
       {KINDS.map(({ kind, title }) => {
         const list = categories.filter((x) => x.kind === kind).sort((a, b) => a.order - b.order);
@@ -52,7 +55,7 @@ export default function NetWorthCategoriesScreen() {
                       />
                     ) : null
                   }
-                  onPress={reordering ? undefined : () => router.push({ pathname: '/category-form', params: { id: cat.id } })}
+                  onPress={reordering ? undefined : guard(() => router.push({ pathname: '/category-form', params: { id: cat.id } }))}
                 />
               );
             })}
@@ -60,7 +63,7 @@ export default function NetWorthCategoriesScreen() {
               title={`Add ${kind === 'asset' ? 'Asset' : 'Liability'} Category`}
               titleColor="tint"
               chevron={false}
-              onPress={() => router.push({ pathname: '/category-form', params: { kind } })}
+              onPress={guard(() => router.push({ pathname: '/category-form', params: { kind } }))}
             />
           </Section>
         );

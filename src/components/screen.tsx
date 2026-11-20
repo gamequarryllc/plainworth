@@ -18,6 +18,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { layout, useColors } from '@/theme';
 
 import { HeaderActions, InlineHeaderButtons, type HeaderItem } from './header-actions';
+import { isGroup, type MenuItem } from './header-actions.types';
+import { SampleStrip, useSampleGuard, useSamplePage } from './sample';
 import { Text } from './text';
 
 interface ScreenProps {
@@ -48,8 +50,18 @@ export function useScrollLock() {
   return useContext(ScrollLock);
 }
 
-export function Screen({ title, large, left, right, children, scroll = true, onRefresh, form, atEnd }: ScreenProps) {
+export function Screen({ title, large, left, right: rightItems, children, scroll = true, onRefresh, form, atEnd }: ScreenProps) {
   const c = useColors();
+  // A page opened from a sample page says so at the top, and its menus
+  // (Edit, Add and the like) ask to start with real numbers instead.
+  // Plain buttons, like a month's up and down arrows, still work.
+  const sample = useSamplePage() && !large;
+  const guard = useSampleGuard();
+  const guardMenu = (items: MenuItem[]): MenuItem[] =>
+    items.map((m) => (isGroup(m) ? { ...m, items: guardMenu(m.items) } : { ...m, onPress: guard(m.onPress) }));
+  const right = sample
+    ? rightItems?.map((item) => (item.menu ? { ...item, menu: guardMenu(item.menu) } : item))
+    : rightItems;
   const [refreshing, setRefreshing] = useState(false);
   const [locked, setLocked] = useState(false);
   const scrollRef = useRef<ScrollViewInstance>(null);
@@ -98,12 +110,16 @@ export function Screen({ title, large, left, right, children, scroll = true, onR
             keyboardShouldPersistTaps="handled"
             refreshControl={onRefresh ? <RefreshControl refreshing={refreshing} onRefresh={refresh} /> : undefined}>
             {inlineTitle ? <LargeTitle title={title ?? ''} left={left} right={right} /> : null}
+            {sample ? <SampleStrip /> : null}
             {children}
             {keyboardRoom > 0 ? <View style={{ height: keyboardRoom }} /> : null}
           </ScrollView>
         </ScrollLock.Provider>
       ) : (
-        <View style={{ flex: 1, backgroundColor: c.background }}>{children}</View>
+        <View style={{ flex: 1, backgroundColor: c.background }}>
+          {sample ? <SampleStrip /> : null}
+          {children}
+        </View>
       )}
     </>
   );

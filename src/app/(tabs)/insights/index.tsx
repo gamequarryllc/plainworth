@@ -1,5 +1,5 @@
 import { router, useLocalSearchParams } from "expo-router";
-import { Fragment, useContext, useState, type ReactElement, type ReactNode } from "react";
+import { useContext, useState, type ReactElement, type ReactNode } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
 
 import { BarChart } from "@/components/bar-chart";
@@ -21,7 +21,7 @@ import {
   useInsightsWaiting,
 } from "@/components/insights-preview";
 import { Row, Section } from "@/components/list";
-import { SampleBanner, SampleBody, SampleData } from "@/components/sample";
+import { SampleBanner, SampleData, startNetWorth, useSampleGuard } from "@/components/sample";
 import { Screen } from "@/components/screen";
 import { Segmented } from "@/components/segmented";
 import { StackedBars, useCategoryColors } from "@/components/stacked-bars";
@@ -118,7 +118,7 @@ export default function InsightsTab() {
   // from made-up sample data, numbers and all. Without Pro it's the preview,
   // as ever: the same sample charts, blurred behind Unlock with Pro.
   return sample ? (
-    <SampleData>
+    <SampleData start={startNetWorth}>
       <InsightsUnlocked>
         <InsightsScreen sample />
       </InsightsUnlocked>
@@ -143,7 +143,6 @@ function InsightsScreen({ sample }: { sample?: boolean }) {
     if (shot === "spending" || shot === "networth") setPart(shot);
     if (shot === "fund") setPart("spending");
   }
-  const Body = sample ? SampleBody : Fragment;
 
   if (!preview && firstYear({ snapshots, spend }) == null) {
     return (
@@ -164,7 +163,7 @@ function InsightsScreen({ sample }: { sample?: boolean }) {
         <SampleBanner
           action="Add an Account"
           icon="plus"
-          onAction={() => router.push("/account-form")}
+          onAction={startNetWorth}
         />
       ) : null}
       <Segmented
@@ -173,7 +172,7 @@ function InsightsScreen({ sample }: { sample?: boolean }) {
         onChange={setPart}
         style={styles.parts}
       />
-      <Body>{part === "networth" ? <NetWorth /> : <Spending />}</Body>
+      {part === "networth" ? <NetWorth /> : <Spending />}
       <PreviewFooter />
     </Screen>
   );
@@ -784,6 +783,8 @@ function GoalLink({
 }) {
   const c = useColors();
   const locked = useInsightsPreview();
+  // Goals and the fund are set up on their own pages, which change data.
+  const guard = useSampleGuard();
   if (locked) {
     return (
       <View style={styles.link}>
@@ -798,7 +799,7 @@ function GoalLink({
   }
   return (
     <Pressable
-      onPress={onPress}
+      onPress={guard(onPress)}
       hitSlop={10}
       accessibilityRole="button"
       style={({ pressed }) => [styles.link, pressed && { opacity: 0.5 }]}
@@ -915,7 +916,8 @@ function EmergencyFundCard() {
     : fund
       ? fundStatus(fund, { spend, spendCategories, accounts, snapshots }, today)
       : null;
-  const edit = () => router.push("/emergency-fund");
+  const guard = useSampleGuard();
+  const edit = guard(() => router.push("/emergency-fund"));
 
   if (!fund || !status) {
     return (

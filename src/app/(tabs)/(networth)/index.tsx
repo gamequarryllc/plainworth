@@ -1,5 +1,4 @@
 import { router, useLocalSearchParams } from "expo-router";
-import { Fragment } from "react";
 import { StyleSheet } from "react-native";
 
 import {
@@ -11,7 +10,7 @@ import { Button } from "@/components/button";
 import { EmptyState } from "@/components/empty-state";
 import type { HeaderItem, MenuItem } from "@/components/header-actions";
 import { Row, Section } from "@/components/list";
-import { SampleBanner, SampleBody, SampleData } from "@/components/sample";
+import { SampleBanner, SampleData, startNetWorth, useNetWorthSample } from "@/components/sample";
 import { Screen } from "@/components/screen";
 import { SortButton } from "@/components/sort-button";
 import { useTabButtons } from "@/components/tab-buttons";
@@ -47,7 +46,6 @@ import {
 } from "@/lib/sort";
 import type { CategoryKind } from "@/lib/types";
 import { useStore } from "@/store";
-import { useSampleOn } from "@/store/sample-hidden";
 import { refreshSpotPrices } from "@/store/spot";
 
 const KINDS: { kind: CategoryKind; title: string }[] = [
@@ -61,10 +59,9 @@ const KINDS: { kind: CategoryKind; title: string }[] = [
  * with the first real account, or when it's hidden.
  */
 export default function NetWorthTab() {
-  const empty = useStore((s) => s.accounts.length === 0);
-  const sample = useSampleOn() && empty;
+  const sample = useNetWorthSample();
   return sample ? (
-    <SampleData>
+    <SampleData start={startNetWorth}>
       <NetWorthScreen sample />
     </SampleData>
   ) : (
@@ -217,8 +214,6 @@ function NetWorthScreen({ sample }: { sample?: boolean }) {
     );
   }
 
-  // The sample can be scrolled but not tapped: its accounts aren't real.
-  const Body = sample ? SampleBody : Fragment;
 
   /** Under the debts: where extra money should go, and what interest costs each month. */
   const debtNotes: string[] = [];
@@ -352,14 +347,14 @@ function NetWorthScreen({ sample }: { sample?: boolean }) {
         <SampleBanner
           action="Add an Account"
           icon="plus"
-          onAction={() => router.push("/account-form")}
+          onAction={startNetWorth}
         />
       ) : null}
-      <Body>
+      <>
         <TrendHeader current={totals.net} series={series} hideChange />
 
         {view === "categories" ? categorySections : accountSections}
-      </Body>
+      </>
 
       {closedCount > 0 ? (
         <Section style={styles.listSection}>
