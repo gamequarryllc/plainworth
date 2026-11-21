@@ -298,7 +298,11 @@ export interface Distribution {
  * included: it shows what your assets are made of. Periods before the first
  * balance are left out.
  */
-export function distribution(data: NWData, today: DateKey, unit: PeriodUnit, count = 6): Distribution {
+/**
+ * Without `count`, every period back to the first balance entered, so a long
+ * history can be scrolled back through.
+ */
+export function distribution(data: NWData, today: DateKey, unit: PeriodUnit, count?: number): Distribution {
   const t = parseDateKey(today);
   const todayDay = dayNumber(today);
   const step = unit === 'month' ? 1 : unit === 'quarter' ? 3 : 12;
@@ -307,7 +311,15 @@ export function distribution(data: NWData, today: DateKey, unit: PeriodUnit, cou
     year: t.y,
     month: unit === 'month' ? t.m : unit === 'quarter' ? Math.ceil(t.m / 3) * 3 : 12,
   };
-  const periods = Array.from({ length: count }, (_, i) => ({ ...shift(current, (i - count + 1) * step), unit }));
+  if (count == null) {
+    let earliest = today;
+    for (const s of data.snapshots) if (s.date < earliest) earliest = s.date;
+    const e = parseDateKey(earliest);
+    const months = (current.year - e.y) * 12 + (current.month - e.m);
+    count = Math.max(1, Math.floor(months / step) + 1);
+  }
+  const n = count;
+  const periods = Array.from({ length: n }, (_, i) => ({ ...shift(current, (i - n + 1) * step), unit }));
   const rows = periods.map((p) => {
     const end = Math.round(Date.UTC(p.year, p.month, 0) / 86_400_000);
     return holdingsOn(data, Math.min(end, todayDay));

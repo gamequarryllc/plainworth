@@ -144,7 +144,7 @@ test('trends: lifestyle creep finds where spending started to climb', () => {
 test('trends: what you own by category, period by period', () => {
   const cats = [...nwCategories, { id: 'inv', name: 'Investments', kind: 'asset' as const, order: 2 }];
   const accts = [...accounts.slice(0, 2).map((a) => (a.id === 'b' ? { ...a, categoryId: 'inv' } : a)), accounts[2]];
-  const d = distribution({ ...nw, accounts: accts, nwCategories: cats }, '2026-05-20', 'month');
+  const d = distribution({ ...nw, accounts: accts, nwCategories: cats }, '2026-05-20', 'month', 6);
   // Six months back is December; November's first balance is before it.
   assert.deepEqual(d.periods.map((p) => p.month), [12, 1, 2, 3, 4, 5]);
   // Investments are biggest now, so they come first. The loan isn't an asset.
@@ -153,6 +153,10 @@ test('trends: what you own by category, period by period', () => {
   assert.deepEqual(d.values[5], [5_000_00, 1_700_00]);
   // The loan is kept apart, to take off the total.
   assert.deepEqual(d.debts, [500_00, 500_00, 500_00, 500_00, 300_00, 300_00]);
+  // Without a count, every month back to the first balance: November.
+  const all = distribution({ ...nw, accounts: accts, nwCategories: cats }, '2026-05-20', 'month');
+  assert.deepEqual(all.periods.map((p) => p.month), [11, 12, 1, 2, 3, 4, 5]);
+  assert.deepEqual(all.values.slice(1), d.values);
 
   const q = distribution(nw, '2026-05-20', 'quarter');
   // Q4 2025, Q1 2026, and Q2 so far.

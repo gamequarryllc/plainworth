@@ -322,7 +322,10 @@ const UNITS: { value: PeriodUnit; label: string }[] = [
 
 const periodLabel = (p: Month & { unit: PeriodUnit }) =>
   p.unit === "month"
-    ? MONTHS_SHORT[p.month - 1]
+    ? // January carries its year, so a long scroll back stays readable.
+      p.month === 1
+      ? `Jan ’${String(p.year).slice(2)}`
+      : MONTHS_SHORT[p.month - 1]
     : p.unit === "quarter"
       ? `Q${p.month / 3} ’${String(p.year).slice(2)}`
       : String(p.year);

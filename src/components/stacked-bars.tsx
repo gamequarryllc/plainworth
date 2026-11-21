@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Pressable, StyleSheet, View, type LayoutChangeEvent } from 'react-native';
+import { useRef, useState } from 'react';
+import { Pressable, ScrollView, StyleSheet, View, type LayoutChangeEvent, type ScrollViewInstance } from 'react-native';
 import Svg, { Path, Rect } from 'react-native-svg';
 
 import { haptics } from '@/lib/haptics';
@@ -18,12 +18,19 @@ export function useCategoryColors(): string[] {
 
 const GAP = 1.5;
 const RADIUS = 4;
+/**
+ * Columns that fit across before the chart scrolls sideways. The half column
+ * peeking in at the left edge is the hint that there's more to swipe back to.
+ */
+const FIT = 6;
+const ACROSS = FIT + 0.5;
 
 /**
  * Stacked columns, one per period, like the Health app's stacked activity
  * bars: the biggest category at the bottom, a hairline gap between pieces,
  * rounded tops. Tap a column to pick it; the others dim. With `below`, each
  * column also gets one piece under the line (debts), so the line is zero.
+ * More than six columns scroll sideways, opening on the newest at the right.
  */
 export function StackedBars({
   values,
@@ -55,14 +62,17 @@ export function StackedBars({
   // Where zero sits: the bottom, unless something hangs below it.
   const zero = down > 0 ? (up / max) * height : height;
   const n = values.length;
-  const slot = n ? width / n : 0;
+  const scrolls = n > FIT;
+  const slot = n ? width / (scrolls ? ACROSS : n) : 0;
   const barW = Math.min(36, slot * 0.56);
+  const full = slot * n;
+  const scroller = useRef<ScrollViewInstance>(null);
 
-  return (
-    <View onLayout={onLayout}>
+  const chart = (
+    <View style={{ width: full }}>
       <View style={{ height }}>
         {width > 0 ? (
-          <Svg width={width} height={height} style={StyleSheet.absoluteFill} pointerEvents="none">
+          <Svg width={full} height={height} style={StyleSheet.absoluteFill} pointerEvents="none">
             {values.map((col, i) => {
               const x = i * slot + (slot - barW) / 2;
               let top = zero;
@@ -129,6 +139,23 @@ export function StackedBars({
         ))}
       </View>
       <View style={[styles.base, { top: zero, backgroundColor: c.chartGrid }]} />
+    </View>
+  );
+
+  return (
+    <View onLayout={onLayout}>
+      {width === 0 ? null : scrolls ? (
+        <ScrollView
+          ref={scroller}
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          // Open on the newest columns, and again when the columns change (Monthly to Yearly).
+          onContentSizeChange={() => scroller.current?.scrollToEnd({ animated: false })}>
+          {chart}
+        </ScrollView>
+      ) : (
+        chart
+      )}
     </View>
   );
 }
