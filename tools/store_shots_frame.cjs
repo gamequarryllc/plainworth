@@ -22,7 +22,7 @@ const SHOTS = [
   { file: '03-where-youre-headed', caption: 'See where your\nnet worth is headed.' },
   { file: '04-spending-by-category', caption: 'See where your\nmoney really goes.' },
   { file: '05-debt-payoff-order', caption: 'Pay off debt faster,\navalanche or snowball.' },
-  { file: '06-emergency-fund', caption: 'Know how many months\nyour savings would last.' },
+  { file: '06-distribution-over-time', caption: 'See what your net worth\nis made of, year by year.' },
 ];
 
 // The screen on the page: 1320 x 2868 pixels shown 1050 wide.
