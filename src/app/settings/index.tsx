@@ -473,10 +473,19 @@ function backupStatus(last: DateKey | undefined): string {
   return `Last backed up ${days} days ago.`;
 }
 
+/** The installed version (the build sets it, so it can be newer than app.json's). Expo Go reports its own, so not there. */
+function appVersion(): string {
+  const native = Constants.executionEnvironment === ExecutionEnvironment.StoreClient ? null : Constants.nativeApplicationVersion;
+  return native ?? Constants.expoConfig?.version ?? '';
+}
+
 /** The closing note: why Plainworth is safe to trust with your numbers. */
 function PrivacyNote() {
   const c = useColors();
   const syncOn = useSync((s) => s.on);
+  // TestFlight builds also show the build number, to tell which build is installed.
+  const testStore = useProStore((s) => s.testStore);
+  const build = testStore && Constants.nativeBuildVersion ? ` (${Constants.nativeBuildVersion})` : '';
   return (
     <View style={styles.privacy}>
       <Icon name="lock.shield.fill" size={30} color={c.secondary} />
@@ -503,7 +512,8 @@ function PrivacyNote() {
         </Pressable>
       ) : null}
       <Text variant="caption" color="tertiary" style={styles.version}>
-        Plainworth {Constants.expoConfig?.version ?? ''}
+        Plainworth {appVersion()}
+        {build}
       </Text>
     </View>
   );
