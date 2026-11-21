@@ -185,8 +185,17 @@ export function decadeSampleData(): Data {
 
   const accounts: Account[] = [];
   const snapshots: Snapshot[] = [];
+  // Accounts opened the same month (the home and its mortgage, the car and its
+  // loan) open the same day, so the chart doesn't spike between the two.
+  const openOffsets = new Map<number, number>();
+  const openTimes = new Map<number, number>();
+  const openedAt = (open: number, date: string) => {
+    if (!openTimes.has(open)) openTimes.set(open, savedAt(date));
+    return openTimes.get(open)!;
+  };
   for (const plan of plans) {
-    const openDay = dayOf(plan.open) + Math.floor(r() * 3);
+    if (!openOffsets.has(plan.open)) openOffsets.set(plan.open, Math.floor(r() * 3));
+    const openDay = dayOf(plan.open) + openOffsets.get(plan.open)!;
     const lastDay = plan.close != null ? dayOf(plan.close) : endDay;
     const account: Account = {
       id: newId(),
@@ -202,14 +211,20 @@ export function decadeSampleData(): Data {
     if (plan.apr != null) account.apr = plan.apr;
     accounts.push(account);
 
+    // Open accounts get their last balance in the past week and a half (the
+    // first one today), so every one is up to date, on different days: all on
+    // the same day, they'd put a step in the net worth chart at today.
+    const lastUpdate = accounts.length === 1 ? endDay : endDay - Math.floor(r() * 10);
     for (let day = openDay; day <= lastDay; ) {
       const next = day + plan.everyDays + Math.floor(r() * 5) - 2;
-      // Open accounts get their last balance today, so every one is up to date.
-      const last = plan.close == null && next > endDay;
-      const d = last ? endDay : day;
+      const last = plan.close == null && next > lastUpdate;
+      const d = last ? Math.max(day, lastUpdate) : day;
       const date = keyFromDayNumber(d);
       const m = Math.min(DECADE, monthOf(d));
-      const snap: Snapshot = { id: newId(), accountId: account.id, date, value: 0, createdAt: savedAt(date) };
+      // Opened together, saved together: the chart shows each separate save, and
+      // hours between the home and its mortgage would spike it in between.
+      const createdAt = d === openDay ? openedAt(plan.open, date) + accounts.length * 1_000 : savedAt(date);
+      const snap: Snapshot = { id: newId(), accountId: account.id, date, value: 0, createdAt };
       if (plan.metal) {
         const qty = plan.metal.qty(Math.floor(m));
         const price = Math.round(plan.metal.price(m) * noise(0.03) * 100);

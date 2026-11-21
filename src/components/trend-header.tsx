@@ -16,6 +16,7 @@ import { Change } from './change';
 import { Hero } from './hero';
 import { Icon } from './icon';
 import { LineChart } from './line-chart';
+import { useSamplePage } from './sample';
 import { ProBadge } from './pro-badge';
 import { RangePicker } from './range-picker';
 import { Text } from './text';
@@ -50,7 +51,9 @@ export function TrendHeader({
   const animated = useAnimatedNumber(current);
   // Without Pro, dragging reads exact values only on All. Other ranges show a
   // small hint instead, which stays a few seconds after the finger lifts so it can be tapped.
-  const pro = usePro();
+  // The sample shows everything Pro has, so it can be tried before buying.
+  const sample = useSamplePage();
+  const pro = usePro() || sample;
   const gated = range !== 'ALL' && !pro;
   const [hint, setHint] = useState(false);
   const hintTimer = useRef<ReturnType<typeof setTimeout> | null>(null);

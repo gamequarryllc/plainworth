@@ -1,7 +1,7 @@
 import { Stack } from 'expo-router';
 import type { ReactNode } from 'react';
 
-import { InsightsPreview, useInsightsPreview } from '@/components/insights-preview';
+import { InsightsPreview } from '@/components/insights-preview';
 import { SampleScreen, startNetWorth } from '@/components/sample';
 import { useStackOptions } from '@/components/stack-options';
 import { useResetOnTabBlur } from '@/hooks/use-reset-on-tab-blur';
@@ -9,7 +9,7 @@ import { UnlockCard } from '@/components/unlock-card';
 import { firstYear } from '@/lib/insights';
 import { useStore } from '@/store';
 import { usePro } from '@/store/pro';
-import { useSampleOn } from '@/store/sample-hidden';
+import { usePreviewing, useSampleOn } from '@/store/sample-hidden';
 
 export default function InsightsLayout() {
   useResetOnTabBlur();
@@ -24,13 +24,24 @@ export default function InsightsLayout() {
   );
 }
 
+/** True while Insights shows the sample: nothing entered yet, and not hidden. */
+function useInsightsSample(): boolean {
+  const snapshots = useStore((s) => s.snapshots);
+  const spend = useStore((s) => s.spend);
+  const sampleOn = useSampleOn();
+  const previewing = usePreviewing();
+  return (sampleOn && firstYear({ snapshots, spend }) == null) || previewing;
+}
+
 /**
  * Insights is part of Pro. Without it, every card's chart is blurred behind
  * an Unlock with Pro tag, with a way to unlock them at the end of the page.
+ * The sample is the exception: it shows all of Pro, so it can be tried first.
  */
 function ProPreview({ children }: { children: ReactNode }) {
   const pro = usePro();
-  if (pro) return <>{children}</>;
+  const sample = useInsightsSample();
+  if (pro || sample) return <>{children}</>;
   return (
     <InsightsPreview
       footer={
@@ -50,12 +61,7 @@ function ProPreview({ children }: { children: ReactNode }) {
  * from its cards show the sample too.
  */
 function InsightsSample({ route, children }: { route: { name: string; params?: object }; children: ReactNode }) {
-  const snapshots = useStore((s) => s.snapshots);
-  const spend = useStore((s) => s.spend);
-  const preview = useInsightsPreview();
-  const sampleOn = useSampleOn();
-  // Like the page itself: without Pro, Insights is the blurred preview instead.
-  const sample = !preview && sampleOn && firstYear({ snapshots, spend }) == null;
+  const sample = useInsightsSample();
   return (
     <SampleScreen on={sample} start={startNetWorth} route={route}>
       {children}

@@ -27,7 +27,7 @@ function readHidden(): boolean {
   return inUse;
 }
 
-const useHidden = create(() => ({ hidden: readHidden() }));
+const useHidden = create(() => ({ hidden: readHidden(), previewing: false }));
 
 /** True until the previews are hidden. Each page also drops its own once it has real data. */
 export function useSampleOn(): boolean {
@@ -43,4 +43,17 @@ export function hideSample() {
 export function resetSample() {
   useHidden.setState({ hidden: false });
   storage.write(KEY, 'on').catch(() => {});
+}
+
+/**
+ * Preview Pro, from Settings: every tab shows the sample again, with all of
+ * Pro, even once there's real data. Only until it's closed or the app quits;
+ * the real data is never touched.
+ */
+export function usePreviewing(): boolean {
+  return useHidden((s) => s.previewing);
+}
+
+export function setPreviewing(previewing: boolean) {
+  useHidden.setState({ previewing });
 }

@@ -90,7 +90,7 @@ import { accountNames, formatMonths, fundBalance, fundStatus, sampleFund } from 
 import { categoryTotals } from "@/lib/spending";
 import type { SpendCategory, SpendingGoal } from "@/lib/types";
 import { SampleContext, useStore } from "@/store";
-import { useSampleOn } from "@/store/sample-hidden";
+import { usePreviewing, useSampleOn } from "@/store/sample-hidden";
 import { openPaywall } from "@/store/pro";
 import { useColors } from "@/theme";
 
@@ -112,8 +112,9 @@ export default function InsightsTab() {
   const spend = useStore((s) => s.spend);
   const preview = useInsightsPreview();
   const sampleOn = useSampleOn();
+  const previewing = usePreviewing();
   const sample =
-    !preview && sampleOn && firstYear({ snapshots, spend }) == null;
+    !preview && ((sampleOn && firstYear({ snapshots, spend }) == null) || previewing);
   // With nothing entered yet and Pro unlocked, the page shows itself drawn
   // from made-up sample data, numbers and all. Without Pro it's the preview,
   // as ever: the same sample charts, blurred behind Unlock with Pro.

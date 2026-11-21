@@ -6,7 +6,8 @@ import type { SFSymbol } from 'sf-symbols-typescript';
 import { currentMonthKey } from '@/lib/dates';
 import { confirm } from '@/lib/dialogs';
 import { SampleContext, useStore } from '@/store';
-import { hideSample, useSampleOn } from '@/store/sample-hidden';
+import { openPaywall } from '@/store/pro';
+import { hideSample, setPreviewing, usePreviewing, useSampleOn } from '@/store/sample-hidden';
 import { layout, useColors } from '@/theme';
 
 import { Button } from './button';
@@ -56,6 +57,7 @@ const StartContext = createContext<(() => void) | null>(null);
 
 /** Leaves whatever sample page is open and adds a first account. */
 export function startNetWorth() {
+  setPreviewing(false);
   if (router.canDismiss()) router.dismissAll();
   router.push('/account-form');
 }
@@ -65,6 +67,7 @@ export function startNetWorth() {
  * amount. `mine` keeps that month, and pages opened from it, out of the sample.
  */
 export function startSpending() {
+  setPreviewing(false);
   if (router.canDismiss()) router.dismissAll();
   router.push({ pathname: '/spending/[month]', params: { month: currentMonthKey(), mine: '1' } });
 }
@@ -72,13 +75,17 @@ export function startSpending() {
 /** True while the Net Worth tab is showing the sample: no accounts yet, and not hidden. */
 export function useNetWorthSample(): boolean {
   const empty = useStore((s) => s.accounts.length === 0);
-  return useSampleOn() && empty;
+  const sampleOn = useSampleOn();
+  const previewing = usePreviewing();
+  return (sampleOn && empty) || previewing;
 }
 
 /** True while the Spending tab is showing the sample: nothing entered yet, and not hidden. */
 export function useSpendingSample(): boolean {
   const empty = useStore((s) => Object.values(s.spend).every((month) => Object.keys(month).length === 0));
-  return useSampleOn() && empty;
+  const sampleOn = useSampleOn();
+  const previewing = usePreviewing();
+  return (sampleOn && empty) || previewing;
 }
 
 /** True on a sample page, or a page opened from one. */
@@ -109,6 +116,8 @@ async function askToStart(start: () => void) {
 /** Top of a sample page: says the numbers are made up, with a way to start and a way to hide it. */
 export function SampleBanner({ action, icon, onAction }: { action: string; icon?: SFSymbol; onAction: () => void }) {
   const c = useColors();
+  // Opened from Preview Pro in Settings: a way to buy, and a way back to the real numbers.
+  const previewing = usePreviewing();
   return (
     <View style={[styles.banner, { borderColor: c.separator }]}>
       <View style={styles.line}>
@@ -118,12 +127,21 @@ export function SampleBanner({ action, icon, onAction }: { action: string; icon?
           </Text>
         </View>
         <Text variant="footnote" color="secondary" numberOfLines={1} style={styles.note}>
-          Made-up numbers. Yours go here.
+          {previewing ? 'Made-up numbers, with all of Pro.' : 'Made-up numbers. Yours go here.'}
         </Text>
       </View>
       <View style={styles.buttons}>
-        <Button title={action} icon={icon} onPress={onAction} style={styles.button} />
-        <Button title="Hide Sample" kind="tinted" onPress={hideSample} style={styles.button} />
+        {previewing ? (
+          <>
+            <Button title="Get Pro" onPress={() => openPaywall()} style={styles.button} />
+            <Button title="Close Preview" kind="tinted" onPress={() => setPreviewing(false)} style={styles.button} />
+          </>
+        ) : (
+          <>
+            <Button title={action} icon={icon} onPress={onAction} style={styles.button} />
+            <Button title="Hide Sample" kind="tinted" onPress={hideSample} style={styles.button} />
+          </>
+        )}
       </View>
     </View>
   );

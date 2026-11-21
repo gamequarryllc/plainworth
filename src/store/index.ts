@@ -471,6 +471,9 @@ export const SampleContext = createContext(false);
 
 let sampleStore: UseBoundStore<StoreApi<Store>> | null = null;
 
+/** Settings that only change how things are shown, which work in the sample too. */
+const SAMPLE_VIEW_SETTINGS = new Set<string>(['nwRange', 'nwView', 'nwSort', 'payoffOrder']);
+
 /**
  * What a sample preview reads instead of the real data: made-up accounts and
  * spending held only in memory. It is never saved, backed up, exported or
@@ -485,9 +488,25 @@ function getSampleStore(): UseBoundStore<StoreApi<Store>> {
       .filter(([, value]) => typeof value === 'function')
       .map(([key]) => [key, () => undefined]),
   );
-  const store = create<Store>()(() => ({ ...real, ...sampleData(), settings: real.settings, ...inert }) as Store);
+  // How the sample is viewed (chart range, list order) can be changed while
+  // looking through it. Those choices stay with the sample, not the real settings.
+  let viewing: Partial<Settings> = {};
+  const settingsOf = (settings: Settings): Settings => ({ ...settings, ...viewing });
+  const updateSettings = (patch: Partial<Settings>) => {
+    const allowed = Object.fromEntries(Object.entries(patch).filter(([key]) => SAMPLE_VIEW_SETTINGS.has(key)));
+    if (Object.keys(allowed).length === 0) return;
+    viewing = { ...viewing, ...allowed };
+    store.setState({ settings: settingsOf(realStore.getState().settings) });
+  };
+  // Ten years, so every chart range and yearly view has something to show.
+  const store = create<Store>()(
+    () => ({ ...real, ...decadeSampleData(), settings: settingsOf(real.settings), ...inert, updateSettings }) as Store,
+  );
+  let lastReal = real.settings;
   realStore.subscribe((state) => {
-    if (state.settings !== store.getState().settings) store.setState({ settings: state.settings });
+    if (state.settings === lastReal) return;
+    lastReal = state.settings;
+    store.setState({ settings: settingsOf(state.settings) });
   });
   sampleStore = store;
   return store;

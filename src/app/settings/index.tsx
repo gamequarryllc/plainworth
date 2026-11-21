@@ -30,7 +30,7 @@ import { useProfiles } from '@/store/profile-list';
 import { allProfiles, eraseEverything, restoreBackup } from '@/store/profiles';
 import { openPaywall, restorePurchases, setTestFree, setTestPro, useProStore } from '@/store/pro';
 import { markReminderOffered, resetReminderOffer } from '@/store/reminder-offer';
-import { resetSample } from '@/store/sample-hidden';
+import { resetSample, setPreviewing } from '@/store/sample-hidden';
 import { useSync } from '@/store/sync';
 import { loadTestProfile, TEST_SETS } from '@/store/test-data';
 import { layout, type, useColors } from '@/theme';
@@ -187,6 +187,19 @@ export default function SettingsScreen() {
           }
           onPress={() => openPaywall()}
         />
+        {pro ? null : (
+          <Row
+            title="Preview Pro"
+            subtitle="Look through every tab with made-up numbers"
+            titleColor="tint"
+            chevron={false}
+            onPress={() => {
+              setPreviewing(true);
+              if (router.canDismiss()) router.dismissAll();
+              router.navigate('/');
+            }}
+          />
+        )}
         {proSource !== 'lifetime' ? (
           <Row
             title="Restore Purchases"
