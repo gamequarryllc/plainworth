@@ -1,8 +1,9 @@
+import { currentMonthKey, todayKey } from '@/lib/dates';
 import { cleanName } from '@/lib/name';
 import { MAIN } from '@/lib/profiles';
 import type { Data } from '@/lib/types';
 
-import { defaultSettings, emptyData } from './defaults';
+import { defaultSettings } from './defaults';
 import { useStore } from './index';
 import { useProfiles } from './profile-list';
 import { setTestFree } from './pro';
@@ -18,7 +19,8 @@ import { DECADE, decadeSampleData } from './sample-decade';
  * comparisons need months of balances a tester doesn't have yet).
  *
  * "New Pro User" is the day someone installs Plainworth and buys Pro right
- * away: nothing entered, the first-open sample showing, Pro on.
+ * away and sets up: every account with the one balance entered today, this
+ * month of spending filled in, and Pro on.
  *
  * Each one opens in a profile of its own, so the tester's real numbers are
  * never touched. Loading the same one again starts it fresh.
@@ -30,13 +32,31 @@ export const TEST_SETS = [
   { label: '10 Years', name: 'Test 10 Years', months: DECADE },
 ] as const;
 
+/** The sample's accounts as someone would have them after one sitting: one balance each, dated today, and this month's spending. */
+function firstDayData(): Data {
+  const data = sampleData();
+  const today = todayKey();
+  const latest = new Map<string, Data['snapshots'][number]>();
+  for (const snap of data.snapshots) {
+    const kept = latest.get(snap.accountId);
+    if (!kept || snap.date >= kept.date) latest.set(snap.accountId, snap);
+  }
+  const months = Object.keys(data.spend).sort();
+  const lastMonth = data.spend[months[months.length - 1]];
+  return {
+    ...data,
+    snapshots: [...latest.values()].map((snap) => ({ ...snap, date: today })),
+    spend: lastMonth ? { [currentMonthKey()]: lastMonth } : {},
+  };
+}
+
 /** Open a test set in its own profile. Returns its name, or null when there's no room for another profile. */
 export function loadTestProfile(index: number): string | null {
   const set = TEST_SETS[index];
   if (!set) return null;
   const old = useProfiles.getState().list.find((p) => p.id !== MAIN && cleanName(p.name) === set.name);
   if (!old && !canAddProfile()) return null;
-  const made = set.months === 0 ? emptyData() : set.months === DECADE ? decadeSampleData() : sampleData(set.months);
+  const made = set.months === 0 ? firstDayData() : set.months === DECADE ? decadeSampleData() : sampleData(set.months);
   const data: Data = {
     ...made,
     settings: { ...defaultSettings(), currency: useStore.getState().settings.currency, name: set.name },
@@ -45,7 +65,7 @@ export function loadTestProfile(index: number): string | null {
   // The one loaded before, now that it isn't the open profile.
   if (old) deleteProfile(old.id);
   if (set.months === 0) {
-    // As on a fresh install: the sample previews, the reminder offer still to come, and Pro.
+    // As on a fresh install: the reminder offer still to come, and Pro.
     resetSample();
     resetReminderOffer();
     setTestFree(false);
