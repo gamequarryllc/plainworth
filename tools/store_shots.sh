@@ -90,7 +90,8 @@ shots=(
   "01-net-worth|plainworth:///"
   "02-spending-year|plainworth:///spending"
   "03-where-youre-headed|plainworth:///insights?shot=networth"
-  "06-distribution-over-time|plainworth:///insights?shot=distribution"
+  "07-distribution-over-time|plainworth:///insights?shot=distribution"
+  "06-emergency-fund|plainworth:///insights?shot=fund"
   "04-spending-by-category|plainworth:///insights/where-it-went"
   "05-debt-payoff-order|plainworth:///?shot=debts"
 )
