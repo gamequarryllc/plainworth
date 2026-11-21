@@ -371,6 +371,26 @@ function DistributionCard() {
         ? `${whole(total)}, about the same as ${since}.`
         : `${whole(total)}, ${diff > 0 ? "up" : "down"} ${whole(Math.abs(diff))} since ${since}.`;
   }
+  // A tapped bar: that period's net worth and how it moved from the one before.
+  if (picked != null && picked <= last) {
+    const now = totalAt(picked);
+    const name = periodName(d.periods[picked]);
+    if (picked === 0) sentence = `${whole(now)} in ${name}.`;
+    else {
+      const before = totalAt(picked - 1);
+      const diff = now - before;
+      const p0 = d.periods[picked - 1];
+      // Same year: "from September", not "from September 2026".
+      const prev =
+        p0.unit !== "year" && p0.year === d.periods[picked].year
+          ? periodName(p0).replace(` ${p0.year}`, "")
+          : periodName(p0);
+      sentence =
+        Math.abs(diff) < Math.max(Math.abs(before) * 0.01, 100_00)
+          ? `${whole(now)} in ${name}, about the same as ${prev}.`
+          : `${whole(now)} in ${name}, ${diff > 0 ? "up" : "down"} ${whole(Math.abs(diff))} from ${prev}.`;
+    }
+  }
 
   return (
     <InsightCard
