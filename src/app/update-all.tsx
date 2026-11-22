@@ -75,7 +75,9 @@ export default function UpdateAllScreen() {
   for (const g of groups) {
     for (const s of g.items) {
       const v = newValue(s);
-      if (v != null && v !== s.balance) changes.push({ summary: s, value: v });
+      // A metal at today's price counts even if the price hasn't moved, unless it's already dated today.
+      const refresh = v != null && autoPrice(s) != null && s.latest?.date !== today;
+      if (v != null && (v !== s.balance || refresh)) changes.push({ summary: s, value: v });
     }
   }
   const netDelta = changes.reduce(

@@ -60,8 +60,9 @@ export default function UpdateBalanceScreen() {
       ? Math.round(quantity * unitPrice)
       : null
     : parseAmount(text);
-  // A metal can be saved as it is: the new entry takes today's price.
-  const changed = value != null && (!unit || touched || (!!live && value !== latest?.value));
+  // A metal can always be saved as it is: the new entry is dated today at today's price,
+  // even when the price hasn't moved (weekends), so the chart's last point is today.
+  const changed = value != null && (!unit || touched || !!live);
   const delta = value != null && latest ? value - latest.value : null;
 
   const save = () => {
