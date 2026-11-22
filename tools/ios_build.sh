@@ -95,6 +95,11 @@ echo "version: $VERSION ($BUILD_NUMBER)"
 
 plist_value() { /usr/libexec/PlistBuddy -c "Print :$2" "$1" 2>/dev/null || true; }
 
+# The extensions (the widgets) inside a built .app, one path per line.
+extensions_in() { ls -d "$1"/PlugIns/*.appex 2>/dev/null || true; }
+# What an extension asks iOS for, as @bacons/apple-targets writes it during prebuild.
+extension_entitlements() { echo "$app/ios/.targets/$(basename "$1" .appex)/generated.entitlements"; }
+
 # Looks inside a built .app: the things App Store Connect or a phone would trip over.
 check_app() {
   local built="$1"
@@ -118,6 +123,20 @@ check_app() {
   [ "$archs" = "arm64" ] || { echo "Expected an arm64 app" >&2; exit 1; }
   echo "minimum iOS: $(plist_value "$info" MinimumOSVersion)"
   echo "size: $(du -sh "$built" | cut -f1) (unsigned, uncompressed)"
+  # The home screen widgets ride inside the app as an extension. App Store Connect
+  # wants its version and build number to be the app's, and its bundle id under the app's.
+  local ext ext_info ext_id
+  for ext in $(extensions_in "$built"); do
+    ext_info="$ext/Info.plist"; ext_id="$(plist_value "$ext_info" CFBundleIdentifier)"
+    case "$ext_id" in "$bundle".*) ;; *) echo "$(basename "$ext") has bundle id $ext_id, which isn't under $bundle" >&2; exit 1;; esac
+    if [ "$(plist_value "$ext_info" CFBundleShortVersionString)" != "$VERSION" ] || [ "$(plist_value "$ext_info" CFBundleVersion)" != "$BUILD_NUMBER" ]; then
+      echo "$(basename "$ext") is version $(plist_value "$ext_info" CFBundleShortVersionString) ($(plist_value "$ext_info" CFBundleVersion)), wanted $VERSION ($BUILD_NUMBER)" >&2; exit 1
+    fi
+    echo "extension: $(basename "$ext") ($ext_id), minimum iOS $(plist_value "$ext_info" MinimumOSVersion)"
+  done
+  if [ -d "$app/targets/widgets" ] && [ -z "$(extensions_in "$built")" ]; then
+    echo "The widgets (targets/widgets) are missing from the built app" >&2; exit 1
+  fi
 }
 
 # ---- entitlements --------------------------------------------------------------------
@@ -133,7 +152,7 @@ if [ -f "$entitlements" ]; then plutil -convert json -o "$wanted" "$entitlements
 # ones already in the app: without this, the uploaded app has no iCloud container
 # and Sync with iCloud can't store anything.
 embed_entitlements() {
-  local built="$1" resolved="$WORK/embed.entitlements"
+  local built="$1" resolved="$WORK/embed.entitlements" ext ext_wanted ext_resolved ext_id
   [ -f "$entitlements" ] || return 0
   cp "$entitlements" "$resolved"
   if [ -n "${APPLE_TEAM_ID:-}" ]; then
@@ -141,19 +160,47 @@ embed_entitlements() {
     /usr/libexec/PlistBuddy -c "Add :com.apple.developer.team-identifier string ${APPLE_TEAM_ID}" "$resolved" > /dev/null
   fi
   quiet "$logs/adhoc_nested.log" codesign --force --deep --sign - "$built"
+  # Each extension carries its own entitlements (the widgets need the app group
+  # they share with the app). They are signed before the app, whose signature
+  # covers them.
+  for ext in $(extensions_in "$built"); do
+    ext_wanted="$(extension_entitlements "$ext")"
+    [ -f "$ext_wanted" ] || continue
+    ext_resolved="$WORK/embed.$(basename "$ext" .appex).entitlements"
+    cp "$ext_wanted" "$ext_resolved"
+    if [ -n "${APPLE_TEAM_ID:-}" ]; then
+      ext_id="$(plist_value "$ext/Info.plist" CFBundleIdentifier)"
+      /usr/libexec/PlistBuddy -c "Add :application-identifier string ${APPLE_TEAM_ID}.${ext_id}" "$ext_resolved" > /dev/null
+      /usr/libexec/PlistBuddy -c "Add :com.apple.developer.team-identifier string ${APPLE_TEAM_ID}" "$ext_resolved" > /dev/null
+    fi
+    quiet "$logs/adhoc_$(basename "$ext" .appex).log" codesign --force --sign - --entitlements "$ext_resolved" "$ext"
+  done
   quiet "$logs/adhoc.log" codesign --force --sign - --entitlements "$resolved" "$built"
 }
 
 # Reads the entitlements out of a built app's signature and checks that everything
 # the project asks for is there. Prints what is missing and fails if anything is.
 check_entitlements() {
-  local built="$1" got="$WORK/entitlements_got"
-  if codesign -d --xml --entitlements - "$built" > "$got.plist" 2>/dev/null && [ -s "$got.plist" ]; then
+  local built="$1" ext ext_wanted
+  check_signed_entitlements "$built" "$wanted" "$WORK/entitlements_got"
+  for ext in $(extensions_in "$built"); do
+    ext_wanted="$(extension_entitlements "$ext")"
+    [ -f "$ext_wanted" ] || continue
+    plutil -convert json -o "$WORK/ext_wanted.json" "$ext_wanted"
+    printf '%s ' "$(basename "$ext"):"
+    check_signed_entitlements "$ext" "$WORK/ext_wanted.json" "$WORK/ext_got"
+  done
+}
+
+# $1 = a signed .app or .appex, $2 = what it should have (JSON), $3 = scratch name.
+check_signed_entitlements() {
+  local signed="$1" want="$2" got="$3"
+  if codesign -d --xml --entitlements - "$signed" > "$got.plist" 2>/dev/null && [ -s "$got.plist" ]; then
     plutil -convert json -o "$got.json" "$got.plist"
   else
     echo '{}' > "$got.json"
   fi
-  node "$app/tools/check_entitlements.mjs" "$wanted" "$got.json"
+  node "$app/tools/check_entitlements.mjs" "$want" "$got.json"
 }
 
 common=(-workspace "$workspace" -scheme "$name" -configuration Release -sdk iphoneos -destination "generic/platform=iOS")
@@ -163,7 +210,7 @@ if [ "$mode" = "check" ]; then
   say "Unsigned build"
   xcb "$logs/build.log" "${common[@]}" -derivedDataPath "$WORK/dd" build "${unsigned[@]}"
   check_app "$WORK/dd/Build/Products/Release-iphoneos/$name.app"
-  say "Entitlements (iCloud, notifications)"
+  say "Entitlements (iCloud, notifications, the widgets' app group)"
   embed_entitlements "$WORK/dd/Build/Products/Release-iphoneos/$name.app"
   check_entitlements "$WORK/dd/Build/Products/Release-iphoneos/$name.app"
   say "OK: Plainworth builds for iPhone (unsigned check, nothing uploaded)"
@@ -232,6 +279,10 @@ under Certificates, IDs & Profiles > Identifiers:
      register the container named in app.json (iCloud.$bundle).
   2. Switch back to App IDs, open $bundle, tick iCloud, press Configure (or Edit),
      tick that container, then Continue and Save.
+If it is the app group (the widgets) that is missing: under Identifiers, switch the
+list to App Groups, press + and register group.$bundle. Then, under App IDs, open
+$bundle and $bundle.widgets in turn (register the second as a new App ID if it
+isn't listed), tick App Groups, press Configure, tick that group, Continue and Save.
 Then run this build again. Nothing was uploaded.
 HELP
 }

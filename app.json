@@ -14,7 +14,8 @@
         "com.apple.developer.icloud-container-identifiers": ["iCloud.com.gamequarry.plainworth"],
         "com.apple.developer.ubiquity-container-identifiers": ["iCloud.com.gamequarry.plainworth"],
         "com.apple.developer.icloud-services": ["CloudDocuments"],
-        "com.apple.developer.icloud-container-environment": "Production"
+        "com.apple.developer.icloud-container-environment": "Production",
+        "com.apple.security.application-groups": ["group.com.gamequarry.plainworth"]
       },
       "config": {
         "usesNonExemptEncryption": false
@@ -54,7 +55,8 @@
           "image": "./assets/images/splash-icon.png",
           "imageWidth": 120
         }
-      ]
+      ],
+      "@bacons/apple-targets"
     ],
     "experiments": {
       "typedRoutes": true,

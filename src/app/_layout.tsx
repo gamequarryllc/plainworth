@@ -16,6 +16,7 @@ import { startPro } from '@/store/pro';
 import { hideSample } from '@/store/sample-hidden';
 import { noteLaunch } from '@/store/review-prompt';
 import { startSync } from '@/store/sync';
+import { startWidgets, syncWidgets } from '@/store/widgets';
 import { useColors } from '@/theme';
 
 // The swipe rows' library (Gesture Handler's Swipeable) reads its own animated
@@ -45,13 +46,18 @@ export default function RootLayout() {
     startPro();
     startSync();
     foldSameNames();
+    startWidgets();
   }, []);
 
   useEffect(() => {
     const sub = AppState.addEventListener('change', (state) => {
       if (state !== 'active') flushSave();
       // Top up the reminders each time the app comes back.
-      else syncReminders(useStore.getState().settings.reminder);
+      else {
+        syncReminders(useStore.getState().settings.reminder);
+        // A new day or month changes what the widgets say.
+        syncWidgets();
+      }
     });
     return () => sub.remove();
   }, []);
