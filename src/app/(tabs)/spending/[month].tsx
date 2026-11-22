@@ -8,6 +8,7 @@ import { Hero } from '@/components/hero';
 import { Icon } from '@/components/icon';
 import { KEYBOARD_BAR_ID, KeyboardBar, useFieldChain } from '@/components/keyboard-bar';
 import { Row, Section, SectionTitle } from '@/components/list';
+import { BetaBadge } from '@/components/pro-badge';
 import { useSampleGuard, useSamplePage } from '@/components/sample';
 import { Screen } from '@/components/screen';
 import { StatTiles, type Tile } from '@/components/stat-tiles';
@@ -135,6 +136,7 @@ export default function MonthScreen() {
             titleColor="tint"
             leading={<Icon name="square.and.arrow.down" size={18} color={c.tint} />}
             chevron={false}
+            accessory={<BetaBadge />}
             // In the sample it asks to start instead: an import always goes into the real data.
             onPress={guard(() => router.push({ pathname: '/import', params: { month } }))}
           />

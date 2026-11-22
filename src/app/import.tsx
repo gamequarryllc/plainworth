@@ -8,6 +8,7 @@ import { Button } from '@/components/button';
 import { Icon } from '@/components/icon';
 import { ImportHero } from '@/components/import-hero';
 import { Row, Section } from '@/components/list';
+import { BetaBadge } from '@/components/pro-badge';
 import { Screen } from '@/components/screen';
 import { StatTiles } from '@/components/stat-tiles';
 import { Text } from '@/components/text';
@@ -340,6 +341,12 @@ function ImportScreen() {
         </Text>
       </View>
       <View style={styles.points}>
+        <View style={styles.point}>
+          <BetaBadge />
+          <Text variant="subheadline" color="secondary" style={styles.pointText}>
+            New. Look over the totals before you add.
+          </Text>
+        </View>
         {POINTS.map((p) => (
           <View key={p.text} style={styles.point}>
             <Icon name={p.icon} size={17} color={c.secondary} style={styles.pointIcon} />

@@ -16,6 +16,18 @@ export function ProBadge() {
   );
 }
 
+/** The small "BETA" capsule next to a feature that is new and still being tuned. */
+export function BetaBadge() {
+  const c = useColors();
+  return (
+    <View style={[styles.badge, { backgroundColor: c.fill }]} accessibilityLabel="Beta">
+      <Text variant="caption" weight="700" color="secondary" style={styles.text}>
+        BETA
+      </Text>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   badge: {
     paddingHorizontal: 6,
