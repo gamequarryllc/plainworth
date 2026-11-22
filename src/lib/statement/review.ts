@@ -1,6 +1,6 @@
 import type { Cents, ID, MonthKey, SpendCategory } from '../types';
 
-import { guessCategory, merchantKey } from './categorize';
+import { guessCategory, isPay, merchantKey, payer } from './categorize';
 import type { Choice, Txn } from './types';
 
 /** One statement line in the review list. */
@@ -32,12 +32,13 @@ const DAY = 86_400_000;
  * Marks money that only moved between the person's own accounts: the same
  * amount going out of one statement and into another within a few days (a
  * card payment, a move to savings or to a brokerage). Neither half is spending
- * or income. Statements are told apart by `source`.
+ * or income. Statements are told apart by `source`. Pay is never one half:
+ * a paycheck that happens to match a withdrawal elsewhere is still pay.
  */
 export function pairTransfers(txns: Txn[], days = 5): Txn[] {
   const out = txns.map((t) => ({ ...t }));
   const time = (t: Txn) => (t.date ? Date.parse(t.date) : NaN);
-  const ins = out.filter((t) => t.amount < 0 && t.date);
+  const ins = out.filter((t) => t.amount < 0 && t.date && !isPay(t.description));
   for (const a of out) {
     if (a.amount <= 0 || !a.date || a.transfer) continue;
     let best: Txn | null = null;
@@ -75,6 +76,12 @@ export function buildReview(
 ): Review {
   const inMonth = txns.filter((t) => !t.date || t.date.startsWith(month));
   const already = new Set(seen);
+  // Who pays the person, from the lines that say they're pay, in any month of the statements.
+  const employers = new Set<string>();
+  for (const t of txns) {
+    const from = t.amount < 0 && isPay(t.description) ? payer(t.description) : null;
+    if (from) employers.add(from);
+  }
   const counts = new Map<string, number>();
   const items = inMonth
     .slice()
@@ -85,7 +92,7 @@ export function buildReview(
       const n = counts.get(base) ?? 0;
       counts.set(base, n + 1);
       const mark = hash(`${base}|${n}`);
-      const guess = t.transfer ? { choice: 'skip' as const, sure: true } : guessCategory(t, categories, remembered);
+      const guess = t.transfer ? { choice: 'skip' as const, sure: true } : guessCategory(t, categories, remembered, employers);
       return { ...t, id: String(i), mark, ...guess, seen: already.has(mark), picked: false };
     });
   return { items, otherMonths: txns.length - inMonth.length };

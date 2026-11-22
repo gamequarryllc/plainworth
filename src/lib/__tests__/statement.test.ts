@@ -6,7 +6,7 @@ import { test } from 'node:test';
 import { defaultSpendCategories } from '../../store/defaults';
 import { buildReview, choose, pairTransfers, pickedRules, readSpreadsheet, readText, readTextWithAi, totalsOf } from '../statement';
 import { chunkLines, readAiAnswer } from '../statement/ai';
-import { guessCategory, merchantKey } from '../statement/categorize';
+import { guessCategory, isCardPayment, merchantKey } from '../statement/categorize';
 import { readLines, toLines } from '../statement/lines';
 import { parseDay, parseMoney } from '../statement/parse';
 import { parseCsv, readTable } from '../statement/table';
@@ -157,6 +157,12 @@ test('merchant names are the same visit to visit', () => {
   assert.equal(merchantKey('AMAZON.COM*2K4XY'), 'AMAZON COM');
   assert.equal(merchantKey('SQ *BLUE BOTTLE 0042'), 'BLUE BOTTLE');
   assert.equal(merchantKey('POS DEBIT KROGER #442'), 'KROGER');
+  // The bank's own words in front are not the name.
+  assert.equal(merchantKey('Withdrawal from GM Financial GMF PYMT'), 'GM FINANCIAL');
+  assert.equal(merchantKey('Orig CO Name:Northwind Corporation Orig ID:1000000001'), 'NORTHWIND CORPORATION');
+  assert.equal(merchantKey('Deposit from NORTHWIND CORP PAYROLL'), 'NORTHWIND CORP');
+  assert.equal(merchantKey('Debit Card Purchase - VENMO SAM K'), 'VENMO SAM');
+  assert.equal(merchantKey('ATM Withdrawal - WALGREE #15-221'), 'ATM WITHDRAWAL');
 });
 
 test('guesses a category from the merchant, and leaves transfers out', () => {
@@ -300,4 +306,82 @@ test('money moved between your own statements is left out', () => {
   assert.equal(review.items.find((i) => i.description === 'KROGER #442')?.choice, 'groceries');
   // With only one statement nothing is paired.
   assert.ok(pairTransfers(txns.map((t) => ({ ...t, source: 'one' }))).every((t) => !t.transfer));
+});
+
+test('a bank statement with checking, savings and a CD in one file: own moves out, bills and pay in', () => {
+  const car = { id: 'car', name: 'Car', group: 'recurring' as const, order: 9, hidden: false };
+  const mine = [...cats, car];
+  const line = (date: string, description: string, amount: number, source = 0): Txn => ({ date: `2026-10-${date}`, description, amount, source });
+  const txns: Txn[] = [
+    // Moves between accounts in the same statement, by name.
+    line('07', 'Withdrawal to 360 Checking XXXXXXX4411', 1000),
+    line('07', 'Deposit from 360 Performance Savings XXXXXXX9020', -1000),
+    line('22', 'Withdrawal to CD XXXXXXX5440', 150000),
+    line('22', 'Deposit from 360 Performance Savings XXXXXXX9020', -150000),
+    line('05', 'Recurring Transfer Debit', 5000),
+    line('05', 'Recurring Transfer Credit', -5000),
+    // To a brokerage.
+    line('15', 'Withdrawal from FID BKG SVC LLC MONEYLINE', 50000),
+    line('09', 'Withdrawal from VANGUARD BUY INVESTMENT', 2500),
+    // Card payments.
+    line('03', 'Withdrawal from CAPITAL ONE MOBILE PMT', 31215),
+    line('11', 'Withdrawal from CAPITAL ONE MOBILE PMT', 4400),
+    // A loan and a bill, both paid by "pymt".
+    line('13', 'Withdrawal from GM Financial GMF PYMT', 35499),
+    line('20', 'Orig CO Name:Lakeshore Energy Orig ID:9012 Desc Date: CO Entry Descr:Pymt', 23634, 1),
+    // Pay, and the same employer's smaller deposit that doesn't say it's pay.
+    line('15', 'Deposit from NORTHWIND CORP PAYROLL', -194636),
+    line('15', 'Deposit from NORTHWIND CORP PAYROLL', -70000),
+    line('15', 'Orig CO Name:Northwind Corporation Orig ID:1000000001', -17500, 1),
+    line('31', 'Monthly Interest Paid Credit', -407),
+    // Worth a look.
+    line('18', 'ATM Withdrawal - WALGREE #15-221', 30000),
+    line('19', 'Cash Added - Walgreens Credit', -26500),
+    line('21', 'Debit Card Purchase - VENMO SAM K', 99660),
+    line('02', 'RENDER.COM', 700),
+  ];
+  const { items } = buildReview(pairTransfers(txns), '2026-10', mine, {}, []);
+  const of = (text: string) => items.filter((i) => i.description.includes(text)).map((i) => [i.choice, i.sure]);
+  for (const text of ['360 Checking', '360 Performance', 'to CD', 'Recurring Transfer', 'FID BKG', 'VANGUARD', 'CAPITAL ONE'])
+    assert.ok(of(text).every(([choice, sure]) => choice === 'skip' && sure), text);
+  assert.deepEqual(of('GM Financial'), [['car', true]]);
+  assert.deepEqual(of('Lakeshore Energy'), [['utilities', true]]);
+  assert.deepEqual(of('NORTHWIND CORP'), [['paycheck-1', true], ['paycheck-1', true]]);
+  assert.deepEqual(of('Northwind Corporation'), [['paycheck-1', true]]);
+  assert.deepEqual(of('Interest'), [['other-income', true]]);
+  assert.deepEqual(of('ATM'), [['general', false]]);
+  assert.deepEqual(of('Cash Added'), [['other-income', false]]);
+  assert.deepEqual(of('VENMO'), [['general', false]]);
+  assert.deepEqual(of('RENDER'), [['general', false]]);
+  const totals = totalsOf(items, mine);
+  assert.equal(totals.income, 194636 + 70000 + 17500 + 407 + 26500);
+  assert.equal(totals.spending, 35499 + 23634 + 30000 + 99660 + 700);
+  // Without a Car category the loan goes to General, to be checked.
+  assert.deepEqual(guessCategory(txns[10], cats, {}), { choice: 'general', sure: false });
+});
+
+test('a payment word alone is not a transfer: bills count, card payments do not', () => {
+  const guess = (description: string, amount = 1000) => guessCategory({ date: null, description, amount }, cats, {});
+  assert.deepEqual(guess('LAKESHORE ENERGY AUTOPAY'), { choice: 'utilities', sure: true });
+  assert.deepEqual(guess('COMCAST CABLE ONLINE PMT'), { choice: 'utilities', sure: true });
+  assert.deepEqual(guess('OAKWOOD APARTMENTS WEB PMT'), { choice: 'rent', sure: true });
+  assert.deepEqual(guess('PLANET FITNESS AUTOPAY'), { choice: 'exercise', sure: true });
+  for (const text of ['CHASE CREDIT CRD AUTOPAY', 'DISCOVER E-PAYMENT 4412', 'AMEX EPAYMENT ACH PMT', 'CITI CARD ONLINE PAYMENT', 'CAPITAL ONE CRCARDPMT', 'BK OF AMER VISA ONLINE PMT', 'APPLECARD GSBANK PAYMENT']) {
+    assert.deepEqual(guess(text), { choice: 'skip', sure: true }, text);
+    assert.equal(isCardPayment(text), true, text);
+  }
+  assert.equal(isCardPayment('TRANSFER TO SAVINGS'), false);
+  assert.equal(isCardPayment('LAKESHORE ENERGY AUTOPAY'), false);
+  // Paid to no one in particular: left out, but shown to check.
+  assert.deepEqual(guess('ONLINE PAYMENT 88213'), { choice: 'skip', sure: false });
+  // "Mobile" is not a Mobil station, and money between people is never left out unseen.
+  assert.notEqual(guess('MOBILE DEPOSIT REF 1182', -4000).choice, 'gas');
+  assert.deepEqual(guess('ZELLE TRANSFER TO SAM'), { choice: 'general', sure: false });
+  assert.deepEqual(guess('VENMO CASHOUT', -80000), { choice: 'other-income', sure: false });
+  // A paycheck is never matched away as a transfer.
+  const paired = pairTransfers([
+    { date: '2026-11-13', description: 'ACME CORP PAYROLL', amount: -70000, source: 0 },
+    { date: '2026-11-14', description: 'CHECK 204', amount: 70000, source: 1 },
+  ]);
+  assert.ok(paired.every((t) => !t.transfer));
 });

@@ -28,7 +28,7 @@ import {
   type Item,
   type Txn,
 } from '@/lib/statement';
-import { merchantKey } from '@/lib/statement/categorize';
+import { isCardPayment, merchantKey } from '@/lib/statement/categorize';
 import {
   aiAsk,
   aiStatus,
@@ -219,7 +219,18 @@ function ImportScreen() {
   }
 
   if (step === 'review') {
-    const leftOut = items.filter((i) => !counts(i) && (i.choice === 'skip' || i.seen));
+    // Left out for sure, or already added. A line left out on a guess is under Check These.
+    const leftOut = items.filter((i) => !counts(i) && ((i.choice === 'skip' && i.sure) || i.seen));
+    // Card payments with no card statement here: what those cards bought isn't counted yet.
+    const cardPaid = leftOut
+      .filter((i) => i.choice === 'skip' && !i.transfer && !i.seen && i.amount > 0 && isCardPayment(i.description))
+      .reduce((sum, i) => sum + i.amount, 0);
+    const leftOutNote = [
+      cardPaid ? `${money(cardPaid)} of card payments left out. Add that card’s statement to count what it bought.` : '',
+      otherMonths ? `${otherMonths} from other months left out.` : '',
+    ]
+      .filter(Boolean)
+      .join(' ');
     const check = items.filter((i) => !leftOut.includes(i) && (!i.sure || !i.choice));
     const sorted = items.filter((i) => !leftOut.includes(i) && !check.includes(i));
     const line = (i: Item) => {
@@ -267,7 +278,7 @@ function ImportScreen() {
         {leftOut.length || otherMonths ? (
           <Section
             header={leftOut.length ? 'Not Added' : undefined}
-            footer={otherMonths ? `${otherMonths} from other months left out.` : undefined}>
+            footer={leftOutNote || undefined}>
             {leftOut.map(line)}
           </Section>
         ) : null}
