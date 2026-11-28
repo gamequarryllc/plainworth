@@ -108,4 +108,10 @@ done
 dupes="$(md5 -q "$OUT"/raw/*.png | sort | uniq -d)"
 [ -z "$dupes" ] || { echo "Some screenshots are identical: a link didn't open its screen" >&2; exit 1; }
 
+# The widgets can't be placed on the Simulator's home screen by a script: write what
+# they show for tools/store_shots_widgets.cjs, which draws that screenshot.
+say "What the widgets show"
+(cd "$app" && npx tsx tools/store_shots_widget_data.ts > "$OUT/raw/widgets.json")
+head -c 200 "$OUT/raw/widgets.json"; echo
+
 say "OK: raw screenshots in $OUT/raw"

@@ -24,6 +24,7 @@ const SHOTS = [
   { file: '05-debt-payoff-order', caption: 'Pay off debt faster,\navalanche or snowball.' },
   { file: '06-emergency-fund', caption: 'Know how many months\nyour savings would last.' },
   { file: '07-distribution-over-time', caption: 'See what your net worth\nis made of, over time.' },
+  { file: '08-home-screen-widgets', caption: 'Your numbers,\nright on your Home Screen.' },
 ];
 
 // The screen on the page: 1320 x 2868 pixels shown 1050 wide.

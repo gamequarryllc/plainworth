@@ -179,6 +179,7 @@ jobs:
           set -euo pipefail
           npm install --prefix "$RUNNER_TEMP/pw" --no-audit --no-fund --silent playwright@1.56.1
           "$RUNNER_TEMP/pw/node_modules/.bin/playwright" install chromium > /dev/null
+          NODE_PATH="$RUNNER_TEMP/pw/node_modules" node tools/store_shots_widgets.cjs "$RUNNER_TEMP/shots"
           NODE_PATH="$RUNNER_TEMP/pw/node_modules" node tools/store_shots_frame.cjs "$RUNNER_TEMP/shots"
           # The 6.3-inch size (1206 x 2622), for a version that has a 6.3-inch set.
           mkdir -p "$RUNNER_TEMP/shots/6.3in"
